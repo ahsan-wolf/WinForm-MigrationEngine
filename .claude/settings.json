@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git status)", "Bash(git diff:*)", "Bash(git log:*)",
+      "Bash(git switch:*)", "Bash(git add:*)", "Bash(git commit:*)",
+      "Bash(dotnet build:*)", "Bash(npm run build)", "Bash(npm run lint)"
+    ],
+    "deny": ["Bash(git push:*)", "Bash(git reset --hard:*)", "Bash(git clean:*)"]
+  }
+}
