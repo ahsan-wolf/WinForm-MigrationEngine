@@ -1,0 +1,427 @@
+{
+  "Name": "ActorCountyList.ascx",
+  "Controls": [
+    {
+      "Id": "",
+      "TagName": "Page",
+      "Attributes": {}
+    },
+    {
+      "Id": "",
+      "TagName": "",
+      "Attributes": {}
+    },
+    {
+      "Id": "ErrorMessage",
+      "TagName": "asp:Label",
+      "Attributes": {
+        "runat": "server",
+        "ID": "ErrorMessage",
+        "ForeColor": "Red",
+        "EnableViewState": "false"
+      }
+    },
+    {
+      "Id": "",
+      "TagName": "table",
+      "Attributes": {
+        "border": "0"
+      }
+    },
+    {
+      "Id": "",
+      "TagName": "tbody",
+      "Attributes": {}
+    },
+    {
+      "Id": "",
+      "TagName": "tr",
+      "Attributes": {}
+    },
+    {
+      "Id": "",
+      "TagName": "td",
+      "Attributes": {}
+    },
+    {
+      "Id": "UpdatePanel1",
+      "TagName": "asp:UpdatePanel",
+      "Attributes": {
+        "ID": "UpdatePanel1",
+        "runat": "server"
+      }
+    },
+    {
+      "Id": "",
+      "TagName": "",
+      "Attributes": {}
+    },
+    {
+      "Id": "",
+      "TagName": "table",
+      "Attributes": {
+        "border": "0",
+        "cellpadding": "3"
+      }
+    },
+    {
+      "Id": "",
+      "TagName": "tbody",
+      "Attributes": {}
+    },
+    {
+      "Id": "",
+      "TagName": "tr",
+      "Attributes": {}
+    },
+    {
+      "Id": "",
+      "TagName": "td",
+      "Attributes": {
+        "nowrap": "nowrap"
+      }
+    },
+    {
+      "Id": "",
+      "TagName": "b",
+      "Attributes": {}
+    },
+    {
+      "Id": "",
+      "TagName": "",
+      "Attributes": {}
+    },
+    {
+      "Id": "",
+      "TagName": "td",
+      "Attributes": {}
+    },
+    {
+      "Id": "",
+      "TagName": "b",
+      "Attributes": {}
+    },
+    {
+      "Id": "",
+      "TagName": "",
+      "Attributes": {}
+    },
+    {
+      "Id": "",
+      "TagName": "td",
+      "Attributes": {}
+    },
+    {
+      "Id": "",
+      "TagName": "b",
+      "Attributes": {}
+    },
+    {
+      "Id": "",
+      "TagName": "",
+      "Attributes": {}
+    },
+    {
+      "Id": "",
+      "TagName": "tr",
+      "Attributes": {}
+    },
+    {
+      "Id": "",
+      "TagName": "td",
+      "Attributes": {}
+    },
+    {
+      "Id": "ddlActor",
+      "TagName": "asp:DropDownList",
+      "Attributes": {
+        "ID": "ddlActor",
+        "AutoPostBack": "false",
+        "DataTextField": "Name",
+        "DataValueField": "Value",
+        "Runat": "server"
+      }
+    },
+    {
+      "Id": "",
+      "TagName": "td",
+      "Attributes": {}
+    },
+    {
+      "Id": "ddlState",
+      "TagName": "asp:DropDownList",
+      "Attributes": {
+        "ID": "ddlState",
+        "DataSourceID": "SqlDataSource_State",
+        "AutoPostBack": "true",
+        "OnSelectedIndexChanged": "ddlState_SelectedIndexChanged",
+        "DataTextField": "StateName",
+        "DataValueField": "StateCode",
+        "Runat": "server"
+      }
+    },
+    {
+      "Id": "SqlDataSource_State",
+      "TagName": "asp:SqlDataSource",
+      "Attributes": {
+        "ID": "SqlDataSource_State",
+        "Runat": "server",
+        "SelectCommand": "SELECT [StateCode], StateName FROM [al_States] ORDER BY 2",
+        "ConnectionString": "\u003C%$ ConnectionStrings:SODB %\u003E"
+      }
+    },
+    {
+      "Id": "",
+      "TagName": "td",
+      "Attributes": {}
+    },
+    {
+      "Id": "ddlCounty",
+      "TagName": "asp:DropDownList",
+      "Attributes": {
+        "ID": "ddlCounty",
+        "AutoPostBack": "false",
+        "Width": "150px",
+        "DataTextField": "Text",
+        "DataValueField": "Value",
+        "runat": "server"
+      }
+    },
+    {
+      "Id": "",
+      "TagName": "asp:ListItem",
+      "Attributes": {
+        "Value": "0"
+      }
+    },
+    {
+      "Id": "",
+      "TagName": "",
+      "Attributes": {}
+    },
+    {
+      "Id": "",
+      "TagName": "",
+      "Attributes": {}
+    },
+    {
+      "Id": "",
+      "TagName": "td",
+      "Attributes": {
+        "nowrap": "nowrap"
+      }
+    },
+    {
+      "Id": "",
+      "TagName": "table",
+      "Attributes": {}
+    },
+    {
+      "Id": "",
+      "TagName": "tbody",
+      "Attributes": {}
+    },
+    {
+      "Id": "",
+      "TagName": "tr",
+      "Attributes": {}
+    },
+    {
+      "Id": "",
+      "TagName": "td",
+      "Attributes": {}
+    },
+    {
+      "Id": "",
+      "TagName": "",
+      "Attributes": {}
+    },
+    {
+      "Id": "",
+      "TagName": "tr",
+      "Attributes": {}
+    },
+    {
+      "Id": "",
+      "TagName": "td",
+      "Attributes": {}
+    },
+    {
+      "Id": "btnAdd",
+      "TagName": "asp:Button",
+      "Attributes": {
+        "ID": "btnAdd",
+        "runat": "server",
+        "Text": "Add",
+        "OnClick": "btnAdd_Click"
+      }
+    },
+    {
+      "Id": "pnlMain",
+      "TagName": "asp:Panel",
+      "Attributes": {
+        "ID": "pnlMain",
+        "runat": "server"
+      }
+    },
+    {
+      "Id": "GridView1",
+      "TagName": "asp:GridView",
+      "Attributes": {
+        "ID": "GridView1",
+        "CssClass": "GridView",
+        "GridLines": "None",
+        "CellSpacing": "1",
+        "CellPadding": "3",
+        "AllowSorting": "true",
+        "AllowPaging": "true",
+        "Runat": "server",
+        "DataSourceID": "SqlDataSource1",
+        "AutoGenerateEditButton": "false",
+        "DataKeyNames": "ActorCountyID",
+        "AutoGenerateColumns": "False"
+      }
+    },
+    {
+      "Id": "",
+      "TagName": "Columns",
+      "Attributes": {}
+    },
+    {
+      "Id": "",
+      "TagName": "asp:BoundField",
+      "Attributes": {
+        "ReadOnly": "true",
+        "HeaderText": "ID",
+        "DataField": "ActorCountyID",
+        "SortExpression": "ActorCountyID",
+        "Visible": "false"
+      }
+    },
+    {
+      "Id": "",
+      "TagName": "asp:BoundField",
+      "Attributes": {
+        "HeaderText": "Company Name",
+        "SortExpression": "ActorName",
+        "DataField": "ActorName"
+      }
+    },
+    {
+      "Id": "",
+      "TagName": "asp:BoundField",
+      "Attributes": {
+        "HeaderText": "State",
+        "SortExpression": "StateName",
+        "DataField": "StateName"
+      }
+    },
+    {
+      "Id": "",
+      "TagName": "asp:TemplateField",
+      "Attributes": {
+        "HeaderText": "County",
+        "SortExpression": "CountyName"
+      }
+    },
+    {
+      "Id": "",
+      "TagName": "ItemTemplate",
+      "Attributes": {}
+    },
+    {
+      "Id": "",
+      "TagName": "",
+      "Attributes": {}
+    },
+    {
+      "Id": "",
+      "TagName": "asp:TemplateField",
+      "Attributes": {
+        "ItemStyle-Width": "10"
+      }
+    },
+    {
+      "Id": "",
+      "TagName": "ItemTemplate",
+      "Attributes": {}
+    },
+    {
+      "Id": "btnDelete",
+      "TagName": "asp:LinkButton",
+      "Attributes": {
+        "ID": "btnDelete",
+        "Text": "Delete",
+        "ForeColor": "Gray",
+        "runat": "server",
+        "OnClientClick": "return confirm(\u0027Are you sure you want to delete this item?\u0027);",
+        "OnClick": "btnDelete_Click",
+        "CommandArgument": "\u003C%# Eval(\u0022ActorCountyID\u0022) %\u003E"
+      }
+    },
+    {
+      "Id": "",
+      "TagName": "",
+      "Attributes": {}
+    },
+    {
+      "Id": "",
+      "TagName": "AlternatingRowStyle",
+      "Attributes": {
+        "CssClass": "Even"
+      }
+    },
+    {
+      "Id": "",
+      "TagName": "EditRowStyle",
+      "Attributes": {
+        "CssClass": "Edit"
+      }
+    },
+    {
+      "Id": "",
+      "TagName": "FooterStyle",
+      "Attributes": {
+        "CssClass": "Footer"
+      }
+    },
+    {
+      "Id": "",
+      "TagName": "HeaderStyle",
+      "Attributes": {
+        "CssClass": "Header"
+      }
+    },
+    {
+      "Id": "",
+      "TagName": "PagerStyle",
+      "Attributes": {
+        "CssClass": "Pager"
+      }
+    },
+    {
+      "Id": "",
+      "TagName": "RowStyle",
+      "Attributes": {
+        "CssClass": "Odd"
+      }
+    },
+    {
+      "Id": "",
+      "TagName": "SelectedRowStyle",
+      "Attributes": {
+        "CssClass": "Selected2"
+      }
+    },
+    {
+      "Id": "SqlDataSource1",
+      "TagName": "asp:SqlDataSource",
+      "Attributes": {
+        "ID": "SqlDataSource1",
+        "Runat": "server",
+        "SelectCommand": "SELECT ac.ActorID, c.CountyName, ac.StateCode, ac.ActorCountyID, a.DisplayName AS ActorName, s.StateName\r\n      FROM dbo.aa_ActorCounties AS ac INNER JOIN\r\n      dbo.aa_Actors AS a ON ac.ActorID = a.ActorID INNER JOIN\r\n      dbo.al_States AS s ON ac.StateCode = s.StateCode LEFT OUTER JOIN\r\n      dbo.al_Counties AS c ON ac.StateCode = c.StateCode AND ac.CountyCode = c.CountyCode",
+        "ConnectionString": "\u003C%$ ConnectionStrings:SODB %\u003E"
+      }
+    }
+  ]
+}

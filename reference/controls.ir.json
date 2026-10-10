@@ -1,0 +1,408 @@
+{
+  "Name": "ActorCountyList.ascx",
+  "RootControl": {
+    "Name": "",
+    "Text": null,
+    "ControlType": "Page",
+    "Children": [
+      {
+        "Name": "",
+        "Text": null,
+        "ControlType": "",
+        "Children": []
+      },
+      {
+        "Name": "ErrorMessage",
+        "Text": null,
+        "ControlType": "asp:Label",
+        "Children": []
+      },
+      {
+        "Name": "",
+        "Text": null,
+        "ControlType": "table",
+        "Children": [
+          {
+            "Name": "",
+            "Text": null,
+            "ControlType": "tbody",
+            "Children": [
+              {
+                "Name": "",
+                "Text": null,
+                "ControlType": "tr",
+                "Children": [
+                  {
+                    "Name": "",
+                    "Text": null,
+                    "ControlType": "td",
+                    "Children": [
+                      {
+                        "Name": "UpdatePanel1",
+                        "Text": null,
+                        "ControlType": "asp:UpdatePanel",
+                        "Children": []
+                      },
+                      {
+                        "Name": "",
+                        "Text": null,
+                        "ControlType": "",
+                        "Children": []
+                      },
+                      {
+                        "Name": "",
+                        "Text": null,
+                        "ControlType": "table",
+                        "Children": [
+                          {
+                            "Name": "",
+                            "Text": null,
+                            "ControlType": "tbody",
+                            "Children": [
+                              {
+                                "Name": "",
+                                "Text": null,
+                                "ControlType": "tr",
+                                "Children": [
+                                  {
+                                    "Name": "",
+                                    "Text": null,
+                                    "ControlType": "td",
+                                    "Children": [
+                                      {
+                                        "Name": "",
+                                        "Text": null,
+                                        "ControlType": "b",
+                                        "Children": [
+                                          {
+                                            "Name": "",
+                                            "Text": null,
+                                            "ControlType": "",
+                                            "Children": []
+                                          }
+                                        ]
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "Name": "",
+                                    "Text": null,
+                                    "ControlType": "td",
+                                    "Children": [
+                                      {
+                                        "Name": "",
+                                        "Text": null,
+                                        "ControlType": "b",
+                                        "Children": [
+                                          {
+                                            "Name": "",
+                                            "Text": null,
+                                            "ControlType": "",
+                                            "Children": []
+                                          }
+                                        ]
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "Name": "",
+                                    "Text": null,
+                                    "ControlType": "td",
+                                    "Children": [
+                                      {
+                                        "Name": "",
+                                        "Text": null,
+                                        "ControlType": "b",
+                                        "Children": [
+                                          {
+                                            "Name": "",
+                                            "Text": null,
+                                            "ControlType": "",
+                                            "Children": []
+                                          }
+                                        ]
+                                      }
+                                    ]
+                                  }
+                                ]
+                              },
+                              {
+                                "Name": "",
+                                "Text": null,
+                                "ControlType": "tr",
+                                "Children": [
+                                  {
+                                    "Name": "",
+                                    "Text": null,
+                                    "ControlType": "td",
+                                    "Children": [
+                                      {
+                                        "Name": "ddlActor",
+                                        "Text": null,
+                                        "ControlType": "asp:DropDownList",
+                                        "Children": []
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "Name": "",
+                                    "Text": null,
+                                    "ControlType": "td",
+                                    "Children": [
+                                      {
+                                        "Name": "ddlState",
+                                        "Text": null,
+                                        "ControlType": "asp:DropDownList",
+                                        "Children": []
+                                      },
+                                      {
+                                        "Name": "SqlDataSource_State",
+                                        "Text": null,
+                                        "ControlType": "asp:SqlDataSource",
+                                        "Children": []
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "Name": "",
+                                    "Text": null,
+                                    "ControlType": "td",
+                                    "Children": [
+                                      {
+                                        "Name": "ddlCounty",
+                                        "Text": null,
+                                        "ControlType": "asp:DropDownList",
+                                        "Children": [
+                                          {
+                                            "Name": "",
+                                            "Text": null,
+                                            "ControlType": "asp:ListItem",
+                                            "Children": [
+                                              {
+                                                "Name": "",
+                                                "Text": null,
+                                                "ControlType": "",
+                                                "Children": []
+                                              }
+                                            ]
+                                          }
+                                        ]
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "Name": "",
+                    "Text": null,
+                    "ControlType": "",
+                    "Children": []
+                  },
+                  {
+                    "Name": "",
+                    "Text": null,
+                    "ControlType": "td",
+                    "Children": [
+                      {
+                        "Name": "",
+                        "Text": null,
+                        "ControlType": "table",
+                        "Children": [
+                          {
+                            "Name": "",
+                            "Text": null,
+                            "ControlType": "tbody",
+                            "Children": [
+                              {
+                                "Name": "",
+                                "Text": null,
+                                "ControlType": "tr",
+                                "Children": [
+                                  {
+                                    "Name": "",
+                                    "Text": null,
+                                    "ControlType": "td",
+                                    "Children": [
+                                      {
+                                        "Name": "",
+                                        "Text": null,
+                                        "ControlType": "",
+                                        "Children": []
+                                      }
+                                    ]
+                                  }
+                                ]
+                              },
+                              {
+                                "Name": "",
+                                "Text": null,
+                                "ControlType": "tr",
+                                "Children": [
+                                  {
+                                    "Name": "",
+                                    "Text": null,
+                                    "ControlType": "td",
+                                    "Children": [
+                                      {
+                                        "Name": "btnAdd",
+                                        "Text": "Add",
+                                        "ControlType": "asp:Button",
+                                        "Children": []
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "Name": "pnlMain",
+        "Text": null,
+        "ControlType": "asp:Panel",
+        "Children": [
+          {
+            "Name": "GridView1",
+            "Text": null,
+            "ControlType": "asp:GridView",
+            "Children": [
+              {
+                "Name": "",
+                "Text": null,
+                "ControlType": "Columns",
+                "Children": []
+              },
+              {
+                "Name": "",
+                "Text": null,
+                "ControlType": "asp:BoundField",
+                "Children": []
+              },
+              {
+                "Name": "",
+                "Text": null,
+                "ControlType": "asp:BoundField",
+                "Children": []
+              },
+              {
+                "Name": "",
+                "Text": null,
+                "ControlType": "asp:BoundField",
+                "Children": []
+              },
+              {
+                "Name": "",
+                "Text": null,
+                "ControlType": "asp:TemplateField",
+                "Children": [
+                  {
+                    "Name": "",
+                    "Text": null,
+                    "ControlType": "ItemTemplate",
+                    "Children": [
+                      {
+                        "Name": "",
+                        "Text": null,
+                        "ControlType": "",
+                        "Children": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "Name": "",
+                "Text": null,
+                "ControlType": "asp:TemplateField",
+                "Children": [
+                  {
+                    "Name": "",
+                    "Text": null,
+                    "ControlType": "ItemTemplate",
+                    "Children": [
+                      {
+                        "Name": "btnDelete",
+                        "Text": "Delete",
+                        "ControlType": "asp:LinkButton",
+                        "Children": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "Name": "",
+                "Text": null,
+                "ControlType": "",
+                "Children": []
+              },
+              {
+                "Name": "",
+                "Text": null,
+                "ControlType": "AlternatingRowStyle",
+                "Children": []
+              },
+              {
+                "Name": "",
+                "Text": null,
+                "ControlType": "EditRowStyle",
+                "Children": []
+              },
+              {
+                "Name": "",
+                "Text": null,
+                "ControlType": "FooterStyle",
+                "Children": []
+              },
+              {
+                "Name": "",
+                "Text": null,
+                "ControlType": "HeaderStyle",
+                "Children": []
+              },
+              {
+                "Name": "",
+                "Text": null,
+                "ControlType": "PagerStyle",
+                "Children": []
+              },
+              {
+                "Name": "",
+                "Text": null,
+                "ControlType": "RowStyle",
+                "Children": []
+              },
+              {
+                "Name": "",
+                "Text": null,
+                "ControlType": "SelectedRowStyle",
+                "Children": []
+              }
+            ]
+          },
+          {
+            "Name": "SqlDataSource1",
+            "Text": null,
+            "ControlType": "asp:SqlDataSource",
+            "Children": []
+          }
+        ]
+      }
+    ]
+  }
+}

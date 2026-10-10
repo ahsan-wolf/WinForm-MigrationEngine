@@ -1,0 +1,71 @@
+{
+  "Name": "ActorCountyList.ascx",
+  "CssAssets": [],
+  "JsAssets": [],
+  "HtmlFragments": [
+    {
+      "Id": "",
+      "RawContent": "\u003C%@ Control Language=\u0022C#\u0022 AutoEventWireup=\u0022true\u0022 Inherits=\u0022OrdersGateway.SO.Controls.Tools.ActorCountyList\u0022 Codebehind=\u0022ActorCountyList.ascx.cs\u0022 %\u003E\r\n\r\n"
+    },
+    {
+      "Id": "",
+      "RawContent": "\r\n                \u003CContentTemplate\u003E\r\n                    "
+    },
+    {
+      "Id": "",
+      "RawContent": "Production Center"
+    },
+    {
+      "Id": "",
+      "RawContent": "Production Center"
+    },
+    {
+      "Id": "",
+      "RawContent": "State"
+    },
+    {
+      "Id": "",
+      "RawContent": "State"
+    },
+    {
+      "Id": "",
+      "RawContent": "County"
+    },
+    {
+      "Id": "",
+      "RawContent": "County"
+    },
+    {
+      "Id": "",
+      "RawContent": "--County--"
+    },
+    {
+      "Id": "",
+      "RawContent": "--County--"
+    },
+    {
+      "Id": "",
+      "RawContent": "\r\n                \u003C/ContentTemplate\u003E\r\n            \u003C/asp:UpdatePanel\u003E\r\n            \u003C/td\u003E\r\n            "
+    },
+    {
+      "Id": "",
+      "RawContent": "\u0026nbsp;"
+    },
+    {
+      "Id": "",
+      "RawContent": "\u0026nbsp;"
+    },
+    {
+      "Id": "",
+      "RawContent": "\r\n          \u003C%# formatCountyName(Eval(Server.HtmlEncode(\u0022CountyName\u0022)))%\u003E\r\n          "
+    },
+    {
+      "Id": "",
+      "RawContent": "\r\n          \u003C%# formatCountyName(Eval(Server.HtmlEncode(\u0022CountyName\u0022)))%\u003E\r\n          "
+    },
+    {
+      "Id": "",
+      "RawContent": "\r\n            \r\n        \u003C/Columns\u003E\r\n        "
+    }
+  ]
+}

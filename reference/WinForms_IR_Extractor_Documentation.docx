@@ -1,0 +1,313 @@
+WinForms IR Extractor — Documentation
+
+WebFormsMigrator
+
+**WinForms IR Extractor**
+
+Technical Documentation & User Guide
+
+*Extracting a framework-neutral Intermediate Representation (IR)*
+
+*from legacy WinForms Designer.cs + code-behind source*
+
+Version 0.1.0
+
+Prepared for the WebFormsMigrator IR Platform initiative
+
+# **Table of Contents**
+
+# **1. Description**
+
+The WinForms IR Extractor is a set of Roslyn-based analyzers that produce a framework-neutral, JSON-serialized Intermediate Representation (“IR”) of a legacy WinForms Form or UserControl — its control tree, business members, event workflows, and screen-navigation — directly from source (*.Designer.cs plus its code-behind .cs file), with no need to run the application.
+
+It extends the WebFormsMigrator project's existing IR platform, which today only extracts this representation from ASP.NET Web Forms (.aspx) markup. The output shape matches the existing PageIr schema used by that pipeline (see complete.ir.json), so the same downstream tools — the IR viewer, the planned read-only IR API, and any future code generator — can consume WinForms IR exactly the way they already consume Web Forms IR.
+
+In short: where the existing pipeline answers “what does this ASPX page do?” by reading markup and code-behind, this extractor answers the same question for a WinForms screen by reading its designer-generated layout code and code-behind instead.
+
+## **1.1 Problem it solves**
+
+- Legacy WinForms applications encode their entire UI structure in generated code (InitializeComponent), not declarative markup — there is no “view file” to parse the way AspxParser parses .aspx.
+
+- Understanding what a WinForms screen does today requires a human to read designer code, cross-reference event wiring, and trace method calls by hand.
+
+- Any future WinForms → modern UI (Blazor / Angular / React) migration path needs the same kind of structured, reusable analysis the ASP.NET path already has — without it, WinForms migration would mean starting the whole IR effort over.
+
+## **1.2 What it produces**
+
+A single PageIr JSON document per Form/UserControl, containing:
+
+- RootControl — the full control tree (type, properties, event wiring, parent/child nesting), with custom UserControls recursively inlined.
+
+- Members — properties, fields, events, and methods extracted from code-behind via Roslyn (business logic bodies included).
+
+- Workflows — for each wired UI event, the ordered chain of business methods it triggers, plus a plain-language semantic summary.
+
+- Navigations — Show / ShowDialog / Close / Application.Exit calls, the WinForms analog of Web Forms redirects.
+
+- Semantic labels — a keyword-driven, human-readable description attached to controls, methods, and workflows (e.g. “Persists form data (create or update)”).
+
+# **2. Architecture**
+
+The extractor is a small pipeline of single-purpose Roslyn analyzers, mirroring the pattern already used by the Web Forms side of WebFormsMigrator (ControlTreeIrExtractor / RoslynMemberExtractor / NavigationWorkflowExtractor). Each stage consumes source text and/or the previous stage's output and contributes one facet of the final PageIr.
+
+## **2.1 Component responsibilities**
+
+| **Component** | **Input** | **Produces** |
+| --- | --- | --- |
+| WinFormsDesignerParser | *.Designer.cs source text | Control declarations, attributes, event wiring, parent/child edges (DesignerParseResult) |
+| WinFormsMemberExtractor | Code-behind .cs source text + known control field names | List<MemberIr> — properties, fields, events, methods (control backing fields excluded) |
+| SemanticKeywords | Control Id / Text / method name strings | A best-guess, human-readable semantic label per string |
+| WinFormsWorkflowExtractor | DesignerParseResult + Members + control semantics | List<WorkflowIr> — one per wired UI event, with ordered method-call steps |
+| WinFormsNavigationExtractor | DesignerParseResult + code-behind source | List<NavigationIr> — Show/ShowDialog/Close/Exit calls found in handler bodies |
+| WinFormsIrExtractor | A WinFormsSourceUnit (+ optional custom-control lookup) | The finished PageIr, orchestrating all of the above |
+
+*Table 1 — Extraction components and their data flow.*
+
+## **2.2 Pipeline diagram**
+
+The pipeline runs in six ordered stages. Each stage's output feeds either the next stage or directly into the final assembly step:
+
+| **Stage** | **Component** | **Output feeding forward** |
+| --- | --- | --- |
+| 1 | WinFormsDesignerParser | DesignerParseResult (control ids, attributes, event wiring, tree edges) |
+| 2 | WinFormsMemberExtractor | List<MemberIr> (properties, fields, events, methods) |
+| 3 | SemanticKeywords.Infer(...) | Per-control and per-method plain-language semantic labels |
+| 4a | WinFormsWorkflowExtractor | List<WorkflowIr> (ordered step chains per wired UI event) |
+| 4b | WinFormsNavigationExtractor | List<NavigationIr> (Show / ShowDialog / Close / Exit calls) |
+| 5 | WinFormsIrExtractor.Extract() | The assembled PageIr — JSON matching the complete.ir.json shape |
+
+*Figure 1 — Stages 1–4b run independently off shared inputs; stage 5 is the single orchestration point, matching IrPipelineRegistry**'**s role on the Web Forms side.*
+
+## **2.3 Data model**
+
+The IR is built from the same model shapes already established by WebFormsMigrator.IR.Models:
+
+| **Type** | **Purpose** |
+| --- | --- |
+| PageIr | Root document: SchemaVersion, Name, MasterPageName (always null for WinForms — no master-page equivalent), RootControl, Members, CssAssets/JsAssets (empty), Navigations, Workflows. |
+| ControlNodeIr | One node per control: Id, TagName (full .NET type), Attributes (property name → value, including OnEventName → handler), Children, Semantic. |
+| MemberIr | One entry per property / field / event / method, with Kind, Type, Visibility, IsStatic, Parameters, and Body (full source text for methods). |
+| WorkflowIr | One entry per wired UI event: TriggerControlId, TriggerEvent, HandlerMethod, an ordered Steps list, and an overall Semantic summary. |
+| NavigationIr | One entry per detected screen-navigation call: TriggerControlId, TargetForm, Kind (Show / ShowDialog / Close / Hide / Exit). |
+
+*Table 2 — Core IR types (WebFormsMigrator.IR.Models).*
+
+# **3. Workflow**
+
+This section describes the step-by-step extraction workflow — what happens, in order, when WinFormsIrExtractor.Extract() runs against one Form/UserControl.
+
+- Parse the designer file. WinFormsDesignerParser reads *.Designer.cs and walks InitializeComponent() statement by statement, classifying each into one of: control instantiation, property assignment, event-handler wiring (+=), or a Controls.Add parent/child edge.
+
+- Resolve the root type. The base type (Form vs. UserControl) is read from the code-behind file's class declaration (Designer.cs partials often omit it), falling back to the designer file, then to System.Windows.Forms.Form.
+
+- Extract members. WinFormsMemberExtractor parses the code-behind partial class and collects every property, field, event, and method — excluding InitializeComponent/Dispose and any field already identified as a control.
+
+- Infer semantic labels. For every declared control, SemanticKeywords.Infer() checks its Id and Text attribute (in that order) against a prioritized keyword table (e.g. “save” → “Persists form data”) and attaches the first match, if any.
+
+- Build the control tree. Starting from the Controls.Add edges recorded in step 1, controls are nested under their true parent; any control that is itself a known custom UserControl type has its own control tree spliced in recursively as children.
+
+- Extract workflows. For every control-event → handler-method wiring, the handler's body is scanned for direct calls to other known methods on the class. Matched calls become an ordered Steps list (ordered by the target methods' declaration order in Members), and the workflow's overall Semantic is the triggering control's own semantic label, falling back to a generic “Runs N step(s): …” summary when the control has none.
+
+- Extract navigations. Handler bodies are scanned separately for Show / ShowDialog / Close / Hide / Application.Exit calls, producing one NavigationIr per match.
+
+- Assemble and serialize. All of the above are combined into one PageIr and serialized to indented, PascalCase JSON — matching the shape of the existing *.ir.json sample files byte-for-byte in structure.
+
+## **3.1 Worked example**
+
+Given a Save button wired as btnSave.Click → btnSave_Click, whose body calls ValidateForm(), then either InsertActor() or UpdateActor(), then ClearForm() and LoadActors():
+
+btnSave  (Id contains "save")  ->  Semantic: "Persists form data (create or update)"
+
+Workflow "btnSave.Click"  ->  Steps: [LoadActors, InsertActor, UpdateActor, ValidateForm, ClearForm]
+
+Workflow Semantic  ->  "Persists form data (create or update)"  (inherited from the control, not the steps)
+
+This mirrors the behavior already observed in complete.ir.json for the equivalent ASP.NET btnSave.OnClick workflow — the same source application logic produces the same semantic conclusion, regardless of whether the UI was ASP.NET or WinForms.
+
+# **4. Integration: Legacy WinForms → Modern UI**
+
+This tool is designed to slot into the existing WebFormsMigrator IR platform as a second, parallel input source — not a separate, disconnected utility. The table below maps every existing Web Forms extraction stage to its new WinForms counterpart.
+
+| **Concern** | **Web Forms (existing)** | **WinForms (this tool)** |
+| --- | --- | --- |
+| Source input | .aspx markup | *.Designer.cs (InitializeComponent) |
+| Control tree | AspxParser / ControlTreeIrExtractor | WinFormsDesignerParser |
+| Members | RoslynMemberExtractor | WinFormsMemberExtractor |
+| Semantics / workflows / navigation | NavigationWorkflowExtractor | SemanticKeywords + WinFormsWorkflowExtractor + WinFormsNavigationExtractor |
+| Orchestration | IrPipelineRegistry.BuildIr() | WinFormsIrExtractor.Extract() |
+| Output | PageIr JSON (ASP.NET-shaped) | PageIr JSON — identical schema |
+
+*Table 3 — Because both paths converge on the same PageIr schema, every downstream consumer (viewer, API, future generators) works unmodified regardless of source technology.*
+
+## **4.1 Recommended integration steps**
+
+- Reuse the real model types. Delete the extractor's bundled Models/WinFormsIrModels.cs and reference WebFormsMigrator.IR.Models directly, so both pipelines produce literally the same PageIr type.
+
+- Add a WinFormsProjectAnalyzer, parallel to the existing ProjectAnalyzer, that scans a WinForms project for *.Designer.cs / *.cs pairs and flags which classes derive from System.Windows.Forms.UserControl (these become the customControlLookup passed into WinFormsIrExtractor).
+
+- Wrap WinFormsIrExtractor.Extract() in a class implementing IIrExtractor (from WebFormsMigrator.IR.Contracts) and register it in IrPipelineRegistry alongside the existing Web Forms extractors, so both source types run through one unified BuildIr() call.
+
+- No changes are required to the IR viewer, the planned IR API, or the LLM-driven scaffold generator (Section 6a.4 of the project backlog) — they already consume PageIr, not markup, so a WinForms-sourced PageIr is indistinguishable to them from an ASP.NET-sourced one.
+
+## **4.2 Path to a modern UI**
+
+With WinForms IR flowing into the same PageIr shape as ASP.NET IR, the already-scoped “minimum working application” generator (project backlog item 6a.4) applies unchanged: an IIrGenerator with Target = “angular-app” or “react-app” can consume a WinForms-derived PageIr exactly as it would an ASP.NET-derived one — translating controls to real bound components, wiring event handlers to LLM-translated business logic, and generating routing from Navigations. This is the direct legacy-desktop-UI-to-modern-web-UI path this extractor exists to unlock.
+
+- Controls (TextBox, Button, DataGridView, DateTimePicker, custom UserControls) map to the same target-framework component set already scoped for Web Forms controls.
+
+- WorkflowIr.Steps feed the same LLM translation step (C# method body → TypeScript/JS, marked “// LLM-translated — verify”) already implemented in LlmScaffoldGenerator.
+
+- NavigationIr (Show/ShowDialog/Close) maps to client-side routing the same way Web Forms Response.Redirect does today.
+
+# **5. Complete User Guide**
+
+## **5.1 Prerequisites**
+
+- .NET 8 SDK
+
+- NuGet access to Microsoft.CodeAnalysis.CSharp (Roslyn) — already a dependency of the existing RoslynMemberExtractor, so no new external dependency is introduced at the solution level
+
+## **5.2 Project layout**
+
+WinFormsIr/
+  WinFormsIr.csproj
+  Program.cs                    (standalone CLI entry point)
+  Models/
+    WinFormsIrModels.cs         (IR POCOs; swap for the real
+                                 types when integrating)
+  Extraction/
+    SemanticKeywords.cs
+    WinFormsDesignerParser.cs
+    WinFormsMemberExtractor.cs
+    WinFormsWorkflowExtractor.cs
+    WinFormsNavigationExtractor.cs
+    WinFormsIrExtractor.cs       (orchestrator)
+  Sample/                        (a sample Form + custom control)
+
+## **5.3 Building**
+
+cd WinFormsIr
+
+dotnet restore
+
+dotnet build
+
+## **5.4 Running against the bundled sample**
+
+The Sample folder contains ActorManagementForm (a WinForms re-creation of the project's familiar ActorManagement screen) and a custom ActorSearchControl UserControl it hosts.
+
+dotnet run -- Sample/ActorManagementForm.Designer.cs Sample/ActorManagementForm.cs ActorManagement.winforms.ir.json Sample
+
+Arguments, in order:
+
+| **Argument** | **Example** | **Meaning** |
+| --- | --- | --- |
+| 1. Designer file | Sample/ActorManagementForm.Designer.cs | The *.Designer.cs to parse for the control tree |
+| 2. Code-behind file | Sample/ActorManagementForm.cs | The matching .cs file to parse for Members/Workflows |
+| 3. Output path | ActorManagement.winforms.ir.json | Optional; defaults to <codebehind-name>.ir.json |
+| 4. Custom controls dir | Sample | Optional; a folder of *.Designer.cs/*.cs pairs for any custom UserControls to inline |
+
+## **5.5 Running against your own project**
+
+- Locate the Form or UserControl you want IR for, and its two files: X.Designer.cs and X.cs.
+
+- If it hosts custom UserControls, collect their Designer.cs/.cs pairs into one folder (they do not need to be the original project structure, just discoverable by filename).
+
+- Run: dotnet run -- <Designer.cs> <CodeBehind.cs> <output.ir.json> <customControlsFolder>
+
+- Open the resulting JSON in the existing tools/ir-viewer/index.html the same way you would an ASP.NET *.ir.json file — the schema is identical.
+
+## **5.6 Reading the output**
+
+- RootControl.Id is the class name of the Form/UserControl; RootControl.TagName is its base type (e.g. System.Windows.Forms.Form).
+
+- Each child ControlNodeIr's Attributes dictionary holds both designer-set properties (Text, Location, Size, …) and event wiring, exposed as “OnClick” → “btn Save_Click”-style keys so it reads the same as the ASP.NET OnClick attribute.
+
+- Members with Kind = 2 are methods and include a full Body — useful both for human review and as the input to any future LLM-driven translation step.
+
+- Workflows.Semantic is the single best one-line description of what a button/menu item actually does when clicked — the fastest way to audit a legacy screen's behavior without reading code.
+
+## **5.7 Customizing the semantic keyword table**
+
+Extraction/SemanticKeywords.cs contains an ordered array of (keywords → semantic label) tuples. Add, reorder, or remove entries to tune inference for your own naming conventions (e.g. teams using “btn_Persist” instead of “btn Save”). Order matters — the first matching entry wins.
+
+## **5.8 Known limitations**
+
+- Handler bodies must live in one of the two files passed in; handlers implemented in a third partial-class file are not resolved.
+
+- Only direct method calls are tracked as workflow steps (not calls made two levels deep inside a called method).
+
+- No visual/layout rendering is produced — this is structural/behavioral IR only, matching the scope of the existing Web Forms pipeline before its own “simple rendering mode” was added.
+
+- Not yet verified against a real dotnet build in this delivery environment (no SDK/network available at generation time) — build and run it in a real .NET 8 environment before relying on it.
+
+# **6. Advantages**
+
+## **6.1 For the migration effort**
+
+- Closes the single biggest gap in the WebFormsMigrator IR platform: today it can only reason about ASP.NET Web Forms applications; this brings the much larger installed base of legacy WinForms line-of-business applications into the same analysis pipeline.
+
+- Zero duplicate design effort — reuses the exact PageIr schema, so the IR viewer, the planned IR API, and the LLM scaffold generator all work against WinForms output with no code changes.
+
+- Enables the same “analyze once, consume many times” model already adopted for Web Forms: one JSON file replaces re-parsing raw WinForms source for every future tool that needs to understand the screen.
+
+## **6.2 For understanding legacy applications**
+
+- Turns an opaque, generated InitializeComponent() method into a readable, structured control tree — no more manually diffing designer code to see what changed.
+
+- Surfaces what each button/menu action actually does (Workflows) in one plain-language sentence, without reading the C# behind it.
+
+- Makes custom UserControls transparent by inlining their own control tree into the parent's, rather than leaving them as an opaque black box.
+
+## **6.3 For a future modern-UI generator**
+
+- Provides everything an LLM-driven Angular/React generator needs in one document: real control types, real property values, real event-to-method wiring, and real method bodies to translate — not just a visual mockup.
+
+- Because Workflows already resolve “which methods does clicking Save actually run, in what order,” a generator does not need to re-derive control flow from raw code — it can translate a known, ordered step list.
+
+- Navigation detection (Show/ShowDialog/Close) gives a generator a ready-made basis for client-side routing, the same way NavigationIr already does for Web Forms redirects.
+
+## **6.4 Engineering advantages**
+
+- Small, single-purpose components (one parser, one member extractor, one workflow extractor, one navigation extractor) mirror the existing Web Forms extractor architecture, so the two pipelines are equally easy to maintain and reason about.
+
+- Built entirely on Roslyn syntax analysis — no execution of the target application is required, so it is safe to run against any WinForms source tree, including ones with missing dependencies or broken builds.
+
+- The semantic-keyword table is externalized to one small, ordered array, making it easy to tune per codebase without touching extraction logic — directly in line with the project's own “pluggable semantic-keyword configuration” backlog idea.
+
+# **Appendix A — File Manifest**
+
+| **File** | **Purpose** |
+| --- | --- |
+| WinFormsIr.csproj | Project file; net8.0 console app referencing Microsoft.CodeAnalysis.CSharp |
+| Program.cs | Standalone CLI entry point |
+| Models/WinFormsIrModels.cs | IR POCOs (PageIr, ControlNodeIr, MemberIr, WorkflowIr, NavigationIr, …) |
+| Extraction/WinFormsDesignerParser.cs | Parses InitializeComponent() into control declarations, attributes, event wiring, and parent/child edges |
+| Extraction/WinFormsMemberExtractor.cs | Extracts properties, fields, events, and methods from code-behind |
+| Extraction/SemanticKeywords.cs | Keyword → plain-language semantic label table |
+| Extraction/WinFormsWorkflowExtractor.cs | Builds ordered workflow step chains from event handler bodies |
+| Extraction/WinFormsNavigationExtractor.cs | Detects Show/ShowDialog/Close/Hide/Application.Exit calls |
+| Extraction/WinFormsIrExtractor.cs | Orchestrator; the single public entry point (Extract) |
+| Sample/ActorManagementForm.* | Example WinForms Form (Designer.cs + code-behind) |
+| Sample/ActorSearchControl.* | Example custom UserControl hosted by the sample Form |
+
+# **Appendix B — Semantic Keyword Reference**
+
+| **Keywords (case-insensitive substring match)** | **Inferred Semantic** |
+| --- | --- |
+| search, filter, find | Filters or searches the data set |
+| clear, reset | Resets input fields |
+| cancel | Discards changes and resets the form |
+| delete, remove | Removes a record |
+| edit, modify | Enters edit mode for a selected record |
+| save, submit, persist | Persists form data (create or update) |
+| insert, create | Creates a new record |
+| update | Updates an existing record |
+| load, bind, fill, refresh, populate | Loads and displays data |
+| close, exit, quit | Closes the form or application |
+| print | Prints the current view |
+| export | Exports data to a file |
+
+*Table 4 — Evaluated top-to-bottom against a control**'**s Id, then its Text attribute; first match wins. Fully user-editable in SemanticKeywords.cs.*
+
+Page  of

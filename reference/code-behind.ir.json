@@ -1,0 +1,201 @@
+{
+  "Name": "ActorCountyList.ascx",
+  "Members": [
+    {
+      "Kind": 1,
+      "Name": "_actorTypeId",
+      "Type": "int",
+      "Visibility": 2,
+      "IsStatic": false,
+      "Parameters": [],
+      "Body": null,
+      "Attributes": []
+    },
+    {
+      "Kind": 0,
+      "Name": "ActorType",
+      "Type": "int",
+      "Visibility": 0,
+      "IsStatic": false,
+      "Parameters": [],
+      "Body": null,
+      "Attributes": []
+    },
+    {
+      "Kind": 1,
+      "Name": "_currentUser",
+      "Type": "ICurrentUser",
+      "Visibility": 2,
+      "IsStatic": false,
+      "Parameters": [],
+      "Body": null,
+      "Attributes": []
+    },
+    {
+      "Kind": 0,
+      "Name": "CurrentUser",
+      "Type": "ICurrentUser",
+      "Visibility": 1,
+      "IsStatic": false,
+      "Parameters": [],
+      "Body": null,
+      "Attributes": []
+    },
+    {
+      "Kind": 1,
+      "Name": "_Actors",
+      "Type": "List\u003CTypedNameValuePair\u003Cstring, int\u003E\u003E",
+      "Visibility": 2,
+      "IsStatic": false,
+      "Parameters": [],
+      "Body": null,
+      "Attributes": []
+    },
+    {
+      "Kind": 0,
+      "Name": "Actors",
+      "Type": "List\u003CTypedNameValuePair\u003Cstring, int\u003E\u003E",
+      "Visibility": 0,
+      "IsStatic": false,
+      "Parameters": [],
+      "Body": null,
+      "Attributes": []
+    },
+    {
+      "Kind": 2,
+      "Name": "Page_Load",
+      "Type": "void",
+      "Visibility": 1,
+      "IsStatic": false,
+      "Parameters": [
+        {
+          "Name": "sender",
+          "Type": "object",
+          "DefaultValue": null
+        },
+        {
+          "Name": "e",
+          "Type": "EventArgs",
+          "DefaultValue": null
+        }
+      ],
+      "Body": "{\r\n            if (!Page.IsPostBack)\r\n            {\r\n\r\n            }\r\n        }",
+      "Attributes": []
+    },
+    {
+      "Kind": 2,
+      "Name": "BindControl",
+      "Type": "void",
+      "Visibility": 0,
+      "IsStatic": false,
+      "Parameters": [],
+      "Body": "{\r\n            ddlActor.DataSource = this.Actors;\r\n            ddlActor.DataBind();\r\n            BindGrid();\r\n        }",
+      "Attributes": []
+    },
+    {
+      "Kind": 2,
+      "Name": "BindGrid",
+      "Type": "void",
+      "Visibility": 2,
+      "IsStatic": false,
+      "Parameters": [],
+      "Body": "{\r\n            GridView1.DataBind();\r\n        }",
+      "Attributes": []
+    },
+    {
+      "Kind": 2,
+      "Name": "ddlState_SelectedIndexChanged",
+      "Type": "void",
+      "Visibility": 1,
+      "IsStatic": false,
+      "Parameters": [
+        {
+          "Name": "sender",
+          "Type": "object",
+          "DefaultValue": null
+        },
+        {
+          "Name": "e",
+          "Type": "EventArgs",
+          "DefaultValue": null
+        }
+      ],
+      "Body": "{\r\n            PopulateCounties(ddlState.SelectedValue);\r\n        }",
+      "Attributes": []
+    },
+    {
+      "Kind": 2,
+      "Name": "PopulateCounties",
+      "Type": "void",
+      "Visibility": 2,
+      "IsStatic": false,
+      "Parameters": [
+        {
+          "Name": "stateCode",
+          "Type": "string",
+          "DefaultValue": null
+        }
+      ],
+      "Body": "{\r\n            string sql =\r\n                @\u0022SELECT [CountyName],[CountyCode] \r\n                FROM [al_Counties] \r\n                WHERE StateCode=@StateCode \r\n                ORDER BY CountyName\u0022;\r\n\r\n            List\u003CSqlParameter\u003E paramList = new List\u003CSqlParameter\u003E();\r\n\r\n            var param1 = new SqlParameter(\u0022@StateCode\u0022, SqlDbType.Char, 2);\r\n            param1.Value = stateCode;\r\n            paramList.Add(param1);\r\n\r\n            List\u003CTextValueItem\u003E items = DbHelper.GetTextValueItems(sql, paramList, \u0022CountyName\u0022, \u0022CountyName\u0022);\r\n\r\n            items.Insert(0, new TextValueItem(\u0022--County--\u0022, \u0022\u0022));\r\n            ddlCounty.DataSource = items;\r\n            ddlCounty.DataBind();\r\n\r\n        }",
+      "Attributes": []
+    },
+    {
+      "Kind": 2,
+      "Name": "formatCountyName",
+      "Type": "object",
+      "Visibility": 1,
+      "IsStatic": true,
+      "Parameters": [
+        {
+          "Name": "countyName",
+          "Type": "object",
+          "DefaultValue": null
+        }
+      ],
+      "Body": "{\r\n            if (countyName == null || string.IsNullOrEmpty(countyName.ToString()))\r\n                return \u0022All Counties\u0022;\r\n            return countyName.ToString();\r\n        }",
+      "Attributes": []
+    },
+    {
+      "Kind": 2,
+      "Name": "btnAdd_Click",
+      "Type": "void",
+      "Visibility": 1,
+      "IsStatic": false,
+      "Parameters": [
+        {
+          "Name": "sender",
+          "Type": "object",
+          "DefaultValue": null
+        },
+        {
+          "Name": "e",
+          "Type": "EventArgs",
+          "DefaultValue": null
+        }
+      ],
+      "Body": "{\r\n            try\r\n            {\r\n                ProductionCenterRepository db = new ProductionCenterRepository();\r\n                db.AddCounty(this.CurrentUser.AsUser(), int.Parse(ddlActor.SelectedValue), ddlState.SelectedValue,\r\n                             int.Parse(ddlCounty.SelectedValue));\r\n                BindGrid();\r\n            }\r\n            catch (Exception ex)\r\n            {\r\n                ErrorMessage.Text = string.Format(\u0022\u003Cp\u003E{0}\u003C/p\u003E\u0022, ex.Message);\r\n            }\r\n        }",
+      "Attributes": []
+    },
+    {
+      "Kind": 2,
+      "Name": "btnDelete_Click",
+      "Type": "void",
+      "Visibility": 1,
+      "IsStatic": false,
+      "Parameters": [
+        {
+          "Name": "sender",
+          "Type": "object",
+          "DefaultValue": null
+        },
+        {
+          "Name": "e",
+          "Type": "EventArgs",
+          "DefaultValue": null
+        }
+      ],
+      "Body": "{\r\n            int actorCountyId = int.Parse((sender as LinkButton).CommandArgument);\r\n            string sql = string.Format(\u0022DELETE FROM aa_ActorCounties WHERE ActorCountyID={0}\u0022, actorCountyId);\r\n            DbHelper.ExecNonQuery(sql);\r\n            BindGrid();\r\n        }",
+      "Attributes": []
+    }
+  ]
+}

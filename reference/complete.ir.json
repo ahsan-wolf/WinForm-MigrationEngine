@@ -1,0 +1,889 @@
+{
+  "SchemaVersion": "0.1.0",
+  "Name": "ActorCountyList.ascx",
+  "RelativePath": "SO/Controls/Tools/ActorCountyList.ascx",
+  "MasterPageName": null,
+  "RootControl": {
+    "Id": "",
+    "TagName": "Page",
+    "Attributes": {},
+    "Children": [
+      {
+        "Id": "",
+        "TagName": "",
+        "Attributes": {},
+        "Children": [],
+        "RawContent": "\u003C%@ Control Language=\u0022C#\u0022 AutoEventWireup=\u0022true\u0022 Inherits=\u0022OrdersGateway.SO.Controls.Tools.ActorCountyList\u0022 Codebehind=\u0022ActorCountyList.ascx.cs\u0022 %\u003E\r\n\r\n",
+        "Semantic": null
+      },
+      {
+        "Id": "ErrorMessage",
+        "TagName": "asp:Label",
+        "Attributes": {
+          "runat": "server",
+          "ID": "ErrorMessage",
+          "ForeColor": "Red",
+          "EnableViewState": "false"
+        },
+        "Children": [],
+        "RawContent": "",
+        "Semantic": null
+      },
+      {
+        "Id": "",
+        "TagName": "table",
+        "Attributes": {
+          "border": "0"
+        },
+        "Children": [
+          {
+            "Id": "",
+            "TagName": "tbody",
+            "Attributes": {},
+            "Children": [
+              {
+                "Id": "",
+                "TagName": "tr",
+                "Attributes": {},
+                "Children": [
+                  {
+                    "Id": "",
+                    "TagName": "td",
+                    "Attributes": {},
+                    "Children": [
+                      {
+                        "Id": "UpdatePanel1",
+                        "TagName": "asp:UpdatePanel",
+                        "Attributes": {
+                          "ID": "UpdatePanel1",
+                          "runat": "server"
+                        },
+                        "Children": [],
+                        "RawContent": "",
+                        "Semantic": "Updates an existing record"
+                      },
+                      {
+                        "Id": "",
+                        "TagName": "",
+                        "Attributes": {},
+                        "Children": [],
+                        "RawContent": "\r\n                \u003CContentTemplate\u003E\r\n                    ",
+                        "Semantic": null
+                      },
+                      {
+                        "Id": "",
+                        "TagName": "table",
+                        "Attributes": {
+                          "border": "0",
+                          "cellpadding": "3"
+                        },
+                        "Children": [
+                          {
+                            "Id": "",
+                            "TagName": "tbody",
+                            "Attributes": {},
+                            "Children": [
+                              {
+                                "Id": "",
+                                "TagName": "tr",
+                                "Attributes": {},
+                                "Children": [
+                                  {
+                                    "Id": "",
+                                    "TagName": "td",
+                                    "Attributes": {
+                                      "nowrap": "nowrap"
+                                    },
+                                    "Children": [
+                                      {
+                                        "Id": "",
+                                        "TagName": "b",
+                                        "Attributes": {},
+                                        "Children": [
+                                          {
+                                            "Id": "",
+                                            "TagName": "",
+                                            "Attributes": {},
+                                            "Children": [],
+                                            "RawContent": "Production Center",
+                                            "Semantic": null
+                                          }
+                                        ],
+                                        "RawContent": "Production Center",
+                                        "Semantic": null
+                                      }
+                                    ],
+                                    "RawContent": null,
+                                    "Semantic": null
+                                  },
+                                  {
+                                    "Id": "",
+                                    "TagName": "td",
+                                    "Attributes": {},
+                                    "Children": [
+                                      {
+                                        "Id": "",
+                                        "TagName": "b",
+                                        "Attributes": {},
+                                        "Children": [
+                                          {
+                                            "Id": "",
+                                            "TagName": "",
+                                            "Attributes": {},
+                                            "Children": [],
+                                            "RawContent": "State",
+                                            "Semantic": null
+                                          }
+                                        ],
+                                        "RawContent": "State",
+                                        "Semantic": null
+                                      }
+                                    ],
+                                    "RawContent": null,
+                                    "Semantic": null
+                                  },
+                                  {
+                                    "Id": "",
+                                    "TagName": "td",
+                                    "Attributes": {},
+                                    "Children": [
+                                      {
+                                        "Id": "",
+                                        "TagName": "b",
+                                        "Attributes": {},
+                                        "Children": [
+                                          {
+                                            "Id": "",
+                                            "TagName": "",
+                                            "Attributes": {},
+                                            "Children": [],
+                                            "RawContent": "County",
+                                            "Semantic": null
+                                          }
+                                        ],
+                                        "RawContent": "County",
+                                        "Semantic": null
+                                      }
+                                    ],
+                                    "RawContent": null,
+                                    "Semantic": null
+                                  }
+                                ],
+                                "RawContent": null,
+                                "Semantic": null
+                              },
+                              {
+                                "Id": "",
+                                "TagName": "tr",
+                                "Attributes": {},
+                                "Children": [
+                                  {
+                                    "Id": "",
+                                    "TagName": "td",
+                                    "Attributes": {},
+                                    "Children": [
+                                      {
+                                        "Id": "ddlActor",
+                                        "TagName": "asp:DropDownList",
+                                        "Attributes": {
+                                          "ID": "ddlActor",
+                                          "AutoPostBack": "false",
+                                          "DataTextField": "Name",
+                                          "DataValueField": "Value",
+                                          "Runat": "server"
+                                        },
+                                        "Children": [],
+                                        "RawContent": "",
+                                        "Semantic": null
+                                      }
+                                    ],
+                                    "RawContent": null,
+                                    "Semantic": null
+                                  },
+                                  {
+                                    "Id": "",
+                                    "TagName": "td",
+                                    "Attributes": {},
+                                    "Children": [
+                                      {
+                                        "Id": "ddlState",
+                                        "TagName": "asp:DropDownList",
+                                        "Attributes": {
+                                          "ID": "ddlState",
+                                          "DataSourceID": "SqlDataSource_State",
+                                          "AutoPostBack": "true",
+                                          "OnSelectedIndexChanged": "ddlState_SelectedIndexChanged",
+                                          "DataTextField": "StateName",
+                                          "DataValueField": "StateCode",
+                                          "Runat": "server"
+                                        },
+                                        "Children": [],
+                                        "RawContent": "",
+                                        "Semantic": null
+                                      },
+                                      {
+                                        "Id": "SqlDataSource_State",
+                                        "TagName": "asp:SqlDataSource",
+                                        "Attributes": {
+                                          "ID": "SqlDataSource_State",
+                                          "Runat": "server",
+                                          "SelectCommand": "SELECT [StateCode], StateName FROM [al_States] ORDER BY 2",
+                                          "ConnectionString": "\u003C%$ ConnectionStrings:SODB %\u003E"
+                                        },
+                                        "Children": [],
+                                        "RawContent": "",
+                                        "Semantic": null
+                                      }
+                                    ],
+                                    "RawContent": null,
+                                    "Semantic": null
+                                  },
+                                  {
+                                    "Id": "",
+                                    "TagName": "td",
+                                    "Attributes": {},
+                                    "Children": [
+                                      {
+                                        "Id": "ddlCounty",
+                                        "TagName": "asp:DropDownList",
+                                        "Attributes": {
+                                          "ID": "ddlCounty",
+                                          "AutoPostBack": "false",
+                                          "Width": "150px",
+                                          "DataTextField": "Text",
+                                          "DataValueField": "Value",
+                                          "runat": "server"
+                                        },
+                                        "Children": [
+                                          {
+                                            "Id": "",
+                                            "TagName": "asp:ListItem",
+                                            "Attributes": {
+                                              "Value": "0"
+                                            },
+                                            "Children": [
+                                              {
+                                                "Id": "",
+                                                "TagName": "",
+                                                "Attributes": {},
+                                                "Children": [],
+                                                "RawContent": "--County--",
+                                                "Semantic": null
+                                              }
+                                            ],
+                                            "RawContent": "--County--",
+                                            "Semantic": null
+                                          }
+                                        ],
+                                        "RawContent": null,
+                                        "Semantic": null
+                                      }
+                                    ],
+                                    "RawContent": null,
+                                    "Semantic": null
+                                  }
+                                ],
+                                "RawContent": null,
+                                "Semantic": null
+                              }
+                            ],
+                            "RawContent": null,
+                            "Semantic": null
+                          }
+                        ],
+                        "RawContent": null,
+                        "Semantic": null
+                      }
+                    ],
+                    "RawContent": null,
+                    "Semantic": null
+                  },
+                  {
+                    "Id": "",
+                    "TagName": "",
+                    "Attributes": {},
+                    "Children": [],
+                    "RawContent": "\r\n                \u003C/ContentTemplate\u003E\r\n            \u003C/asp:UpdatePanel\u003E\r\n            \u003C/td\u003E\r\n            ",
+                    "Semantic": null
+                  },
+                  {
+                    "Id": "",
+                    "TagName": "td",
+                    "Attributes": {
+                      "nowrap": "nowrap"
+                    },
+                    "Children": [
+                      {
+                        "Id": "",
+                        "TagName": "table",
+                        "Attributes": {},
+                        "Children": [
+                          {
+                            "Id": "",
+                            "TagName": "tbody",
+                            "Attributes": {},
+                            "Children": [
+                              {
+                                "Id": "",
+                                "TagName": "tr",
+                                "Attributes": {},
+                                "Children": [
+                                  {
+                                    "Id": "",
+                                    "TagName": "td",
+                                    "Attributes": {},
+                                    "Children": [
+                                      {
+                                        "Id": "",
+                                        "TagName": "",
+                                        "Attributes": {},
+                                        "Children": [],
+                                        "RawContent": "\u0026nbsp;",
+                                        "Semantic": null
+                                      }
+                                    ],
+                                    "RawContent": "\u0026nbsp;",
+                                    "Semantic": null
+                                  }
+                                ],
+                                "RawContent": null,
+                                "Semantic": null
+                              },
+                              {
+                                "Id": "",
+                                "TagName": "tr",
+                                "Attributes": {},
+                                "Children": [
+                                  {
+                                    "Id": "",
+                                    "TagName": "td",
+                                    "Attributes": {},
+                                    "Children": [
+                                      {
+                                        "Id": "btnAdd",
+                                        "TagName": "asp:Button",
+                                        "Attributes": {
+                                          "ID": "btnAdd",
+                                          "runat": "server",
+                                          "Text": "Add",
+                                          "OnClick": "btnAdd_Click"
+                                        },
+                                        "Children": [],
+                                        "RawContent": "",
+                                        "Semantic": "Creates a new record"
+                                      }
+                                    ],
+                                    "RawContent": null,
+                                    "Semantic": null
+                                  }
+                                ],
+                                "RawContent": null,
+                                "Semantic": null
+                              }
+                            ],
+                            "RawContent": null,
+                            "Semantic": null
+                          }
+                        ],
+                        "RawContent": null,
+                        "Semantic": null
+                      }
+                    ],
+                    "RawContent": null,
+                    "Semantic": null
+                  }
+                ],
+                "RawContent": null,
+                "Semantic": null
+              }
+            ],
+            "RawContent": null,
+            "Semantic": null
+          }
+        ],
+        "RawContent": null,
+        "Semantic": null
+      },
+      {
+        "Id": "pnlMain",
+        "TagName": "asp:Panel",
+        "Attributes": {
+          "ID": "pnlMain",
+          "runat": "server"
+        },
+        "Children": [
+          {
+            "Id": "GridView1",
+            "TagName": "asp:GridView",
+            "Attributes": {
+              "ID": "GridView1",
+              "CssClass": "GridView",
+              "GridLines": "None",
+              "CellSpacing": "1",
+              "CellPadding": "3",
+              "AllowSorting": "true",
+              "AllowPaging": "true",
+              "Runat": "server",
+              "DataSourceID": "SqlDataSource1",
+              "AutoGenerateEditButton": "false",
+              "DataKeyNames": "ActorCountyID",
+              "AutoGenerateColumns": "False"
+            },
+            "Children": [
+              {
+                "Id": "",
+                "TagName": "Columns",
+                "Attributes": {},
+                "Children": [],
+                "RawContent": "",
+                "Semantic": null
+              },
+              {
+                "Id": "",
+                "TagName": "asp:BoundField",
+                "Attributes": {
+                  "ReadOnly": "true",
+                  "HeaderText": "ID",
+                  "DataField": "ActorCountyID",
+                  "SortExpression": "ActorCountyID",
+                  "Visible": "false"
+                },
+                "Children": [],
+                "RawContent": "",
+                "Semantic": null
+              },
+              {
+                "Id": "",
+                "TagName": "asp:BoundField",
+                "Attributes": {
+                  "HeaderText": "Company Name",
+                  "SortExpression": "ActorName",
+                  "DataField": "ActorName"
+                },
+                "Children": [],
+                "RawContent": "",
+                "Semantic": null
+              },
+              {
+                "Id": "",
+                "TagName": "asp:BoundField",
+                "Attributes": {
+                  "HeaderText": "State",
+                  "SortExpression": "StateName",
+                  "DataField": "StateName"
+                },
+                "Children": [],
+                "RawContent": "",
+                "Semantic": null
+              },
+              {
+                "Id": "",
+                "TagName": "asp:TemplateField",
+                "Attributes": {
+                  "HeaderText": "County",
+                  "SortExpression": "CountyName"
+                },
+                "Children": [
+                  {
+                    "Id": "",
+                    "TagName": "ItemTemplate",
+                    "Attributes": {},
+                    "Children": [
+                      {
+                        "Id": "",
+                        "TagName": "",
+                        "Attributes": {},
+                        "Children": [],
+                        "RawContent": "\r\n          \u003C%# formatCountyName(Eval(Server.HtmlEncode(\u0022CountyName\u0022)))%\u003E\r\n          ",
+                        "Semantic": null
+                      }
+                    ],
+                    "RawContent": "\r\n          \u003C%# formatCountyName(Eval(Server.HtmlEncode(\u0022CountyName\u0022)))%\u003E\r\n          ",
+                    "Semantic": null
+                  }
+                ],
+                "RawContent": null,
+                "Semantic": null
+              },
+              {
+                "Id": "",
+                "TagName": "asp:TemplateField",
+                "Attributes": {
+                  "ItemStyle-Width": "10"
+                },
+                "Children": [
+                  {
+                    "Id": "",
+                    "TagName": "ItemTemplate",
+                    "Attributes": {},
+                    "Children": [
+                      {
+                        "Id": "btnDelete",
+                        "TagName": "asp:LinkButton",
+                        "Attributes": {
+                          "ID": "btnDelete",
+                          "Text": "Delete",
+                          "ForeColor": "Gray",
+                          "runat": "server",
+                          "OnClientClick": "return confirm(\u0027Are you sure you want to delete this item?\u0027);",
+                          "OnClick": "btnDelete_Click",
+                          "CommandArgument": "\u003C%# Eval(\u0022ActorCountyID\u0022) %\u003E"
+                        },
+                        "Children": [],
+                        "RawContent": "",
+                        "Semantic": "Removes a record"
+                      }
+                    ],
+                    "RawContent": null,
+                    "Semantic": null
+                  }
+                ],
+                "RawContent": null,
+                "Semantic": null
+              },
+              {
+                "Id": "",
+                "TagName": "",
+                "Attributes": {},
+                "Children": [],
+                "RawContent": "\r\n            \r\n        \u003C/Columns\u003E\r\n        ",
+                "Semantic": null
+              },
+              {
+                "Id": "",
+                "TagName": "AlternatingRowStyle",
+                "Attributes": {
+                  "CssClass": "Even"
+                },
+                "Children": [],
+                "RawContent": "",
+                "Semantic": null
+              },
+              {
+                "Id": "",
+                "TagName": "EditRowStyle",
+                "Attributes": {
+                  "CssClass": "Edit"
+                },
+                "Children": [],
+                "RawContent": "",
+                "Semantic": null
+              },
+              {
+                "Id": "",
+                "TagName": "FooterStyle",
+                "Attributes": {
+                  "CssClass": "Footer"
+                },
+                "Children": [],
+                "RawContent": "",
+                "Semantic": null
+              },
+              {
+                "Id": "",
+                "TagName": "HeaderStyle",
+                "Attributes": {
+                  "CssClass": "Header"
+                },
+                "Children": [],
+                "RawContent": "",
+                "Semantic": null
+              },
+              {
+                "Id": "",
+                "TagName": "PagerStyle",
+                "Attributes": {
+                  "CssClass": "Pager"
+                },
+                "Children": [],
+                "RawContent": "",
+                "Semantic": null
+              },
+              {
+                "Id": "",
+                "TagName": "RowStyle",
+                "Attributes": {
+                  "CssClass": "Odd"
+                },
+                "Children": [],
+                "RawContent": "",
+                "Semantic": null
+              },
+              {
+                "Id": "",
+                "TagName": "SelectedRowStyle",
+                "Attributes": {
+                  "CssClass": "Selected2"
+                },
+                "Children": [],
+                "RawContent": "",
+                "Semantic": null
+              }
+            ],
+            "RawContent": null,
+            "Semantic": null
+          },
+          {
+            "Id": "SqlDataSource1",
+            "TagName": "asp:SqlDataSource",
+            "Attributes": {
+              "ID": "SqlDataSource1",
+              "Runat": "server",
+              "SelectCommand": "SELECT ac.ActorID, c.CountyName, ac.StateCode, ac.ActorCountyID, a.DisplayName AS ActorName, s.StateName\r\n      FROM dbo.aa_ActorCounties AS ac INNER JOIN\r\n      dbo.aa_Actors AS a ON ac.ActorID = a.ActorID INNER JOIN\r\n      dbo.al_States AS s ON ac.StateCode = s.StateCode LEFT OUTER JOIN\r\n      dbo.al_Counties AS c ON ac.StateCode = c.StateCode AND ac.CountyCode = c.CountyCode",
+              "ConnectionString": "\u003C%$ ConnectionStrings:SODB %\u003E"
+            },
+            "Children": [],
+            "RawContent": "",
+            "Semantic": null
+          }
+        ],
+        "RawContent": null,
+        "Semantic": null
+      }
+    ],
+    "RawContent": null,
+    "Semantic": null
+  },
+  "Members": [
+    {
+      "Kind": 1,
+      "Name": "_actorTypeId",
+      "Type": "int",
+      "Visibility": 2,
+      "IsStatic": false,
+      "Parameters": [],
+      "Body": null,
+      "Attributes": []
+    },
+    {
+      "Kind": 0,
+      "Name": "ActorType",
+      "Type": "int",
+      "Visibility": 0,
+      "IsStatic": false,
+      "Parameters": [],
+      "Body": null,
+      "Attributes": []
+    },
+    {
+      "Kind": 1,
+      "Name": "_currentUser",
+      "Type": "ICurrentUser",
+      "Visibility": 2,
+      "IsStatic": false,
+      "Parameters": [],
+      "Body": null,
+      "Attributes": []
+    },
+    {
+      "Kind": 0,
+      "Name": "CurrentUser",
+      "Type": "ICurrentUser",
+      "Visibility": 1,
+      "IsStatic": false,
+      "Parameters": [],
+      "Body": null,
+      "Attributes": []
+    },
+    {
+      "Kind": 1,
+      "Name": "_Actors",
+      "Type": "List\u003CTypedNameValuePair\u003Cstring, int\u003E\u003E",
+      "Visibility": 2,
+      "IsStatic": false,
+      "Parameters": [],
+      "Body": null,
+      "Attributes": []
+    },
+    {
+      "Kind": 0,
+      "Name": "Actors",
+      "Type": "List\u003CTypedNameValuePair\u003Cstring, int\u003E\u003E",
+      "Visibility": 0,
+      "IsStatic": false,
+      "Parameters": [],
+      "Body": null,
+      "Attributes": []
+    },
+    {
+      "Kind": 2,
+      "Name": "Page_Load",
+      "Type": "void",
+      "Visibility": 1,
+      "IsStatic": false,
+      "Parameters": [
+        {
+          "Name": "sender",
+          "Type": "object",
+          "DefaultValue": null
+        },
+        {
+          "Name": "e",
+          "Type": "EventArgs",
+          "DefaultValue": null
+        }
+      ],
+      "Body": "{\r\n            if (!Page.IsPostBack)\r\n            {\r\n\r\n            }\r\n        }",
+      "Attributes": []
+    },
+    {
+      "Kind": 2,
+      "Name": "BindControl",
+      "Type": "void",
+      "Visibility": 0,
+      "IsStatic": false,
+      "Parameters": [],
+      "Body": "{\r\n            ddlActor.DataSource = this.Actors;\r\n            ddlActor.DataBind();\r\n            BindGrid();\r\n        }",
+      "Attributes": []
+    },
+    {
+      "Kind": 2,
+      "Name": "BindGrid",
+      "Type": "void",
+      "Visibility": 2,
+      "IsStatic": false,
+      "Parameters": [],
+      "Body": "{\r\n            GridView1.DataBind();\r\n        }",
+      "Attributes": []
+    },
+    {
+      "Kind": 2,
+      "Name": "ddlState_SelectedIndexChanged",
+      "Type": "void",
+      "Visibility": 1,
+      "IsStatic": false,
+      "Parameters": [
+        {
+          "Name": "sender",
+          "Type": "object",
+          "DefaultValue": null
+        },
+        {
+          "Name": "e",
+          "Type": "EventArgs",
+          "DefaultValue": null
+        }
+      ],
+      "Body": "{\r\n            PopulateCounties(ddlState.SelectedValue);\r\n        }",
+      "Attributes": []
+    },
+    {
+      "Kind": 2,
+      "Name": "PopulateCounties",
+      "Type": "void",
+      "Visibility": 2,
+      "IsStatic": false,
+      "Parameters": [
+        {
+          "Name": "stateCode",
+          "Type": "string",
+          "DefaultValue": null
+        }
+      ],
+      "Body": "{\r\n            string sql =\r\n                @\u0022SELECT [CountyName],[CountyCode] \r\n                FROM [al_Counties] \r\n                WHERE StateCode=@StateCode \r\n                ORDER BY CountyName\u0022;\r\n\r\n            List\u003CSqlParameter\u003E paramList = new List\u003CSqlParameter\u003E();\r\n\r\n            var param1 = new SqlParameter(\u0022@StateCode\u0022, SqlDbType.Char, 2);\r\n            param1.Value = stateCode;\r\n            paramList.Add(param1);\r\n\r\n            List\u003CTextValueItem\u003E items = DbHelper.GetTextValueItems(sql, paramList, \u0022CountyName\u0022, \u0022CountyName\u0022);\r\n\r\n            items.Insert(0, new TextValueItem(\u0022--County--\u0022, \u0022\u0022));\r\n            ddlCounty.DataSource = items;\r\n            ddlCounty.DataBind();\r\n\r\n        }",
+      "Attributes": []
+    },
+    {
+      "Kind": 2,
+      "Name": "formatCountyName",
+      "Type": "object",
+      "Visibility": 1,
+      "IsStatic": true,
+      "Parameters": [
+        {
+          "Name": "countyName",
+          "Type": "object",
+          "DefaultValue": null
+        }
+      ],
+      "Body": "{\r\n            if (countyName == null || string.IsNullOrEmpty(countyName.ToString()))\r\n                return \u0022All Counties\u0022;\r\n            return countyName.ToString();\r\n        }",
+      "Attributes": []
+    },
+    {
+      "Kind": 2,
+      "Name": "btnAdd_Click",
+      "Type": "void",
+      "Visibility": 1,
+      "IsStatic": false,
+      "Parameters": [
+        {
+          "Name": "sender",
+          "Type": "object",
+          "DefaultValue": null
+        },
+        {
+          "Name": "e",
+          "Type": "EventArgs",
+          "DefaultValue": null
+        }
+      ],
+      "Body": "{\r\n            try\r\n            {\r\n                ProductionCenterRepository db = new ProductionCenterRepository();\r\n                db.AddCounty(this.CurrentUser.AsUser(), int.Parse(ddlActor.SelectedValue), ddlState.SelectedValue,\r\n                             int.Parse(ddlCounty.SelectedValue));\r\n                BindGrid();\r\n            }\r\n            catch (Exception ex)\r\n            {\r\n                ErrorMessage.Text = string.Format(\u0022\u003Cp\u003E{0}\u003C/p\u003E\u0022, ex.Message);\r\n            }\r\n        }",
+      "Attributes": []
+    },
+    {
+      "Kind": 2,
+      "Name": "btnDelete_Click",
+      "Type": "void",
+      "Visibility": 1,
+      "IsStatic": false,
+      "Parameters": [
+        {
+          "Name": "sender",
+          "Type": "object",
+          "DefaultValue": null
+        },
+        {
+          "Name": "e",
+          "Type": "EventArgs",
+          "DefaultValue": null
+        }
+      ],
+      "Body": "{\r\n            int actorCountyId = int.Parse((sender as LinkButton).CommandArgument);\r\n            string sql = string.Format(\u0022DELETE FROM aa_ActorCounties WHERE ActorCountyID={0}\u0022, actorCountyId);\r\n            DbHelper.ExecNonQuery(sql);\r\n            BindGrid();\r\n        }",
+      "Attributes": []
+    }
+  ],
+  "CssAssets": [],
+  "JsAssets": [],
+  "Navigations": [],
+  "Workflows": [
+    {
+      "Name": "ddlState.OnSelectedIndexChanged",
+      "TriggerControlId": "ddlState",
+      "TriggerEvent": "OnSelectedIndexChanged",
+      "HandlerMethod": "ddlState_SelectedIndexChanged",
+      "Steps": [
+        {
+          "MethodName": "PopulateCounties",
+          "Semantic": null
+        }
+      ],
+      "Semantic": "Runs 1 step(s): PopulateCounties"
+    },
+    {
+      "Name": "btnAdd.OnClick",
+      "TriggerControlId": "btnAdd",
+      "TriggerEvent": "OnClick",
+      "HandlerMethod": "btnAdd_Click",
+      "Steps": [
+        {
+          "MethodName": "BindGrid",
+          "Semantic": null
+        }
+      ],
+      "Semantic": "Creates a new record"
+    },
+    {
+      "Name": "btnDelete.OnClick",
+      "TriggerControlId": "btnDelete",
+      "TriggerEvent": "OnClick",
+      "HandlerMethod": "btnDelete_Click",
+      "Steps": [
+        {
+          "MethodName": "BindGrid",
+          "Semantic": null
+        }
+      ],
+      "Semantic": "Removes a record"
+    }
+  ]
+}
