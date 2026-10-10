@@ -30,8 +30,20 @@ and `IIrGenerator` (`Target`, `Generate(PageIr, outputDirectory)`).
 - `PageIr.RootControl` is nullable; the prototype assumed non-null.
 - The real projects target `net8.0` and `IR.Contracts` pulls AngleSharp + Roslyn 4.8.0 into every consumer.
 
+## WinForms source engine (P1, first slice)
+Pipeline (declared by the engine, order matters): `controlTree` -> `members` -> `semantics` -> `workflows` -> `navigation`.
+Later facets read earlier ones from the `PageIr` only (event wiring is read back from `Attributes["OnClick"]` etc.).
+`IProjectAwareSourceEngine.CreateExtractors(analysis)` lets an engine build extractors that need the whole project
+(UserControl inlining); `Migrator.Engine.Pipeline.SourceIrRunner` runs them per unit with per-unit failure isolation.
+
+Known limitations (carry into reports): handlers in a third partial file are not resolved; only direct calls become workflow
+steps (not 2+ levels), ordered by call order; a handler name inside an inlined UserControl that equals a form method name
+would be attributed to the form; menu/toolbar items, DataGridView columns, TableLayoutPanel cells, DataBindings and `.resx`
+are not extracted yet; a custom base class stays as `RootControl.TagName` (e.g. `BaseForm`) rather than resolving to `Form`.
+
 ## Commands
 ```bash
 dotnet build WinFormsMigrator.sln
 dotnet run --project src/Migrator.Cli -- engines [--config path/to/engines.json]
+dotnet run --project src/Migrator.Cli -- ir --source <winforms-folder> --out <dir>   # writes <dir>/ir/<Form>/<Form>.complete.ir.json
 ```
