@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>Migrator.Source.WinForms</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Contracts only (IEngineModule, ISourceEngine, ...). Engines never reference each other. -->
+    <ProjectReference Include="..\Migrator.Engine\Migrator.Engine.csproj" />
+  </ItemGroup>
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\build\IrReference.props" />
+
+</Project>

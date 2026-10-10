@@ -1,0 +1,9 @@
+{
+  // Authoritative allow-list of engines. Nothing loads unless it is listed here and enabled.
+  // "assembly": built-in engines are found in the app directory; anything else in plugins/<assembly>.dll
+  // or plugins/<assembly>/<assembly>.dll. "options" is passed to the module's (EngineOptions) constructor.
+  "pluginsDirectory": "plugins",
+  "engines": [
+    { "id": "winforms", "enabled": true, "assembly": "Migrator.Source.WinForms", "options": {} }
+  ]
+}
