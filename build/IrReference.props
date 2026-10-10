@@ -1,0 +1,29 @@
+<Project>
+  <!--
+    The ONLY place that decides how projects consume the shared IR models + contracts.
+    Import from any project that needs them:
+        <Import Project="$(MSBuildThisFileDirectory)..\..\build\IrReference.props" />
+
+    Default: ProjectReference to a sibling checkout of the real WebFormsMigrator repo (WebFormsMigrator.IR and
+    WebFormsMigrator.IR.Contracts). Nothing is copied. Override the checkout location with:
+        dotnet build -p:WebFormsMigratorRoot=<path to WebFormsMigrator checkout>
+    Once the packages are published to a feed, switch with:
+        dotnet build -p:UseSharedIrPackages=true -p:SharedIrVersion=<x.y.z>
+    No C# source changes are required either way (same namespaces).
+  -->
+  <PropertyGroup>
+    <UseSharedIrPackages Condition="'$(UseSharedIrPackages)' == ''">false</UseSharedIrPackages>
+    <SharedIrVersion Condition="'$(SharedIrVersion)' == ''">0.1.0</SharedIrVersion>
+    <WebFormsMigratorRoot Condition="'$(WebFormsMigratorRoot)' == ''">$([MSBuild]::NormalizeDirectory('$(MSBuildThisFileDirectory)', '..', '..', 'MIgration Engine 2'))</WebFormsMigratorRoot>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(UseSharedIrPackages)' != 'true'">
+    <ProjectReference Include="$(WebFormsMigratorRoot)WebFormsMigrator.IR\WebFormsMigrator.IR.csproj" />
+    <ProjectReference Include="$(WebFormsMigratorRoot)WebFormsMigrator.IR.Contracts\WebFormsMigrator.IR.Contracts.csproj" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(UseSharedIrPackages)' == 'true'">
+    <PackageReference Include="WebFormsMigrator.IR" Version="$(SharedIrVersion)" />
+    <PackageReference Include="WebFormsMigrator.IR.Contracts" Version="$(SharedIrVersion)" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Migrator.Cli</RootNamespace>
+    <AssemblyName>migrator</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Migrator.Engine\Migrator.Engine.csproj" />
+    <!-- Composition root: built-in engines are referenced here only so they land in the app directory.
+         Migrator.Engine itself never references an engine. -->
+    <ProjectReference Include="..\Migrator.Source.WinForms\Migrator.Source.WinForms.csproj" />
+  </ItemGroup>
+
+</Project>

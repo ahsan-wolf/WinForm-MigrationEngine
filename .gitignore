@@ -1,6 +1,6 @@
-  bin/
-  obj/
-  .vs/
-  node_modules/
-  dist/
-  *.user
+bin/
+obj/
+.vs/
+node_modules/
+dist/
+*.user
