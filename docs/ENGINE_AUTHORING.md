@@ -25,7 +25,7 @@ override with `-p:WebFormsMigratorRoot=<path>`. Nothing is copied. When the pack
 and `IIrGenerator` (`Target`, `Generate(PageIr, outputDirectory)`).
 
 ### Known schema gaps for WinForms (changes belong in the WebFormsMigrator repo, additive only)
-- `NavigationIr` is web-shaped (`SourceControlId`, `Target`, `TargetType`); CLAUDE.md §4 expects `TriggerControlId`, `TargetForm`, `Kind` (Show|ShowDialog|Close|Hide|Exit).
+- `NavigationIr` is web-shaped. **Resolved without touching the shared IR:** WinForms entries reuse the existing fields (`SourceControlId` = trigger control, `TriggerEvent` = event, `Target` = target form, `TargetType` = `Show|ShowDialog|Close|Hide|Exit`). Create and read them through `Migrator.Engine.Navigation.WinNavigation` (typed `TryGetKind`, `TargetForm`, `FindWorkflow`); don't hand-write the strings. If richer data is ever needed (DialogResult, ctor args), add a WinForms-owned sidecar file keyed by control + event.
 - `MemberIr.Kind` / `Visibility` are enums (`Visibility` includes `Protected`/`Internal`), not the ints in the prototype.
 - `PageIr.RootControl` is nullable; the prototype assumed non-null.
 - The real projects target `net8.0` and `IR.Contracts` pulls AngleSharp + Roslyn 4.8.0 into every consumer.
