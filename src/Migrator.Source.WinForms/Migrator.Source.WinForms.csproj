@@ -9,6 +9,11 @@
     <ProjectReference Include="..\Migrator.Engine\Migrator.Engine.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Same version as WebFormsMigrator.IR.Contracts so the two never diverge. -->
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.8.0" />
+  </ItemGroup>
+
   <Import Project="$(MSBuildThisFileDirectory)..\..\build\IrReference.props" />
 
 </Project>
