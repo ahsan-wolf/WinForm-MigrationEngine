@@ -4,21 +4,22 @@
     Import from any project that needs them:
         <Import Project="$(MSBuildThisFileDirectory)..\..\build\IrReference.props" />
 
-    Interim (default): ProjectReference to src/Migrator.IR.Interim, which exposes the same
-    namespaces (WebFormsMigrator.IR.Models / .Contracts) as the real packages.
-
-    Once the packages are published to a feed (local `dotnet pack` feed first):
+    Default: ProjectReference to a sibling checkout of the real WebFormsMigrator repo (WebFormsMigrator.IR and
+    WebFormsMigrator.IR.Contracts). Nothing is copied. Override the checkout location with:
+        dotnet build -p:WebFormsMigratorRoot=<path to WebFormsMigrator checkout>
+    Once the packages are published to a feed, switch with:
         dotnet build -p:UseSharedIrPackages=true -p:SharedIrVersion=<x.y.z>
-    or flip the default below, add the feed to nuget.config, then delete src/Migrator.IR.Interim.
-    No C# source changes are required.
+    No C# source changes are required either way (same namespaces).
   -->
   <PropertyGroup>
     <UseSharedIrPackages Condition="'$(UseSharedIrPackages)' == ''">false</UseSharedIrPackages>
     <SharedIrVersion Condition="'$(SharedIrVersion)' == ''">0.1.0</SharedIrVersion>
+    <WebFormsMigratorRoot Condition="'$(WebFormsMigratorRoot)' == ''">$([MSBuild]::NormalizeDirectory('$(MSBuildThisFileDirectory)', '..', '..', 'MIgration Engine 2'))</WebFormsMigratorRoot>
   </PropertyGroup>
 
   <ItemGroup Condition="'$(UseSharedIrPackages)' != 'true'">
-    <ProjectReference Include="$(MSBuildThisFileDirectory)..\src\Migrator.IR.Interim\Migrator.IR.Interim.csproj" />
+    <ProjectReference Include="$(WebFormsMigratorRoot)WebFormsMigrator.IR\WebFormsMigrator.IR.csproj" />
+    <ProjectReference Include="$(WebFormsMigratorRoot)WebFormsMigrator.IR.Contracts\WebFormsMigrator.IR.Contracts.csproj" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(UseSharedIrPackages)' == 'true'">

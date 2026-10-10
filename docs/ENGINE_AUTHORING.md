@@ -17,11 +17,18 @@
 - Each engine loads in isolation: a failure becomes an `[ERROR]` diagnostic and the remaining engines still load.
 - Schema check: same major; while major is `0`, the minor must also match. Otherwise the registry refuses the engine.
 
-## Interim IR reference
-The shared `WebFormsMigrator.IR` / `.IR.Contracts` packages are not yet available to this repo.
-`src/Migrator.IR.Interim` stands in, using the **same namespaces**, and `build/IrReference.props` is the only switch.
-When the packages are on a feed: `-p:UseSharedIrPackages=true -p:SharedIrVersion=<x.y.z>` (or flip the default), then delete `src/Migrator.IR.Interim`.
-`IIrExtractor` / `IIrGenerator` / `IrExtractionContext` there are **provisional** shapes; reconcile with the real ones at that point.
+## Shared IR reference
+`build/IrReference.props` is the only place that decides how projects consume `WebFormsMigrator.IR` and `WebFormsMigrator.IR.Contracts`.
+By default it ProjectReferences a sibling checkout of the real WebFormsMigrator repo (`..\..\MIgration Engine 2` relative to this repo);
+override with `-p:WebFormsMigratorRoot=<path>`. Nothing is copied. When the packages are on a feed, use
+`-p:UseSharedIrPackages=true -p:SharedIrVersion=<x.y.z>`. Our contracts use the real `IIrExtractor` (`Facet`, `Extract(context, PageIr)`)
+and `IIrGenerator` (`Target`, `Generate(PageIr, outputDirectory)`).
+
+### Known schema gaps for WinForms (changes belong in the WebFormsMigrator repo, additive only)
+- `NavigationIr` is web-shaped (`SourceControlId`, `Target`, `TargetType`); CLAUDE.md §4 expects `TriggerControlId`, `TargetForm`, `Kind` (Show|ShowDialog|Close|Hide|Exit).
+- `MemberIr.Kind` / `Visibility` are enums (`Visibility` includes `Protected`/`Internal`), not the ints in the prototype.
+- `PageIr.RootControl` is nullable; the prototype assumed non-null.
+- The real projects target `net8.0` and `IR.Contracts` pulls AngleSharp + Roslyn 4.8.0 into every consumer.
 
 ## Commands
 ```bash
