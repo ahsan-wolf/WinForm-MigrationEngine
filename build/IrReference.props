@@ -1,0 +1,28 @@
+<Project>
+  <!--
+    The ONLY place that decides how projects consume the shared IR models + contracts.
+    Import from any project that needs them:
+        <Import Project="$(MSBuildThisFileDirectory)..\..\build\IrReference.props" />
+
+    Interim (default): ProjectReference to src/Migrator.IR.Interim, which exposes the same
+    namespaces (WebFormsMigrator.IR.Models / .Contracts) as the real packages.
+
+    Once the packages are published to a feed (local `dotnet pack` feed first):
+        dotnet build -p:UseSharedIrPackages=true -p:SharedIrVersion=<x.y.z>
+    or flip the default below, add the feed to nuget.config, then delete src/Migrator.IR.Interim.
+    No C# source changes are required.
+  -->
+  <PropertyGroup>
+    <UseSharedIrPackages Condition="'$(UseSharedIrPackages)' == ''">false</UseSharedIrPackages>
+    <SharedIrVersion Condition="'$(SharedIrVersion)' == ''">0.1.0</SharedIrVersion>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(UseSharedIrPackages)' != 'true'">
+    <ProjectReference Include="$(MSBuildThisFileDirectory)..\src\Migrator.IR.Interim\Migrator.IR.Interim.csproj" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(UseSharedIrPackages)' == 'true'">
+    <PackageReference Include="WebFormsMigrator.IR" Version="$(SharedIrVersion)" />
+    <PackageReference Include="WebFormsMigrator.IR.Contracts" Version="$(SharedIrVersion)" />
+  </ItemGroup>
+</Project>

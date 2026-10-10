@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>WebFormsMigrator.IR</RootNamespace>
+    <Description>INTERIM stand-in for WebFormsMigrator.IR + WebFormsMigrator.IR.Contracts. Replace via build/IrReference.props.</Description>
+  </PropertyGroup>
+
+</Project>
