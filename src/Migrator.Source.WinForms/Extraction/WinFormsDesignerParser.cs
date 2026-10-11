@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -15,7 +16,11 @@ public sealed class DesignerParseResult
     /// <summary>Control field name -> declared/instantiated type, e.g. "txtSearch" -> "System.Windows.Forms.TextBox".</summary>
     public Dictionary<string, string> DeclaredControlTypes { get; } = new();
 
-    /// <summary>Control field name -> { PropertyName -> assigned value text }.</summary>
+    /// <summary>
+    /// Control field name -> { PropertyName -> assigned value text }. Besides real properties this holds designer facts that
+    /// have no property of their own, under dotted keys that cannot collide with a C# property name:
+    /// <c>ParentSlot</c>, <c>TableLayout.*</c>, <c>DataBinding.*</c>, <c>Items</c>, <c>ColumnStyles</c>/<c>RowStyles</c>.
+    /// </summary>
     public Dictionary<string, Dictionary<string, string>> ControlAttributes { get; } = new();
 
     /// <summary>Control field name -> { EventName -> handler method name }.</summary>
@@ -24,7 +29,7 @@ public sealed class DesignerParseResult
     /// <summary>Events wired on the Form/UserControl itself (this.Load += ...) -> handler method name.</summary>
     public Dictionary<string, string> RootEventHandlers { get; } = new();
 
-    /// <summary>Child control id -> parent control id ("" means the parent is the Form/UserControl root).</summary>
+    /// <summary>Child control id -> parent control id ("" means the parent is the Form/UserControl root). Insertion order = add order.</summary>
     public Dictionary<string, string> ParentOf { get; } = new();
 
     /// <summary>Controls in first-seen order within InitializeComponent.</summary>
@@ -32,11 +37,20 @@ public sealed class DesignerParseResult
 
     /// <summary>Form/UserControl-level property assignments, e.g. this.Text = "Actor Management";</summary>
     public Dictionary<string, string> RootAttributes { get; } = new();
+
+    /// <summary>InitializeComponent statements the parser did not understand (single-line text). Never silently dropped.</summary>
+    public List<string> Unhandled { get; } = new();
 }
 
 /// <summary>Reads InitializeComponent() statement by statement (syntax only; nothing is compiled or run).</summary>
-public static class WinFormsDesignerParser
+public static partial class WinFormsDesignerParser
 {
+    /// <summary>Layout bookkeeping calls that carry no migratable fact.</summary>
+    private static readonly HashSet<string> IgnorableCalls = new()
+    {
+        "SuspendLayout", "ResumeLayout", "PerformLayout", "BeginInit", "EndInit", "ApplyResources"
+    };
+
     public static DesignerParseResult Parse(string designerSourceText)
     {
         var result = new DesignerParseResult();
@@ -67,31 +81,68 @@ public static class WinFormsDesignerParser
             .FirstOrDefault(m => m.Identifier.Text == "InitializeComponent");
         if (initMethod?.Body == null) return result;
 
+        var locals = new Dictionary<string, Dictionary<string, string>>(); // designer locals, e.g. DataGridViewCellStyle
         foreach (var stmt in initMethod.Body.Statements)
         {
-            if (stmt is not ExpressionStatementSyntax exprStmt) continue;
-
-            switch (exprStmt.Expression)
-            {
-                case AssignmentExpressionSyntax assign when assign.IsKind(SyntaxKind.SimpleAssignmentExpression):
-                    HandleAssignment(assign, result);
-                    break;
-                case AssignmentExpressionSyntax assign when assign.IsKind(SyntaxKind.AddAssignmentExpression):
-                    HandleEventWiring(assign, result);
-                    break;
-                case InvocationExpressionSyntax invoke:
-                    HandleControlsAddInvocation(invoke, result);
-                    break;
-            }
+            if (!HandleStatement(stmt, result, locals))
+                result.Unhandled.Add(Describe(stmt));
         }
 
         return result;
     }
 
+    /// <summary>Returns false when the statement is not understood (the caller records it).</summary>
+    private static bool HandleStatement(StatementSyntax stmt, DesignerParseResult result, Dictionary<string, Dictionary<string, string>> locals)
+    {
+        switch (stmt)
+        {
+            case LocalDeclarationStatementSyntax local:
+                // e.g. ComponentResourceManager resources = ...; DataGridViewCellStyle dataGridViewCellStyle1 = new ...;
+                foreach (var v in local.Declaration.Variables) locals.TryAdd(v.Identifier.Text, new Dictionary<string, string>());
+                return true;
+
+            case ExpressionStatementSyntax { Expression: var expr }:
+                return expr switch
+                {
+                    AssignmentExpressionSyntax a when a.IsKind(SyntaxKind.SimpleAssignmentExpression) => HandleAssignment(a, result, locals),
+                    AssignmentExpressionSyntax a when a.IsKind(SyntaxKind.AddAssignmentExpression) => HandleEventWiring(a, result),
+                    InvocationExpressionSyntax invoke => HandleInvocation(invoke, result),
+                    _ => false
+                };
+
+            default:
+                return false;
+        }
+    }
+
+    // ---- helpers -------------------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// Flattens a member-access chain: <c>this.dgv.Columns</c> -> root "this", segments [dgv, Columns];
+    /// <c>style.Format</c> -> root "style", segments [Format]. False when the chain does not start at `this` or an identifier.
+    /// </summary>
+    private static bool TryFlatten(ExpressionSyntax expr, out string root, out List<string> segments)
+    {
+        segments = new List<string>();
+        root = "";
+        while (expr is MemberAccessExpressionSyntax ma)
+        {
+            segments.Insert(0, ma.Name.Identifier.Text);
+            expr = ma.Expression;
+        }
+
+        switch (expr)
+        {
+            case ThisExpressionSyntax: root = "this"; return true;
+            case IdentifierNameSyntax id: root = id.Identifier.Text; return true;
+            default: return false;
+        }
+    }
+
     /// <summary>Matches `this.X` and returns X.</summary>
     private static bool TryGetThisMemberName(ExpressionSyntax expr, out string name)
     {
-        if (expr is MemberAccessExpressionSyntax ma && ma.Expression is ThisExpressionSyntax)
+        if (expr is MemberAccessExpressionSyntax { Expression: ThisExpressionSyntax } ma)
         {
             name = ma.Name.Identifier.Text;
             return true;
@@ -100,69 +151,101 @@ public static class WinFormsDesignerParser
         return false;
     }
 
-    private static void HandleAssignment(AssignmentExpressionSyntax assign, DesignerParseResult result)
+    private static Dictionary<string, string> Attrs(DesignerParseResult result, string controlId)
     {
-        var left = assign.Left;
-
-        // Case A: this.X = new SomeControlType(...);   or   this.Name = "..." (root property)
-        // `new` only declares a control when X is a field of the class; this.ClientSize = new Size(..),
-        // this.AutoScaleDimensions = new SizeF(..) are properties of the Form/UserControl itself.
-        if (TryGetThisMemberName(left, out var directId))
+        if (!result.ControlAttributes.TryGetValue(controlId, out var attrs))
         {
-            if (directId == "components") return; // IContainer plumbing, not a control or a property worth keeping
-
-            if (assign.Right is ObjectCreationExpressionSyntax creation && result.DeclaredControlTypes.ContainsKey(directId))
-            {
-                result.DeclaredControlTypes[directId] = creation.Type.ToString();
-                result.ControlAttributes.TryAdd(directId, new Dictionary<string, string>());
-                result.ControlEventHandlers.TryAdd(directId, new Dictionary<string, string>());
-                if (!result.ControlDeclarationOrder.Contains(directId))
-                    result.ControlDeclarationOrder.Add(directId);
-            }
-            else
-            {
-                result.RootAttributes[directId] = CleanLiteral(assign.Right.ToString());
-            }
-            return;
+            attrs = new Dictionary<string, string>();
+            result.ControlAttributes[controlId] = attrs;
         }
-
-        // Case B: this.X.SomeProperty = value;
-        if (left is MemberAccessExpressionSyntax outerMa &&
-            outerMa.Expression is MemberAccessExpressionSyntax innerMa &&
-            innerMa.Expression is ThisExpressionSyntax)
-        {
-            var controlId = innerMa.Name.Identifier.Text;
-            if (!result.ControlAttributes.TryGetValue(controlId, out var attrs))
-            {
-                attrs = new Dictionary<string, string>();
-                result.ControlAttributes[controlId] = attrs;
-            }
-            attrs[outerMa.Name.Identifier.Text] = CleanLiteral(assign.Right.ToString());
-
-            if (!result.ControlDeclarationOrder.Contains(controlId))
-                result.ControlDeclarationOrder.Add(controlId);
-        }
+        return attrs;
     }
 
-    private static void HandleEventWiring(AssignmentExpressionSyntax addAssign, DesignerParseResult result)
+    private static void Touch(DesignerParseResult result, string controlId)
+    {
+        if (!result.ControlDeclarationOrder.Contains(controlId)) result.ControlDeclarationOrder.Add(controlId);
+    }
+
+    private static string Describe(StatementSyntax stmt)
+    {
+        var text = WhitespaceRegex().Replace(stmt.ToString(), " ").Trim();
+        return text.Length <= 200 ? text : text[..200] + "...";
+    }
+
+    private static string CleanLiteral(string text) => text.Trim().Trim('"');
+
+    [GeneratedRegex(@"\s+")]
+    private static partial Regex WhitespaceRegex();
+
+    // ---- assignments ---------------------------------------------------------------------------------------------
+
+    private static bool HandleAssignment(AssignmentExpressionSyntax assign, DesignerParseResult result, Dictionary<string, Dictionary<string, string>> locals)
+    {
+        if (!TryFlatten(assign.Left, out var root, out var segments)) return false;
+
+        // this.X = ...  /  this.X.Prop[.Sub] = ...
+        if (root == "this")
+        {
+            if (segments.Count == 0) return false;
+            var first = segments[0];
+
+            if (segments.Count == 1)
+            {
+                if (first == "components") return true; // IContainer plumbing
+
+                // `new` only declares a control when X is a field of the class; this.ClientSize = new Size(..),
+                // this.AutoScaleDimensions = new SizeF(..) are properties of the Form/UserControl itself.
+                if (assign.Right is ObjectCreationExpressionSyntax creation && result.DeclaredControlTypes.ContainsKey(first))
+                {
+                    result.DeclaredControlTypes[first] = creation.Type.ToString();
+                    Attrs(result, first);
+                    result.ControlEventHandlers.TryAdd(first, new Dictionary<string, string>());
+                    Touch(result, first);
+                }
+                else
+                {
+                    result.RootAttributes[first] = CleanLiteral(assign.Right.ToString());
+                }
+                return true;
+            }
+
+            var controlId = first;
+            var property = string.Join('.', segments.Skip(1));
+            var attrs = Attrs(result, controlId);
+            Touch(result, controlId);
+
+            // this.col.DefaultCellStyle = dataGridViewCellStyle1;  -> copy the local's properties as DefaultCellStyle.*
+            if (assign.Right is IdentifierNameSyntax local && locals.TryGetValue(local.Identifier.Text, out var localProps))
+            {
+                foreach (var (k, v) in localProps) attrs[$"{property}.{k}"] = v;
+                return true;
+            }
+
+            attrs[property] = CleanLiteral(assign.Right.ToString());
+            return true;
+        }
+
+        // style.Format = "d";   (designer local such as a DataGridViewCellStyle)
+        if (locals.TryGetValue(root, out var props) && segments.Count >= 1)
+        {
+            props[string.Join('.', segments)] = CleanLiteral(assign.Right.ToString());
+            return true;
+        }
+
+        return false;
+    }
+
+    // ---- events --------------------------------------------------------------------------------------------------
+
+    private static bool HandleEventWiring(AssignmentExpressionSyntax addAssign, DesignerParseResult result)
     {
         // this.X.EventName += new System.EventHandler(this.Handler);   |   this.X.EventName += this.Handler;
         // this.EventName   += ...                                      (event on the Form/UserControl itself)
-        string? controlId = null;
-        string eventName;
+        if (!TryFlatten(addAssign.Left, out var root, out var segments) || root != "this" || segments.Count is < 1 or > 2)
+            return false;
 
-        if (addAssign.Left is MemberAccessExpressionSyntax outerMa)
-        {
-            eventName = outerMa.Name.Identifier.Text;
-            if (outerMa.Expression is MemberAccessExpressionSyntax innerMa && innerMa.Expression is ThisExpressionSyntax)
-                controlId = innerMa.Name.Identifier.Text;
-            else if (outerMa.Expression is not ThisExpressionSyntax)
-                return;
-        }
-        else
-        {
-            return;
-        }
+        var eventName = segments[^1];
+        var controlId = segments.Count == 2 ? segments[0] : null;
 
         string? handlerMethod = null;
         if (addAssign.Right is ObjectCreationExpressionSyntax { ArgumentList.Arguments.Count: > 0 } oce)
@@ -174,12 +257,12 @@ public static class WinFormsDesignerParser
             handlerMethod = direct;
         }
 
-        if (handlerMethod == null) return;
+        if (handlerMethod == null) return false;
 
         if (controlId == null)
         {
             result.RootEventHandlers[eventName] = handlerMethod;
-            return;
+            return true;
         }
 
         if (!result.ControlEventHandlers.TryGetValue(controlId, out var handlers))
@@ -188,25 +271,82 @@ public static class WinFormsDesignerParser
             result.ControlEventHandlers[controlId] = handlers;
         }
         handlers[eventName] = handlerMethod;
+        return true;
     }
 
-    private static void HandleControlsAddInvocation(InvocationExpressionSyntax invoke, DesignerParseResult result)
+    // ---- invocations ---------------------------------------------------------------------------------------------
+
+    private static bool HandleInvocation(InvocationExpressionSyntax invoke, DesignerParseResult result)
     {
-        // this.Controls.Add(this.X);         -> parent = root
-        // this.panel1.Controls.Add(this.X);  -> parent = panel1
-        if (invoke.Expression is not MemberAccessExpressionSyntax { Name.Identifier.Text: "Add" } addAccess) return;
-        if (addAccess.Expression is not MemberAccessExpressionSyntax { Name.Identifier.Text: "Controls" } controlsAccess) return;
+        var methodName = invoke.Expression switch
+        {
+            MemberAccessExpressionSyntax ma => ma.Name.Identifier.Text,
+            IdentifierNameSyntax id => id.Identifier.Text,
+            _ => ""
+        };
+        if (IgnorableCalls.Contains(methodName)) return true;
 
-        string parentId;
-        if (controlsAccess.Expression is ThisExpressionSyntax) parentId = "";
-        else if (TryGetThisMemberName(controlsAccess.Expression, out var pid)) parentId = pid;
-        else return;
+        if (invoke.Expression is not MemberAccessExpressionSyntax access) return false;
+        if (!TryFlatten(access.Expression, out var root, out var receiver) || root != "this") return false;
 
-        if (invoke.ArgumentList.Arguments.Count == 0) return;
-        if (!TryGetThisMemberName(invoke.ArgumentList.Arguments[0].Expression, out var childId)) return;
+        if (methodName is "Add" or "AddRange") return HandleCollectionAdd(invoke, receiver, methodName == "AddRange", result);
 
-        result.ParentOf[childId] = parentId;
+        return false;
     }
 
-    private static string CleanLiteral(string text) => text.Trim().Trim('"');
+    /// <summary>
+    /// this.Controls.Add(this.X) | this.P.Controls.Add(this.X) | this.P.Items/DropDownItems/TabPages/Columns.Add|AddRange(...)
+    /// | this.S.Panel1/Panel2.Controls.Add(this.X). Receiver = member chain after `this`.
+    /// </summary>
+    private static bool HandleCollectionAdd(InvocationExpressionSyntax invoke, List<string> receiver, bool isRange, DesignerParseResult result)
+    {
+        string parentId;
+        string slot;
+        switch (receiver)
+        {
+            case ["Controls"]:
+                parentId = ""; slot = ""; break;
+            case [var p, "Controls"]:
+                parentId = p; slot = ""; break;
+            case [var p, "Items" or "DropDownItems" or "TabPages" or "Columns"]:
+                parentId = p; slot = receiver[1]; break;
+            case [var p, "Panel1" or "Panel2", "Controls"]:
+                parentId = p; slot = receiver[1]; break;
+            default:
+                return false;
+        }
+
+        var children = new List<string>();
+        var args = invoke.ArgumentList.Arguments;
+        if (isRange)
+        {
+            var elements = args.Count == 1
+                ? args[0].Expression switch
+                {
+                    ArrayCreationExpressionSyntax a => a.Initializer?.Expressions,
+                    ImplicitArrayCreationExpressionSyntax a => a.Initializer.Expressions,
+                    _ => null
+                }
+                : null;
+            if (elements is null) return false;
+            foreach (var e in elements)
+            {
+                if (!TryGetThisMemberName(e, out var childId)) return false;
+                children.Add(childId);
+            }
+        }
+        else
+        {
+            // Only the first argument is the child (Controls.Add(child, col, row) carries cell coordinates after it).
+            if (args.Count == 0 || !TryGetThisMemberName(args[0].Expression, out var childId)) return false;
+            children.Add(childId);
+        }
+
+        foreach (var child in children)
+        {
+            result.ParentOf[child] = parentId;
+            if (slot.Length > 0) Attrs(result, child)["ParentSlot"] = slot;
+        }
+        return children.Count > 0;
+    }
 }
