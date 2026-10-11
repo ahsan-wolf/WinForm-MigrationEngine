@@ -4,3 +4,6 @@ obj/
 node_modules/
 dist/
 *.user
+
+local-inputs/
+local-outputs/
