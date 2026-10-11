@@ -21,7 +21,7 @@ static int Run(string[] args)
               contract --assembly <dll> --out <dir>
                                                   Read a managed assembly's public API from metadata only (never loaded or run) -> <out>/<name>/contract.json
                                                   and data-access.json (SQL table/procedure names; connection-string-like literals are only counted)
-              migrate --source <dir> --out <dir> [--target react-app] [--entry <form>] [--depth <n|all>] [--config <engines.json>]
+              migrate --source <dir> --out <dir> [--target react-app] [--entry <form>] [--depth <n|all>] [--contract <contract.json>]... [--contract-scope used|all] [--config <engines.json>]
                                                   ir step, then generate an app into <out>/<target> (default depth 1: entry form + forms it opens)
             """);
         return args.Length == 0 ? 1 : 0;
@@ -163,7 +163,13 @@ static int Migrate(string[] args)
     GenerationResult result;
     try
     {
-        result = target.GenerateProject(Path.Combine(outDir, "ir"), Path.Combine(outDir, targetId), new GenerationOptions { EntryForm = OptionValue(args, "--entry"), Depth = depth });
+        result = target.GenerateProject(Path.Combine(outDir, "ir"), Path.Combine(outDir, targetId), new GenerationOptions
+        {
+            EntryForm = OptionValue(args, "--entry"),
+            Depth = depth,
+            ContractFiles = OptionValues(args, "--contract"),
+            ContractScope = OptionValue(args, "--contract-scope") ?? "used"
+        });
     }
     catch (Exception ex) when (ex is IOException or InvalidOperationException or InvalidDataException)
     {
@@ -176,6 +182,14 @@ static int Migrate(string[] args)
         Console.WriteLine($"  {group.Key,-22} {group.Count()}");
     Console.WriteLine($"  report: {Path.Combine(result.OutputDirectory, "MIGRATION_REPORT.md")}");
     return result.Issues.Any(i => i.Category == "generation-failed") ? 2 : 0;
+}
+
+static List<string> OptionValues(string[] args, string name)
+{
+    var values = new List<string>();
+    for (var i = 0; i < args.Length - 1; i++)
+        if (args[i] == name) values.Add(args[i + 1]);
+    return values;
 }
 
 static string? OptionValue(string[] args, string name)

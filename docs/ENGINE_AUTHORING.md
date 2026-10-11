@@ -110,6 +110,20 @@ values) and `data-access.json` (table / procedure **names** found in SQL-looking
 Use it for binary-only dependencies the app calls (e.g. a backend client library) to get exact contracts instead of inferring them from usage.
 Write output to a git-ignored folder (`local-outputs/`); do not commit the assembly or its generated contract. The console prints counts only.
 
+### External contracts in the React target (`migrate --contract`)
+`migrate ... --contract <contract.json> [--contract-scope used|all]` (repeatable) turns an assembly contract (see "Assembly contract") into typed code inside the
+generated app: `src/services/<assembly>/types.ts` (DTO interfaces + enum unions), `fixtures.ts` (deterministic fake rows) and `service.ts` (a Promise-based
+`<Assembly>Service` interface with one method per **static facade method the generated forms call**, plus a `mock...Service` and an exported instance). Names mirror the C# API
+(`ecmLibrary.UCM.CheckInList(...)`), so translated handlers map 1:1; every call is async. C# -> TS mapping follows CLAUDE.md §8 (`Guid`/`DateTime` -> `string`,
+`DataTable` -> `Row[]` marked inferred, unknown external types -> `unknown`). Pages do not call the service yet.
+
+**Secrets never reach the browser.** Names matching password/secret/encryptionkey/licensecode/connectionstring/credential/token/api-key are handled by rule:
+- a method whose name or return type is secret-like, or that takes a secret as a plain `string`/primitive (e.g. `password`), is **omitted** (listed as SERVER-ONLY in the report);
+- a secret-looking **object** parameter (a credentials holder) is **stripped** and the operation is kept: the server supplies credentials;
+- secret-looking DTO properties are omitted.
+The filter is deliberately over-inclusive; the report lists everything it removed. Scope `used` scans the generated forms' members with a regex (aliases and
+`using static` calls are missed; a miss only means a method is not emitted).
+
 ## Commands
 ```bash
 dotnet build WinFormsMigrator.sln
