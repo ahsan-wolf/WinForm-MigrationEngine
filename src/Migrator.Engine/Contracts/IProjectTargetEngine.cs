@@ -8,6 +8,12 @@ public sealed class GenerationOptions
 
     /// <summary>How many navigation hops from the entry form to generate (0 = entry only, 1 = entry + forms it opens, ...). Null = everything reachable.</summary>
     public int? Depth { get; init; } = 1;
+
+    /// <summary>contract.json files (from `migrator contract`) of binary-only dependencies the app calls; the target emits typed mock services from them.</summary>
+    public IReadOnlyList<string> ContractFiles { get; init; } = Array.Empty<string>();
+
+    /// <summary>"used" (default): only types/methods the generated forms reference. "all": every public data type and static method.</summary>
+    public string ContractScope { get; init; } = "used";
 }
 
 public sealed record GenerationIssue(string Unit, string Category, string Message);

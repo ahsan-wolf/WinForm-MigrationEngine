@@ -1,5 +1,7 @@
 using System.Text;
+using System.Text.Json;
 using Migrator.Engine.Contracts;
+using Migrator.Target.React.Contracts;
 using Migrator.Target.React.Spec;
 
 namespace Migrator.Target.React.Generation;
@@ -49,6 +51,28 @@ public sealed class ReactAppGenerator
             }
         }
 
+        // External contracts (binary-only dependencies): typed mock services, secrets omitted.
+        var contracts = new List<ContractEmitResult>();
+        if (options.ContractFiles.Count > 0)
+        {
+            var generatedUnits = result.GeneratedUnits.Select(n => ir.Units[n]).ToList();
+            foreach (var file in options.ContractFiles)
+            {
+                try
+                {
+                    var emitted = ServiceEmitter.Emit(file, generatedUnits, options.ContractScope.Equals("all", StringComparison.OrdinalIgnoreCase), outputDirectory, result.Files);
+                    contracts.Add(emitted);
+                    result.Issues.AddRange(emitted.OmittedMembers.Concat(emitted.OmittedMethods).Select(m => new GenerationIssue(emitted.Assembly, "contract-secret-omitted", m)));
+                    result.Issues.AddRange(emitted.CredentialParametersStripped.Distinct().Select(m => new GenerationIssue(emitted.Assembly, "contract-credentials-stripped", $"{m}: credentials parameter removed; the server supplies it")));
+                    result.Issues.AddRange(emitted.Notes.Select(n => new GenerationIssue(emitted.Assembly, "contract-unmapped", n)));
+                }
+                catch (Exception ex) when (ex is IOException or JsonException or InvalidDataException)
+                {
+                    result.Issues.Add(new GenerationIssue(Path.GetFileName(file), "generation-failed", $"contract could not be used: {ex.Message}"));
+                }
+            }
+        }
+
         var skippedOutOfScope = ir.Units.Keys.Where(n => !scope.ContainsKey(n)).OrderBy(n => n, StringComparer.Ordinal).ToList();
         result.SkippedUnits.AddRange(skippedOutOfScope);
 
@@ -56,7 +80,7 @@ public sealed class ReactAppGenerator
             AppWriter.Write(outputDirectory, "migrated-" + Naming.Camel(Naming.StripPrefix(entry)).ToLowerInvariant(), entryComponent,
                 Path.GetFullPath(_options.UiLibraryPath), result.Files);
 
-        AppWriter.Put(outputDirectory, "MIGRATION_REPORT.md", Report(ir, entry, options, spec, pages, result, skippedOutOfScope), result.Files);
+        AppWriter.Put(outputDirectory, "MIGRATION_REPORT.md", Report(ir, entry, options, spec, pages, result, skippedOutOfScope, contracts), result.Files);
         return result;
     }
 
@@ -78,7 +102,7 @@ public sealed class ReactAppGenerator
     }
 
     private static string Report(IrFolder ir, string entry, GenerationOptions options, SpecCatalog spec,
-        List<(string Unit, int Depth, GeneratedPage Page)> pages, GenerationResult result, List<string> outOfScope)
+        List<(string Unit, int Depth, GeneratedPage Page)> pages, GenerationResult result, List<string> outOfScope, List<ContractEmitResult> contracts)
     {
         var sb = new StringBuilder();
         sb.AppendLine("# Migration report — react-app");
@@ -110,7 +134,10 @@ public sealed class ReactAppGenerator
             ("event-not-mapped", "WinForms events with no ui-spec event"),
             ("user-control-inlined", "User controls rendered as panels"),
             ("image-resource", "Designer images not extracted"),
-            ("non-visual", "Non-visual components (not rendered)")
+            ("non-visual", "Non-visual components (not rendered)"),
+            ("contract-secret-omitted", "Secret-looking members omitted from generated services (SERVER-ONLY)"),
+            ("contract-credentials-stripped", "Service methods kept with their credentials parameter removed (server-side concern)"),
+            ("contract-unmapped", "Contract types without a TypeScript mapping (`unknown`)")
         };
         foreach (var (category, title) in order)
         {
@@ -124,6 +151,18 @@ public sealed class ReactAppGenerator
                 foreach (var item in group.Take(25)) sb.AppendLine($"  - {item.Message}");
                 if (group.Count() > 25) sb.AppendLine($"  - … and {group.Count() - 25} more");
             }
+        }
+
+        foreach (var c in contracts)
+        {
+            sb.AppendLine();
+            sb.AppendLine($"## External contract: {c.Assembly}");
+            sb.AppendLine();
+            sb.AppendLine($"Typed **mock** service generated into `src/services/{c.Assembly.ToLowerInvariant()}/` from the assembly's public API (scope `{c.Scope}`): " +
+                          $"{c.DataTypes} data type(s), {c.Enums} enum(s), {c.Methods} service method(s) ({c.CallSites} call site(s) in the generated forms).");
+            sb.AppendLine("Calls are async even where the C# API was synchronous. Fixtures are fake and prove shapes only. Pages do not call the service yet (handler translation is a later phase).");
+            if (c.OmittedMethods.Count + c.OmittedMembers.Count > 0)
+                sb.AppendLine($"Omitted as secret-looking (never shipped to the browser; belong on a server): {c.OmittedMethods.Count} method(s), {c.OmittedMembers.Count} member(s) — listed above.");
         }
 
         if (outOfScope.Count > 0)
