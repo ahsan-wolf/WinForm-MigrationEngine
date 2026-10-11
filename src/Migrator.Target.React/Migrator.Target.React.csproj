@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>Migrator.Target.React</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Contracts only. Targets never reference a source engine; they read the IR files. -->
+    <ProjectReference Include="..\Migrator.Engine\Migrator.Engine.csproj" />
+  </ItemGroup>
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\build\IrReference.props" />
+
+</Project>
