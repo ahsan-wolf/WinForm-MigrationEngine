@@ -74,6 +74,18 @@ source engine contributes technology-specific ones through the optional `IIrProj
   `Forms[]` / `UserControls[]` of `{Name, Kind, IrFile}` (`IrFile` relative to project.ir.json), `Shared {Settings, Resources, Dependencies,
   Unsupported}` (`Unsupported` is filled from unhandled designer statements; `Settings`, `Resources`, `Dependencies` are **empty lists for now**), and `Failures[]` for units whose extraction failed (never silently omitted).
 
+## IR viewer (`tools/win-ir-viewer`)
+Small React + TypeScript (Vite) developer tool for reviewing the IR; the Web Forms viewer cannot render WinForms tag names (no `asp:` prefix),
+so this one reads our files. Open the `ir` folder written by `migrator ir` (picker or drag-drop; nothing is uploaded, files are read in the browser).
+Sidebar: forms, user controls (startup form marked), failures, `Shared.Unsupported`. Tabs per unit: Tree (search, menus nested, event wiring),
+Layout (approximate boxes from Dock/Location/Size/table cells), Members (bodies), Workflows, Navigation (click to jump to the target form), Properties.
+It loads `project.ir.json` plus each unit's `complete` and `layout` files. `src/ir.ts` is DOM-free (types + loaders).
+
+```bash
+cd tools/win-ir-viewer && npm ci && npm run build && npm run lint && npm run dev
+```
+The npm scripts call the tools through `node ./node_modules/...` on purpose: a `&` in the repo path (e.g. `R&D`) breaks npm's `.bin` shims on Windows.
+
 ## Commands
 ```bash
 dotnet build WinFormsMigrator.sln
