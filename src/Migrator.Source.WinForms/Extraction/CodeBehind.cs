@@ -4,7 +4,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 namespace Migrator.Source.WinForms.Extraction;
 
 /// <summary>Raw source of one Form/UserControl pair.</summary>
-public sealed record WinFormsSourceText(string DesignerSource, string CodeBehindSource);
+public sealed record WinFormsSourceText(string DesignerSource, string CodeBehindSource, string? ResourcesSource = null);
 
 internal static class CodeBehind
 {

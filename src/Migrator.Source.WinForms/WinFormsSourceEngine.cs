@@ -24,7 +24,7 @@ public sealed class WinFormsSourceEngine : IProjectAwareSourceEngine, IIrProject
     {
         var userControls = analysis.UserControls.ToDictionary(
             u => u.Name,
-            u => new WinFormsSourceText(File.ReadAllText(u.DesignerPath), File.ReadAllText(u.CodeBehindPath)));
+            u => new WinFormsSourceText(File.ReadAllText(u.DesignerPath), File.ReadAllText(u.CodeBehindPath), ResxReader.ReadSibling(u.CodeBehindPath)));
         return Pipeline(userControls);
     }
 

@@ -39,6 +39,9 @@ public sealed class DesignerParseResult
     /// <summary>Form/UserControl-level property assignments, e.g. this.Text = "Actor Management";</summary>
     public Dictionary<string, string> RootAttributes { get; } = new();
 
+    /// <summary>Control id -> resource key from <c>resources.ApplyResources(this.btn, "btn")</c>; "" is the form itself (key "$this").</summary>
+    public Dictionary<string, string> ResourceKeys { get; } = new();
+
     /// <summary>InitializeComponent statements the parser did not understand (single-line text). Never silently dropped.</summary>
     public List<string> Unhandled { get; } = new();
 }
@@ -49,7 +52,7 @@ public static partial class WinFormsDesignerParser
     /// <summary>Layout bookkeeping calls that carry no migratable fact.</summary>
     private static readonly HashSet<string> IgnorableCalls = new()
     {
-        "SuspendLayout", "ResumeLayout", "PerformLayout", "BeginInit", "EndInit", "ApplyResources"
+        "SuspendLayout", "ResumeLayout", "PerformLayout", "BeginInit", "EndInit"
     };
 
     public static DesignerParseResult Parse(string designerSourceText)
@@ -286,6 +289,7 @@ public static partial class WinFormsDesignerParser
             _ => ""
         };
         if (IgnorableCalls.Contains(methodName)) return true;
+        if (methodName == "ApplyResources") return HandleApplyResources(invoke, result);
 
         if (invoke.Expression is not MemberAccessExpressionSyntax access) return false;
         if (!TryFlatten(access.Expression, out var root, out var receiver) || root != "this") return false;
@@ -390,6 +394,18 @@ public static partial class WinFormsDesignerParser
             if (!complete) result.Unhandled.Add("cell coordinates are not literals: " + Describe(invoke));
         }
         return children.Count > 0 || literals.Count > 0;
+    }
+
+    /// <summary>resources.ApplyResources(this.btn, "btn") / resources.ApplyResources(this, "$this").</summary>
+    private static bool HandleApplyResources(InvocationExpressionSyntax invoke, DesignerParseResult result)
+    {
+        var args = invoke.ArgumentList.Arguments;
+        if (args.Count != 2 || args[1].Expression is not LiteralExpressionSyntax key) return false;
+
+        if (args[0].Expression is ThisExpressionSyntax) result.ResourceKeys[""] = key.Token.ValueText;
+        else if (TryGetThisMemberName(args[0].Expression, out var controlId)) result.ResourceKeys[controlId] = key.Token.ValueText;
+        else return false;
+        return true;
     }
 
     private static bool HandleSetToolTip(InvocationExpressionSyntax invoke, DesignerParseResult result)
