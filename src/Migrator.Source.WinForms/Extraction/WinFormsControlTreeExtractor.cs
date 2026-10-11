@@ -30,10 +30,10 @@ public sealed class WinFormsControlTreeExtractor : IIrExtractor
         var designer = WinFormsDesignerParser.Parse(context.MarkupContent);
         target.Name = designer.ClassName;
         target.MasterPageName = null; // no WinForms equivalent of a Web Forms master page
-        target.RootControl = BuildRoot(designer, context.CodeBehindContent ?? "", _maxRecursionDepth);
+        target.RootControl = BuildRoot(designer, context.CodeBehindContent ?? "", ResxReader.ReadSibling(context.FilePath), _maxRecursionDepth);
     }
 
-    private ControlNodeIr BuildRoot(DesignerParseResult designer, string codeBehind, int remainingDepth)
+    private ControlNodeIr BuildRoot(DesignerParseResult designer, string codeBehind, string? resourcesXml, int remainingDepth)
     {
         // Designer.cs partials rarely repeat the base-type clause; the code-behind usually does, so it wins.
         var baseType = CodeBehind.FindClass(codeBehind, designer.ClassName)?.BaseList?.Types.FirstOrDefault()?.Type.ToString()
@@ -49,6 +49,9 @@ public sealed class WinFormsControlTreeExtractor : IIrExtractor
         foreach (var (eventName, handler) in designer.RootEventHandlers)
             root.Attributes[$"On{eventName}"] = handler;
 
+        var resources = ResxReader.Parse(resourcesXml);
+        if (designer.ResourceKeys.TryGetValue("", out var rootKey)) MergeResources(root.Attributes, resources, rootKey);
+
         var nodesById = new Dictionary<string, ControlNodeIr>();
         foreach (var id in designer.ControlDeclarationOrder.Concat(designer.DeclaredControlTypes.Keys).Distinct())
         {
@@ -61,6 +64,8 @@ public sealed class WinFormsControlTreeExtractor : IIrExtractor
                 foreach (var (eventName, handler) in handlers)
                     attributes[$"On{eventName}"] = handler;
 
+            if (designer.ResourceKeys.TryGetValue(id, out var key)) MergeResources(attributes, resources, key);
+
             var node = new ControlNodeIr { Id = id, TagName = tagName, Attributes = attributes };
 
             if (remainingDepth > 0)
@@ -69,7 +74,7 @@ public sealed class WinFormsControlTreeExtractor : IIrExtractor
                 if (_userControls.TryGetValue(simpleType, out var source))
                 {
                     var inner = WinFormsDesignerParser.Parse(source.DesignerSource);
-                    node.Children.AddRange(BuildRoot(inner, source.CodeBehindSource, remainingDepth - 1).Children);
+                    node.Children.AddRange(BuildRoot(inner, source.CodeBehindSource, source.ResourcesSource, remainingDepth - 1).Children);
                 }
             }
 
@@ -92,5 +97,13 @@ public sealed class WinFormsControlTreeExtractor : IIrExtractor
                 root.Children.Add(node);
 
         return root;
+    }
+
+    /// <summary>Localizable forms keep Text/ToolTip in the .resx; values set in code win over the resource.</summary>
+    private static void MergeResources(Dictionary<string, string> attributes, Dictionary<string, string> resources, string key)
+    {
+        foreach (var property in ResxReader.MergedProperties)
+            if (!attributes.ContainsKey(property) && resources.TryGetValue($"{key}.{property}", out var value))
+                attributes[property] = value;
     }
 }

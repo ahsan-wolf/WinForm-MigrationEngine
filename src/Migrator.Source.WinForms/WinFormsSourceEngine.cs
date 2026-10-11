@@ -7,7 +7,7 @@ using WebFormsMigrator.IR.Models;
 
 namespace Migrator.Source.WinForms;
 
-public sealed class WinFormsSourceEngine : IProjectAwareSourceEngine, IIrProjectionProvider
+public sealed class WinFormsSourceEngine : IProjectAwareSourceEngine, IIrProjectionProvider, IUnsupportedReporter
 {
     public string Id => "winforms";
     public string Technology => "WinForms";
@@ -24,12 +24,16 @@ public sealed class WinFormsSourceEngine : IProjectAwareSourceEngine, IIrProject
     {
         var userControls = analysis.UserControls.ToDictionary(
             u => u.Name,
-            u => new WinFormsSourceText(File.ReadAllText(u.DesignerPath), File.ReadAllText(u.CodeBehindPath)));
+            u => new WinFormsSourceText(File.ReadAllText(u.DesignerPath), File.ReadAllText(u.CodeBehindPath), ResxReader.ReadSibling(u.CodeBehindPath)));
         return Pipeline(userControls);
     }
 
     /// <summary>WinForms-specific facet files on top of the generic ones the host writes (controls, control-properties, code-behind).</summary>
     public IEnumerable<IIrProjection> Projections { get; } = new IIrProjection[] { new WinFormsLayoutProjection() };
+
+    /// <summary>Designer statements the parser did not understand (the parser records them rather than dropping them).</summary>
+    public IEnumerable<string> FindUnsupported(IrExtractionContext context) =>
+        WinFormsDesignerParser.Parse(context.MarkupContent).Unhandled;
 
     // Order matters: tree -> members -> semantics -> workflows -> navigation (later facets read the earlier ones from PageIr).
     private static IEnumerable<IIrExtractor> Pipeline(IReadOnlyDictionary<string, WinFormsSourceText>? userControls) => new IIrExtractor[]
