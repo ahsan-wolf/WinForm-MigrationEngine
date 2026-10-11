@@ -22,7 +22,8 @@ public sealed class WinFormsSourceEngine : IProjectAwareSourceEngine, IIrProject
     /// <summary>Same pipeline, with the project's UserControls inlined into the control tree.</summary>
     public IEnumerable<IIrExtractor> CreateExtractors(ProjectAnalysis analysis)
     {
-        var userControls = analysis.UserControls.ToDictionary(
+        // Same class name in two namespaces would collide; the first wins (inlining matches on the simple name anyway).
+        var userControls = analysis.UserControls.GroupBy(u => u.Name).Select(g => g.First()).ToDictionary(
             u => u.Name,
             u => new WinFormsSourceText(File.ReadAllText(u.DesignerPath), File.ReadAllText(u.CodeBehindPath), ResxReader.ReadSibling(u.CodeBehindPath)));
         return Pipeline(userControls);

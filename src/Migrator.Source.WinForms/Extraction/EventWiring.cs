@@ -19,7 +19,11 @@ internal static class EventWiringReader
     {
         if (page.RootControl == null) yield break;
 
-        var methods = page.Members.Where(m => m.Kind == MemberKind.Method).ToDictionary(m => m.Name, m => m);
+        // Methods can be overloaded (same name, different parameters). An event handler has the (sender, e) shape, so prefer
+        // the two-parameter overload; otherwise the first declared. Never key a dictionary on the bare name.
+        var methods = page.Members.Where(m => m.Kind == MemberKind.Method)
+            .GroupBy(m => m.Name)
+            .ToDictionary(g => g.Key, g => g.FirstOrDefault(m => m.Parameters.Count == 2) ?? g.First());
         foreach (var node in Walk(page.RootControl))
         foreach (var (key, value) in node.Attributes)
         {
