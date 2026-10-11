@@ -12,7 +12,18 @@ public sealed class EngineOptions
 
     private readonly JsonElement? _raw;
 
-    public EngineOptions(JsonElement? raw) => _raw = raw;
+    public EngineOptions(JsonElement? raw, string? baseDirectory = null)
+    {
+        _raw = raw;
+        BaseDirectory = baseDirectory;
+    }
+
+    /// <summary>Directory of the engines.json that declared these options (relative paths in options are relative to it).</summary>
+    public string? BaseDirectory { get; }
+
+    /// <summary>Resolves a path from the options against <see cref="BaseDirectory"/>; absolute paths are returned unchanged.</summary>
+    public string ResolvePath(string path) =>
+        Path.IsPathRooted(path) || BaseDirectory is null ? path : Path.GetFullPath(Path.Combine(BaseDirectory, path));
 
     public T Bind<T>() where T : new()
     {
