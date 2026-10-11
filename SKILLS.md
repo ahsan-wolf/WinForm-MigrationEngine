@@ -632,5 +632,19 @@ Create `Migrator.Source.<Tech>` implementing `ISourceEngine`; emit the **same** 
 ### 18.3 New target framework (e.g. Vue, Blazor)
 Create `Migrator.Target.<X>` implementing `ITargetEngine` + new `ui-library/ui-<x>` package implementing `ui-spec`. Add a column set to Skills 1–15 describing the library's internal implementation and a usage snippet to Skill 0.4.
 
+### 18.2a WinForms source engine (`Migrator.Source.WinForms`) — what the IR carries
+Generators read these from `ControlNodeIr.Attributes` / `PageIr` (never from the source); details in `docs/ENGINE_AUTHORING.md` and CLAUDE.md §4.2.
+
+| Source construct | IR location | Generator use |
+|---|---|---|
+| `Controls/Items/DropDownItems/TabPages/Columns/Panel1/Panel2 .Add` | child nodes; `ParentSlot` attr | menus → `WfMenuBar`, tabs → `WfTabs`, split → `WfSplit`, grid columns → `WfGridColumn` |
+| `TableLayoutPanel` cell/span/styles | child `TableLayout.*`; table `ColumnStyles`/`RowStyles` (+ `layout` facet `TableDefinition`) | `WfTableLayout` columns/rows/cells (Skill 3.4) |
+| `Items.AddRange(new object[]{...})` | `Items` JSON array | `WfComboBox`/`WfListBox` `items` |
+| `DataBindings.Add(new Binding("Text", bs, "Name"))` | `DataBinding.Text = bs.Name` | controlled input bound to record field (Skill 7) |
+| `SetToolTip`, `.resx` Text/ToolTip | `ToolTip`, `Text` attrs | `tooltip`, labels |
+| `Show/ShowDialog/Close/Hide/Application.Exit` | `NavigationIr` via `WinNavigation` (`TargetType` = kind, `Target` = form) | Skill 10 routes / dialog service |
+| Form events (`this.Load += ...`) | `RootControl.Attributes["OnLoad"]` + `WorkflowIr` | Skill 1 `Form.Load` |
+| Unrecognized designer statement | `project.ir.json` `Shared.Unsupported` | goes to `MIGRATION_REPORT.md`; never dropped |
+
 ### 18.4 Branch & report reminder
 Every addition is done on a **new branch**, committed locally, **not pushed**; finish with the push + fetch/update command block from `CLAUDE.md` §0.2.
