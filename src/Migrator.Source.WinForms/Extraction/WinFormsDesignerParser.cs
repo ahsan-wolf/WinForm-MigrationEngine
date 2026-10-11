@@ -105,9 +105,13 @@ public static class WinFormsDesignerParser
         var left = assign.Left;
 
         // Case A: this.X = new SomeControlType(...);   or   this.Name = "..." (root property)
+        // `new` only declares a control when X is a field of the class; this.ClientSize = new Size(..),
+        // this.AutoScaleDimensions = new SizeF(..) are properties of the Form/UserControl itself.
         if (TryGetThisMemberName(left, out var directId))
         {
-            if (assign.Right is ObjectCreationExpressionSyntax creation)
+            if (directId == "components") return; // IContainer plumbing, not a control or a property worth keeping
+
+            if (assign.Right is ObjectCreationExpressionSyntax creation && result.DeclaredControlTypes.ContainsKey(directId))
             {
                 result.DeclaredControlTypes[directId] = creation.Type.ToString();
                 result.ControlAttributes.TryAdd(directId, new Dictionary<string, string>());
