@@ -1,0 +1,8 @@
+{
+  "name": "@wfm/ui-spec",
+  "version": "0.1.0",
+  "description": "Framework-neutral control contract (controls.json) and design tokens (tokens.css) shared by every @wfm/ui-* package. Data only; no code.",
+  "files": ["controls.json", "tokens.css"],
+  "license": "UNLICENSED",
+  "private": true
+}
