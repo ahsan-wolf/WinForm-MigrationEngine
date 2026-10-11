@@ -103,6 +103,13 @@ Generated pages import only `@wfm/ui-react`.
 Known limits: `Show()` opens as a dialog (no router yet); no auth/mock services; ListView/TreeView/Tabs/RadioGroup/DatePicker/GroupBox have no library component yet
 (they become `WfUnsupported`); the generated app links the local `@wfm/ui-react` with `file:` (Vite `resolve.dedupe` keeps a single React).
 
+## Assembly contract (`migrator contract`)
+`migrator contract --assembly <dll> --out <dir>` reads a managed assembly's **public API from metadata only** (`System.Reflection.Metadata`; the file is parsed,
+never loaded or executed, method bodies are not read) and writes `<dir>/<name>/contract.json` (types, kinds, base types, properties, method signatures, enum
+values) and `data-access.json` (table / procedure **names** found in SQL-looking string literals; connection-string-like literals are only counted and discarded).
+Use it for binary-only dependencies the app calls (e.g. a backend client library) to get exact contracts instead of inferring them from usage.
+Write output to a git-ignored folder (`local-outputs/`); do not commit the assembly or its generated contract. The console prints counts only.
+
 ## Commands
 ```bash
 dotnet build WinFormsMigrator.sln
