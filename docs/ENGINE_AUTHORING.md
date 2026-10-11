@@ -59,6 +59,14 @@ would be attributed to the form; a custom base class stays as `RootControl.TagNa
 non-string `.resx` resources (images, icons) and culture-specific `.resx` files are not read; ToolStrip items added through helper
 methods or loops, and any layout computed at runtime, are not seen.
 
+### Navigation extraction (found on the ECMNavigator pilot)
+Forms are usually opened from **helper methods** that handlers call (`using (frmX f = new frmX(..)) { f.ShowDialog(); }`), so navigation sites are
+searched in **every** method and attributed to each wired control event that reaches them through calls to the form's own methods
+(transitive, depth <= 8, cycle-safe). Sites no wired handler reaches (handlers wired in code-behind such as `Form_Closing`) are kept against the
+root control with `TriggerEvent = "Method:{name}"`. Not navigation: `MessageBox`, `OpenFileDialog`, `SaveFileDialog`, `FolderBrowserDialog`,
+`ColorDialog`, `FontDialog`, `PrintDialog`, `PageSetupDialog`, `PrintPreviewDialog`; and `Close`/`Hide` only count on the form itself
+(`conn.Close()` / `reader.Close()` are far too common to guess). Effect on the pilot: `frmNavigator` -> 16 forms (was 0).
+
 ## IR files (CLAUDE.md §4.1)
 `migrator ir` writes, per Form/UserControl, `<out>/ir/{Name}/{Name}.{facet}.ir.json` for `complete` (source of truth), `controls`,
 `control-properties`, `code-behind` and `layout`, plus `<out>/ir/project.ir.json`. Every facet is a pure function of the
