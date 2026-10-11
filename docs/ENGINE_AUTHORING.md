@@ -36,10 +36,28 @@ Later facets read earlier ones from the `PageIr` only (event wiring is read back
 `IProjectAwareSourceEngine.CreateExtractors(analysis)` lets an engine build extractors that need the whole project
 (UserControl inlining); `Migrator.Engine.Pipeline.SourceIrRunner` runs them per unit with per-unit failure isolation.
 
+### Designer constructs captured (no schema change: facts live in `Attributes`)
+| Construct | Result |
+|---|---|
+| `Controls/Items/DropDownItems/TabPages/Columns .Add\|AddRange`, `Panel1/Panel2.Controls.Add` | child nodes under the right parent (menus, tabs, split panels, grid columns); non-`Controls` slot in `ParentSlot` |
+| `TableLayoutPanel`: `Controls.Add(c, col, row)`, `SetColumnSpan/SetRowSpan`, `ColumnStyles/RowStyles` | `TableLayout.Column/Row/ColumnSpan/RowSpan` on the child; `ColumnStyles`/`RowStyles` JSON on the table |
+| `DataGridView` columns + designer-local `DataGridViewCellStyle` | column nodes with `HeaderText`, `DataPropertyName`, `Width`, ...; `DefaultCellStyle.Format` |
+| `Items.AddRange(new object[]{"a","b"})` / `Items.Add("x")` (combo, list, combo column) | `Items` = JSON string array |
+| `DataBindings.Add(new Binding("Text", src, "Member"))` | `DataBinding.Text` = `src.Member` |
+| `toolTip.SetToolTip(ctrl, "text")` | `ToolTip` on the control |
+| `resources.ApplyResources(...)` + sibling `.resx` | `Text`, `ToolTip`, `ToolTipText`, `HeaderText`, `PlaceholderText` merged when not set in code (code wins); geometry, binary and `>>` metadata entries ignored; a malformed `.resx` is skipped, not fatal |
+
+Dotted/pseudo attribute keys (`ParentSlot`, `TableLayout.*`, `DataBinding.*`, `DefaultCellStyle.*`) cannot collide with C# property names.
+Anything else in `InitializeComponent` goes to `project.ir.json` `Shared.Unsupported` as `"{Unit}: {statement}"` (via the optional
+`IUnsupportedReporter`; capped at 50 per unit) — never silently dropped. Partially understood statements are reported too, e.g.
+non-literal table coordinates (`Controls.Add(btn, dynCol, 1)` keeps the literal row and reports the rest).
+
 Known limitations (carry into reports): handlers in a third partial file are not resolved; only direct calls become workflow
 steps (not 2+ levels), ordered by call order; a handler name inside an inlined UserControl that equals a form method name
-would be attributed to the form; menu/toolbar items, DataGridView columns, TableLayoutPanel cells, DataBindings and `.resx`
-are not extracted yet; a custom base class stays as `RootControl.TagName` (e.g. `BaseForm`) rather than resolving to `Form`.
+would be attributed to the form; a custom base class stays as `RootControl.TagName` (e.g. `BaseForm`) rather than resolving to `Form`;
+`Controls.Add` order in designer code is reverse z-order, so child order is not visual order (generators order by TabIndex/Dock, Skill 4);
+non-string `.resx` resources (images, icons) and culture-specific `.resx` files are not read; ToolStrip items added through helper
+methods or loops, and any layout computed at runtime, are not seen.
 
 ## IR files (CLAUDE.md §4.1)
 `migrator ir` writes, per Form/UserControl, `<out>/ir/{Name}/{Name}.{facet}.ir.json` for `complete` (source of truth), `controls`,
@@ -50,11 +68,11 @@ source engine contributes technology-specific ones through the optional `IIrProj
 - `layout`: `Dock`, `Anchor[]`, `Location{X,Y}`, `Size{Width,Height}`, `TabIndex`, `Margin`/`Padding{Left,Top,Right,Bottom}`, `Visible`,
   `Enabled`. `null` = not set in the designer (WinForms default applies) **or** not a plain literal (e.g. `new Point(offsetX, 5)`);
   the raw text is still in `control-properties`. The root's size is read from `ClientSize`.
-  **`TableLayout {Row, Column, RowSpan, ColumnSpan}` is present on every control but always null for now** — TableLayoutPanel cell
-  extraction is part of designer hardening (next slice).
+  `TableLayout {Row, Column, RowSpan, ColumnSpan}` is on every control (all null when it is not in a table); the `TableLayoutPanel`
+  itself carries `TableDefinition {Columns[], Rows[]}` of `{SizeType: Absolute|Percent|AutoSize, Value}` (null elsewhere).
 - `project.ir.json` (`ProjectIr`, an additive wrapper owned by this repo): `Source {Technology, FrameworkVersion, RootPath, StartupForm}`,
   `Forms[]` / `UserControls[]` of `{Name, Kind, IrFile}` (`IrFile` relative to project.ir.json), `Shared {Settings, Resources, Dependencies,
-  Unsupported}` (fixed shape, **empty lists for now**), and `Failures[]` for units whose extraction failed (never silently omitted).
+  Unsupported}` (`Unsupported` is filled from unhandled designer statements; `Settings`, `Resources`, `Dependencies` are **empty lists for now**), and `Failures[]` for units whose extraction failed (never silently omitted).
 
 ## Commands
 ```bash
