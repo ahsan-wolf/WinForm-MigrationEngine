@@ -294,6 +294,12 @@ public static partial class WinFormsDesignerParser
         if (methodName is "SetColumn" or "SetRow" or "SetColumnSpan" or "SetRowSpan" && receiver.Count == 1)
             return HandleTableCell(invoke, methodName, result);
 
+        // this.toolTip1.SetToolTip(this.btn, "text")  -> ToolTip attribute on the target control
+        if (methodName == "SetToolTip" && receiver.Count == 1) return HandleSetToolTip(invoke, result);
+
+        // this.txt.DataBindings.Add(new Binding("Text", this.bindingSource1, "Name", ...))
+        if (methodName == "Add" && receiver is [var boundId, "DataBindings"]) return HandleDataBinding(invoke, boundId, result);
+
         // this.tlp.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F))
         if (methodName == "Add" && receiver is [var tableId, "ColumnStyles" or "RowStyles"])
             return HandleTableStyle(invoke, tableId, receiver[1], result);
@@ -326,29 +332,45 @@ public static partial class WinFormsDesignerParser
         }
 
         var children = new List<string>();
+        var literals = new List<string>(); // ComboBox/ListBox/column Items: string literals, not controls
         var args = invoke.ArgumentList.Arguments;
+
+        bool Collect(ExpressionSyntax e)
+        {
+            if (TryGetThisMemberName(e, out var childId)) { children.Add(childId); return true; }
+            if (slot == "Items" && e is LiteralExpressionSyntax lit) { literals.Add(lit.Token.ValueText); return true; }
+            return false;
+        }
+
         if (isRange)
         {
             var elements = args.Count == 1
                 ? args[0].Expression switch
                 {
-                    ArrayCreationExpressionSyntax a => a.Initializer?.Expressions,
-                    ImplicitArrayCreationExpressionSyntax a => a.Initializer.Expressions,
+                    ArrayCreationExpressionSyntax arr => arr.Initializer?.Expressions,
+                    ImplicitArrayCreationExpressionSyntax arr => arr.Initializer.Expressions,
                     _ => null
                 }
                 : null;
             if (elements is null) return false;
             foreach (var e in elements)
-            {
-                if (!TryGetThisMemberName(e, out var childId)) return false;
-                children.Add(childId);
-            }
+                if (!Collect(e)) return false;
         }
         else
         {
             // Only the first argument is the child (Controls.Add(child, col, row) carries cell coordinates after it).
-            if (args.Count == 0 || !TryGetThisMemberName(args[0].Expression, out var childId)) return false;
-            children.Add(childId);
+            if (args.Count == 0 || !Collect(args[0].Expression)) return false;
+        }
+
+        if (literals.Count > 0)
+        {
+            var itemAttrs = Attrs(result, parentId);
+            var items = itemAttrs.TryGetValue("Items", out var existingItems)
+                ? JsonSerializer.Deserialize<List<string>>(existingItems) ?? new List<string>()
+                : new List<string>();
+            items.AddRange(literals);
+            itemAttrs["Items"] = JsonSerializer.Serialize(items);
+            Touch(result, parentId);
         }
 
         foreach (var child in children)
@@ -367,7 +389,33 @@ public static partial class WinFormsDesignerParser
             if (int.TryParse(args[2].Expression.ToString(), out var row)) attrs["TableLayout.Row"] = row.ToString(); else complete = false;
             if (!complete) result.Unhandled.Add("cell coordinates are not literals: " + Describe(invoke));
         }
-        return children.Count > 0;
+        return children.Count > 0 || literals.Count > 0;
+    }
+
+    private static bool HandleSetToolTip(InvocationExpressionSyntax invoke, DesignerParseResult result)
+    {
+        var args = invoke.ArgumentList.Arguments;
+        if (args.Count != 2 || !TryGetThisMemberName(args[0].Expression, out var controlId) || args[1].Expression is not LiteralExpressionSyntax text)
+            return false;
+
+        Attrs(result, controlId)["ToolTip"] = text.Token.ValueText;
+        Touch(result, controlId);
+        return true;
+    }
+
+    /// <summary>DataBinding.{Property} = {source}.{member}, e.g. DataBinding.Text = bindingSource1.Name.</summary>
+    private static bool HandleDataBinding(InvocationExpressionSyntax invoke, string controlId, DesignerParseResult result)
+    {
+        var args = invoke.ArgumentList.Arguments;
+        if (args.Count != 1 || args[0].Expression is not ObjectCreationExpressionSyntax { ArgumentList.Arguments: { Count: >= 3 } ctor })
+            return false;
+        if (ctor[0].Expression is not LiteralExpressionSyntax property || ctor[2].Expression is not LiteralExpressionSyntax member)
+            return false;
+
+        var source = TryGetThisMemberName(ctor[1].Expression, out var sourceId) ? sourceId : ctor[1].Expression.ToString();
+        Attrs(result, controlId)[$"DataBinding.{property.Token.ValueText}"] = $"{source}.{member.Token.ValueText}";
+        Touch(result, controlId);
+        return true;
     }
 
     private static bool HandleTableCell(InvocationExpressionSyntax invoke, string methodName, DesignerParseResult result)
