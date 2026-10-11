@@ -1,4 +1,6 @@
+using System.Text.Json;
 using Migrator.Engine.Hosting;
+using Migrator.Engine.Pipeline;
 
 return Run(args);
 
@@ -11,6 +13,8 @@ static int Run(string[] args)
 
             Commands:
               engines [--config <engines.json>]   List the engines that load from engines.json
+              ir --source <dir> --out <dir> [--engine <id>] [--config <engines.json>]
+                                                  Extract IR only (no generation); writes <out>/ir/<Form>/<Form>.complete.ir.json
 
             (migrate / ir arrive in later phases.)
             """);
@@ -20,6 +24,7 @@ static int Run(string[] args)
     return args[0] switch
     {
         "engines" => ListEngines(args[1..]),
+        "ir" => ExtractIr(args[1..]),
         _ => Fail($"Unknown command '{args[0]}'. Try 'migrator --help'.")
     };
 }
@@ -49,6 +54,54 @@ static int ListEngines(string[] args)
     }
 
     return result.HasErrors ? 2 : 0;
+}
+
+static int ExtractIr(string[] args)
+{
+    var source = OptionValue(args, "--source");
+    var outDir = OptionValue(args, "--out");
+    if (source is null || outDir is null) return Fail("ir needs --source <dir> and --out <dir>.");
+
+    var configPath = OptionValue(args, "--config") ?? FindEnginesJson();
+    if (configPath is null || !File.Exists(configPath)) return Fail("engines.json not found. Pass --config <path>.");
+
+    var load = EngineLoader.Load(configPath);
+    foreach (var d in load.Diagnostics.Where(d => d.Severity != DiagnosticSeverity.Info))
+        Console.Error.WriteLine($"[{d.Severity.ToString().ToUpperInvariant()}] {d.Message}");
+
+    var engineId = OptionValue(args, "--engine");
+    var engine = engineId is null ? load.Registry.Sources.FirstOrDefault() : load.Registry.FindSource(engineId);
+    if (engine is null) return Fail(engineId is null ? "No source engine is loaded." : $"Source engine '{engineId}' is not loaded.");
+
+    Migrator.Engine.Contracts.ProjectAnalysis analysis;
+    try
+    {
+        analysis = engine.Analyzer.Analyze(source);
+    }
+    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotImplementedException)
+    {
+        return Fail($"Cannot analyze '{source}': {ex.Message}");
+    }
+    Console.WriteLine($"{engine.Technology}: {analysis.Forms.Count} form(s), {analysis.UserControls.Count} user control(s); " +
+                      $"startup: {analysis.StartupForm ?? "(not found)"}; framework: {analysis.FrameworkVersion ?? "(unknown)"}");
+
+    var json = new JsonSerializerOptions { WriteIndented = true }; // PascalCase, like the existing IR samples
+    var failed = 0;
+    foreach (var result in SourceIrRunner.Run(engine, analysis))
+    {
+        if (result.Page is null)
+        {
+            failed++;
+            Console.Error.WriteLine($"  FAILED {result.Unit.Name}: {result.Error}");
+            continue;
+        }
+        var dir = Path.Combine(outDir, "ir", result.Unit.Name);
+        Directory.CreateDirectory(dir);
+        var file = Path.Combine(dir, $"{result.Unit.Name}.complete.ir.json");
+        File.WriteAllText(file, JsonSerializer.Serialize(result.Page, json));
+        Console.WriteLine($"  {result.Unit.Kind,-11} {result.Unit.Name,-28} -> {file}");
+    }
+    return failed > 0 ? 2 : 0;
 }
 
 static string? OptionValue(string[] args, string name)
