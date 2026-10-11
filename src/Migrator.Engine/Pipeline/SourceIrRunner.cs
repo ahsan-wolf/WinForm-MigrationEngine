@@ -5,7 +5,7 @@ using WebFormsMigrator.IR.Models;
 namespace Migrator.Engine.Pipeline;
 
 /// <summary>Outcome for one Form/UserControl. Exactly one of <see cref="Page"/> / <see cref="Error"/> is set.</summary>
-public sealed record UnitIrResult(SourceUnit Unit, PageIr? Page, string? Error);
+public sealed record UnitIrResult(SourceUnit Unit, PageIr? Page, string? Error, IReadOnlyList<string>? Unsupported = null);
 
 /// <summary>Runs a source engine's extractor pipeline over every unit of an analyzed project.</summary>
 public static class SourceIrRunner
@@ -30,7 +30,8 @@ public static class SourceIrRunner
                 };
                 var page = registry.BuildIr(context, unit.Name);
                 page.RelativePath = Path.GetRelativePath(analysis.RootPath, unit.CodeBehindPath).Replace('\\', '/');
-                results.Add(new UnitIrResult(unit, page, null));
+                var unsupported = engine is IUnsupportedReporter reporter ? reporter.FindUnsupported(context).ToList() : null;
+                results.Add(new UnitIrResult(unit, page, null, unsupported));
             }
             catch (Exception ex)
             {

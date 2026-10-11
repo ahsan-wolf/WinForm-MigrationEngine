@@ -14,6 +14,7 @@ public sealed record IrWriteSummary(string ProjectIrPath, IReadOnlyList<string> 
 public static class IrFileWriter
 {
     public const string CompleteSuffix = "complete";
+    private const int MaxUnsupportedPerUnit = 50;
 
     /// <summary>Indented PascalCase, matching the existing IR samples.</summary>
     public static readonly JsonSerializerOptions Json = new() { WriteIndented = true };
@@ -56,6 +57,8 @@ public static class IrFileWriter
             foreach (var projection in projections)
                 WriteJson(Path.Combine(unitDir, $"{name}.{projection.FileSuffix}.ir.json"), projection.Project(result.Page), written);
 
+            AddUnsupported(project, name, result.Unsupported);
+
             var entry = new ProjectUnitIr { Name = name, Kind = result.Unit.Kind.ToString(), IrFile = $"{name}/{completeFile}" };
             (result.Unit.Kind == SourceUnitKind.UserControl ? project.UserControls : project.Forms).Add(entry);
         }
@@ -63,6 +66,16 @@ public static class IrFileWriter
         var projectPath = Path.Combine(irRoot, "project.ir.json");
         WriteJson(projectPath, project, written);
         return new IrWriteSummary(projectPath, written);
+    }
+
+    /// <summary>Listed per unit as "{Unit}: {what}", capped so one noisy form cannot bury the rest.</summary>
+    private static void AddUnsupported(ProjectIr project, string unit, IReadOnlyList<string>? items)
+    {
+        if (items is null) return;
+        foreach (var item in items.Take(MaxUnsupportedPerUnit))
+            project.Shared.Unsupported.Add($"{unit}: {item}");
+        if (items.Count > MaxUnsupportedPerUnit)
+            project.Shared.Unsupported.Add($"{unit}: ... and {items.Count - MaxUnsupportedPerUnit} more");
     }
 
     private static void WriteJson(string path, object value, List<string> written)
