@@ -1,4 +1,3 @@
-using System.Text.Json;
 using Migrator.Engine.Hosting;
 using Migrator.Engine.Pipeline;
 
@@ -14,7 +13,7 @@ static int Run(string[] args)
             Commands:
               engines [--config <engines.json>]   List the engines that load from engines.json
               ir --source <dir> --out <dir> [--engine <id>] [--config <engines.json>]
-                                                  Extract IR only (no generation); writes <out>/ir/<Form>/<Form>.complete.ir.json
+                                                  Extract IR only (no generation); writes the six IR files per unit under <out>/ir/<Form>/ plus <out>/ir/project.ir.json
 
             (migrate / ir arrive in later phases.)
             """);
@@ -85,22 +84,15 @@ static int ExtractIr(string[] args)
     Console.WriteLine($"{engine.Technology}: {analysis.Forms.Count} form(s), {analysis.UserControls.Count} user control(s); " +
                       $"startup: {analysis.StartupForm ?? "(not found)"}; framework: {analysis.FrameworkVersion ?? "(unknown)"}");
 
-    var json = new JsonSerializerOptions { WriteIndented = true }; // PascalCase, like the existing IR samples
-    var failed = 0;
-    foreach (var result in SourceIrRunner.Run(engine, analysis))
-    {
-        if (result.Page is null)
-        {
-            failed++;
-            Console.Error.WriteLine($"  FAILED {result.Unit.Name}: {result.Error}");
-            continue;
-        }
-        var dir = Path.Combine(outDir, "ir", result.Unit.Name);
-        Directory.CreateDirectory(dir);
-        var file = Path.Combine(dir, $"{result.Unit.Name}.complete.ir.json");
-        File.WriteAllText(file, JsonSerializer.Serialize(result.Page, json));
-        Console.WriteLine($"  {result.Unit.Kind,-11} {result.Unit.Name,-28} -> {file}");
-    }
+    var results = SourceIrRunner.Run(engine, analysis);
+    foreach (var failure in results.Where(r => r.Page is null))
+        Console.Error.WriteLine($"  FAILED {failure.Unit.Name}: {failure.Error}");
+
+    var summary = IrFileWriter.Write(outDir, engine, analysis, results);
+    var ok = results.Count(r => r.Page is not null);
+    Console.WriteLine($"  {ok} unit(s) extracted; {summary.Files.Count} IR file(s) written");
+    Console.WriteLine($"  index: {summary.ProjectIrPath}");
+    var failed = results.Count - ok;
     return failed > 0 ? 2 : 0;
 }
 

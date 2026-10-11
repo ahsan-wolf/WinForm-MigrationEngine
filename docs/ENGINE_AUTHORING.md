@@ -41,9 +41,24 @@ steps (not 2+ levels), ordered by call order; a handler name inside an inlined U
 would be attributed to the form; menu/toolbar items, DataGridView columns, TableLayoutPanel cells, DataBindings and `.resx`
 are not extracted yet; a custom base class stays as `RootControl.TagName` (e.g. `BaseForm`) rather than resolving to `Form`.
 
+## IR files (CLAUDE.md §4.1)
+`migrator ir` writes, per Form/UserControl, `<out>/ir/{Name}/{Name}.{facet}.ir.json` for `complete` (source of truth), `controls`,
+`control-properties`, `code-behind` and `layout`, plus `<out>/ir/project.ir.json`. Every facet is a pure function of the
+`PageIr` (`IIrProjection.Project(PageIr)`), so facets cannot diverge from `complete`. The host writes the generic three; the
+source engine contributes technology-specific ones through the optional `IIrProjectionProvider` (WinForms: `layout`).
+
+- `layout`: `Dock`, `Anchor[]`, `Location{X,Y}`, `Size{Width,Height}`, `TabIndex`, `Margin`/`Padding{Left,Top,Right,Bottom}`, `Visible`,
+  `Enabled`. `null` = not set in the designer (WinForms default applies) **or** not a plain literal (e.g. `new Point(offsetX, 5)`);
+  the raw text is still in `control-properties`. The root's size is read from `ClientSize`.
+  **`TableLayout {Row, Column, RowSpan, ColumnSpan}` is present on every control but always null for now** — TableLayoutPanel cell
+  extraction is part of designer hardening (next slice).
+- `project.ir.json` (`ProjectIr`, an additive wrapper owned by this repo): `Source {Technology, FrameworkVersion, RootPath, StartupForm}`,
+  `Forms[]` / `UserControls[]` of `{Name, Kind, IrFile}` (`IrFile` relative to project.ir.json), `Shared {Settings, Resources, Dependencies,
+  Unsupported}` (fixed shape, **empty lists for now**), and `Failures[]` for units whose extraction failed (never silently omitted).
+
 ## Commands
 ```bash
 dotnet build WinFormsMigrator.sln
 dotnet run --project src/Migrator.Cli -- engines [--config path/to/engines.json]
-dotnet run --project src/Migrator.Cli -- ir --source <winforms-folder> --out <dir>   # writes <dir>/ir/<Form>/<Form>.complete.ir.json
+dotnet run --project src/Migrator.Cli -- ir --source <winforms-folder> --out <dir>   # six IR files per unit under <dir>/ir/<Form>/ + <dir>/ir/project.ir.json
 ```
