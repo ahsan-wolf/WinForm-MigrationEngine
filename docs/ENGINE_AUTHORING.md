@@ -59,6 +59,14 @@ would be attributed to the form; a custom base class stays as `RootControl.TagNa
 non-string `.resx` resources (images, icons) and culture-specific `.resx` files are not read; ToolStrip items added through helper
 methods or loops, and any layout computed at runtime, are not seen.
 
+### Navigation extraction (found on the ECMNavigator pilot)
+Forms are usually opened from **helper methods** that handlers call (`using (frmX f = new frmX(..)) { f.ShowDialog(); }`), so navigation sites are
+searched in **every** method and attributed to each wired control event that reaches them through calls to the form's own methods
+(transitive, depth <= 8, cycle-safe). Sites no wired handler reaches (handlers wired in code-behind such as `Form_Closing`) are kept against the
+root control with `TriggerEvent = "Method:{name}"`. Not navigation: `MessageBox`, `OpenFileDialog`, `SaveFileDialog`, `FolderBrowserDialog`,
+`ColorDialog`, `FontDialog`, `PrintDialog`, `PageSetupDialog`, `PrintPreviewDialog`; and `Close`/`Hide` only count on the form itself
+(`conn.Close()` / `reader.Close()` are far too common to guess). Effect on the pilot: `frmNavigator` -> 16 forms (was 0).
+
 ## IR files (CLAUDE.md §4.1)
 `migrator ir` writes, per Form/UserControl, `<out>/ir/{Name}/{Name}.{facet}.ir.json` for `complete` (source of truth), `controls`,
 `control-properties`, `code-behind` and `layout`, plus `<out>/ir/project.ir.json`. Every facet is a pure function of the
@@ -73,6 +81,27 @@ source engine contributes technology-specific ones through the optional `IIrProj
 - `project.ir.json` (`ProjectIr`, an additive wrapper owned by this repo): `Source {Technology, FrameworkVersion, RootPath, StartupForm}`,
   `Forms[]` / `UserControls[]` of `{Name, Kind, IrFile}` (`IrFile` relative to project.ir.json), `Shared {Settings, Resources, Dependencies,
   Unsupported}` (`Unsupported` is filled from unhandled designer statements; `Settings`, `Resources`, `Dependencies` are **empty lists for now**), and `Failures[]` for units whose extraction failed (never silently omitted).
+
+## React target (`Migrator.Target.React`, first slice)
+`migrator migrate --source <dir> --out <dir>` runs the ir step, then generates `<out>/react-app/` from the **IR folder only** (project.ir.json +
+`complete` + `layout`), through the optional `IProjectTargetEngine` contract. It reads `ui-library/ui-spec/controls.json` as data (paths come from the engine's
+`options` in engines.json): `TagName` -> `Wf*` component, `Attributes` -> props (`from`/`transform` in the spec), `OnX` -> the spec's canonical event.
+Generated pages import only `@wfm/ui-react`.
+
+| Concern | Behaviour |
+|---|---|
+| Scope | entry form (default: startup form) + forms reachable by `Show/ShowDialog` within `--depth` hops (default 1; `all` = everything reachable) |
+| Layout | Dock/Location facts -> top chrome, free rows (clustered by Y, ordered by X), left/fill/right band, bottom chrome (`wfm-*` flex classes). No pixels. MenuStrip/ToolStrip default to top, StatusStrip to bottom |
+| State | TextBox/ComboBox/CheckBox become controlled `useState`; hidden controls get a `...Visible` flag (`// TODO: toggled by untranslated code`) |
+| Navigation | `ShowDialog` -> `await dialog.show(close => <XPage onClose={close}/>)`; `Close/Hide` -> `onClose?.()`; several targets in one handler -> first wired + TODO; target outside scope -> alert + TODO |
+| Handlers | **Not translated.** Each keeps its original C# as comments + TODO; the full code-behind of each page is in `src/legacy/*.cs.txt` (never dropped) |
+| Not rendered | non-visual components (ImageList, ToolTip, BindingSource, Timer, file dialogs, ...) are listed in the report |
+| Unsupported | no spec entry -> `WfUnsupported` + TODO + report entry; inlined user controls render as a panel |
+| Grids | designer columns -> `WfGridColumn[]`; typed mock rows marked `// MOCK`; grids with columns created in code get a TODO |
+| Output | `src/pages/*.tsx`, `src/legacy/*.cs.txt`, app shell (package.json, vite, tsconfig, eslint), `MIGRATION_REPORT.md` |
+
+Known limits: `Show()` opens as a dialog (no router yet); no auth/mock services; ListView/TreeView/Tabs/RadioGroup/DatePicker/GroupBox have no library component yet
+(they become `WfUnsupported`); the generated app links the local `@wfm/ui-react` with `file:` (Vite `resolve.dedupe` keeps a single React).
 
 ## Commands
 ```bash

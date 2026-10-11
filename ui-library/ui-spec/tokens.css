@@ -1,0 +1,39 @@
+/* ui-spec design tokens (v0.1.0). Every ui-library package themes through these variables; no hard-coded colors in components. */
+:root {
+  --wf-font-family: system-ui, "Segoe UI", sans-serif;
+  --wf-font-size: 13px;
+  --wf-color-bg: #ffffff;
+  --wf-color-surface: #f3f3f3;
+  --wf-color-text: #1f2328;
+  --wf-color-muted: #656d76;
+  --wf-color-border: #c9ced6;
+  --wf-color-accent: #0b5fd6;
+  --wf-color-accent-text: #ffffff;
+  --wf-color-hover: #e6eefc;
+  --wf-color-selected: #cfe0fb;
+  --wf-color-danger: #b42318;
+  --wf-color-warning-bg: #fff4ce;
+  --wf-color-warning-border: #d9a400;
+  --wf-radius: 3px;
+  --wf-space-1: 4px;
+  --wf-space-2: 8px;
+  --wf-space-3: 12px;
+  --wf-control-height: 26px;
+  --wf-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+  --wf-z-menu: 1000;
+  --wf-z-dialog: 2000;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --wf-color-bg: #14181d;
+    --wf-color-surface: #1d232b;
+    --wf-color-text: #e6edf3;
+    --wf-color-muted: #8b949e;
+    --wf-color-border: #3a424d;
+    --wf-color-accent: #4c8dff;
+    --wf-color-hover: #26324a;
+    --wf-color-selected: #2b4270;
+    --wf-color-warning-bg: #3a3000;
+  }
+}

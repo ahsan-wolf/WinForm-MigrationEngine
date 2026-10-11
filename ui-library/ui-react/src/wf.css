@@ -1,0 +1,53 @@
+@import '../../ui-spec/tokens.css';
+
+.wf-form, .wf-form * , .wf-dialog, .wf-dialog * { box-sizing: border-box; }
+.wf-form { font: var(--wf-font-size) var(--wf-font-family); color: var(--wf-color-text); background: var(--wf-color-bg); display: flex; flex-direction: column; min-height: 100%; }
+.wf-form-title { font-size: 15px; margin: 0; padding: var(--wf-space-2) var(--wf-space-3); border-bottom: 1px solid var(--wf-color-border); }
+
+.wf-label { color: var(--wf-color-text); }
+.wf-button { height: var(--wf-control-height); padding: 0 var(--wf-space-3); border: 1px solid var(--wf-color-border); border-radius: var(--wf-radius); background: var(--wf-color-surface); color: var(--wf-color-text); cursor: pointer; font: inherit; }
+.wf-button:hover:not(:disabled) { background: var(--wf-color-hover); }
+.wf-button:disabled { opacity: .5; cursor: default; }
+.wf-button-primary { background: var(--wf-color-accent); border-color: var(--wf-color-accent); color: var(--wf-color-accent-text); }
+.wf-button-primary:hover:not(:disabled) { background: var(--wf-color-accent); filter: brightness(1.1); }
+.wf-textbox, .wf-combobox { height: var(--wf-control-height); padding: 0 var(--wf-space-1); border: 1px solid var(--wf-color-border); border-radius: var(--wf-radius); background: var(--wf-color-bg); color: var(--wf-color-text); font: inherit; }
+textarea.wf-textbox { height: auto; padding: var(--wf-space-1); }
+.wf-checkbox { display: inline-flex; gap: var(--wf-space-1); align-items: center; }
+.wf-progress { width: 100%; height: 14px; accent-color: var(--wf-color-accent); }
+.wf-picturebox { max-width: 100%; } .wf-picturebox-empty { min-width: 24px; min-height: 24px; background: var(--wf-color-surface); border: 1px dashed var(--wf-color-border); }
+.wf-unsupported { padding: var(--wf-space-1) var(--wf-space-2); background: var(--wf-color-warning-bg); border: 1px solid var(--wf-color-warning-border); border-radius: var(--wf-radius); }
+
+.wf-panel { display: block; position: relative; } .wf-panel-scroll { overflow: auto; }
+.wf-split { display: flex; min-height: 0; flex: 1 1 auto; } .wf-split-horizontal { flex-direction: column; }
+.wf-split-first { overflow: auto; } .wf-split-second { flex: 1 1 0; overflow: auto; min-width: 0; min-height: 0; }
+.wf-splitter { flex: 0 0 4px; background: var(--wf-color-border); }
+.wf-split-vertical > .wf-splitter { cursor: col-resize; } .wf-split-horizontal > .wf-splitter { cursor: row-resize; }
+.wf-statusbar { display: flex; gap: var(--wf-space-3); align-items: center; padding: 2px var(--wf-space-2); border-top: 1px solid var(--wf-color-border); background: var(--wf-color-surface); color: var(--wf-color-muted); }
+
+.wf-menubar, .wf-toolbar { display: flex; align-items: center; gap: 2px; background: var(--wf-color-surface); border-bottom: 1px solid var(--wf-color-border); padding: 1px var(--wf-space-1); position: relative; z-index: var(--wf-z-menu); }
+.wf-menuitem { position: relative; }
+.wf-menuitem > button { display: flex; align-items: center; gap: var(--wf-space-2); width: 100%; background: none; border: 0; border-radius: var(--wf-radius); padding: 3px var(--wf-space-2); color: var(--wf-color-text); font: inherit; cursor: pointer; text-align: left; white-space: nowrap; }
+.wf-menuitem > button:hover:not(:disabled), .wf-menuitem > button[aria-expanded="true"] { background: var(--wf-color-hover); }
+.wf-menuitem > button:disabled { color: var(--wf-color-muted); cursor: default; }
+.wf-menuitem-check { width: 14px; display: inline-block; } .wf-menuitem-top > button > .wf-menuitem-check { display: none; }
+.wf-menuitem-text { flex: 1 1 auto; } .wf-menuitem-shortcut { color: var(--wf-color-muted); font: inherit; margin-left: var(--wf-space-3); }
+.wf-menu { position: absolute; left: 0; top: 100%; min-width: 180px; background: var(--wf-color-bg); border: 1px solid var(--wf-color-border); border-radius: var(--wf-radius); box-shadow: var(--wf-shadow); padding: 2px; z-index: var(--wf-z-menu); }
+.wf-menuitem-sub > .wf-menu { left: 100%; top: -3px; }
+.wf-contextmenu { position: fixed; }
+.wf-separator { background: var(--wf-color-border); }
+.wf-menu > .wf-separator { height: 1px; margin: 3px 0; } .wf-toolbar > .wf-separator { width: 1px; align-self: stretch; margin: 3px 2px; }
+.wf-toolbar-button { display: inline-flex; align-items: center; gap: var(--wf-space-1); min-width: var(--wf-control-height); height: var(--wf-control-height); padding: 0 var(--wf-space-1); border: 1px solid transparent; border-radius: var(--wf-radius); background: none; color: var(--wf-color-text); font: inherit; cursor: pointer; justify-content: center; }
+.wf-toolbar-button:hover:not(:disabled) { background: var(--wf-color-hover); border-color: var(--wf-color-border); } .wf-toolbar-button:disabled { opacity: .5; }
+.wf-toolbar-button img { width: 16px; height: 16px; }
+
+.wf-datagrid { overflow: auto; border: 1px solid var(--wf-color-border); background: var(--wf-color-bg); }
+.wf-datagrid table { border-collapse: collapse; width: 100%; }
+.wf-datagrid th { position: sticky; top: 0; background: var(--wf-color-surface); text-align: left; font-weight: 600; cursor: pointer; user-select: none; }
+.wf-datagrid th, .wf-datagrid td { padding: 3px var(--wf-space-2); border-bottom: 1px solid var(--wf-color-border); white-space: nowrap; }
+.wf-datagrid tbody tr:hover { background: var(--wf-color-hover); } .wf-datagrid .wf-row-selected, .wf-datagrid .wf-row-selected:hover { background: var(--wf-color-selected); }
+.wf-grid-empty { color: var(--wf-color-muted); text-align: center; }
+
+.wf-dialog-backdrop { position: fixed; inset: 0; background: rgba(0, 0, 0, .35); display: flex; align-items: center; justify-content: center; z-index: var(--wf-z-dialog); }
+.wf-dialog { min-width: 320px; max-width: 90vw; max-height: 90vh; overflow: auto; background: var(--wf-color-bg); color: var(--wf-color-text); font: var(--wf-font-size) var(--wf-font-family); border: 1px solid var(--wf-color-border); border-radius: var(--wf-radius); box-shadow: var(--wf-shadow); }
+.wf-dialog-title { padding: var(--wf-space-2) var(--wf-space-3); border-bottom: 1px solid var(--wf-color-border); font-weight: 600; }
+.wf-dialog-body { padding: var(--wf-space-3); } .wf-dialog-actions { display: flex; gap: var(--wf-space-2); justify-content: flex-end; margin-top: var(--wf-space-3); }

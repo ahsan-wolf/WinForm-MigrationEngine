@@ -54,7 +54,7 @@ public static class EngineLoader
 
             try
             {
-                LoadEntry(entry, pluginsDir, registry, diagnostics);
+                LoadEntry(entry, baseDir, pluginsDir, registry, diagnostics);
             }
             catch (Exception ex)
             {
@@ -67,7 +67,7 @@ public static class EngineLoader
         return new EngineLoadResult(registry, diagnostics);
     }
 
-    private static void LoadEntry(EngineEntry entry, string pluginsDir, EngineRegistry registry, List<EngineDiagnostic> diagnostics)
+    private static void LoadEntry(EngineEntry entry, string baseDir, string pluginsDir, EngineRegistry registry, List<EngineDiagnostic> diagnostics)
     {
         if (string.IsNullOrWhiteSpace(entry.Assembly))
             throw new InvalidOperationException("entry has no 'assembly'.");
@@ -81,7 +81,7 @@ public static class EngineLoader
         if (moduleTypes.Count == 0)
             throw new InvalidOperationException($"no IEngineModule found in '{entry.Assembly}'" + (entry.Module is null ? "." : $" matching '{entry.Module}'."));
 
-        var options = new EngineOptions(entry.Options);
+        var options = new EngineOptions(entry.Options, baseDir);
         foreach (var type in moduleTypes)
             Instantiate(type, options).Register(registry);
 

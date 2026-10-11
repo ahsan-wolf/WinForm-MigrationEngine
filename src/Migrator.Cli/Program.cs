@@ -1,3 +1,4 @@
+using Migrator.Engine.Contracts;
 using Migrator.Engine.Hosting;
 using Migrator.Engine.Pipeline;
 
@@ -15,7 +16,8 @@ static int Run(string[] args)
               ir --source <dir> --out <dir> [--engine <id>] [--config <engines.json>]
                                                   Extract IR only (no generation); writes the six IR files per unit under <out>/ir/<Form>/ plus <out>/ir/project.ir.json
 
-            (migrate / ir arrive in later phases.)
+              migrate --source <dir> --out <dir> [--target react-app] [--entry <form>] [--depth <n|all>] [--config <engines.json>]
+                                                  ir step, then generate an app into <out>/<target> (default depth 1: entry form + forms it opens)
             """);
         return args.Length == 0 ? 1 : 0;
     }
@@ -24,6 +26,7 @@ static int Run(string[] args)
     {
         "engines" => ListEngines(args[1..]),
         "ir" => ExtractIr(args[1..]),
+        "migrate" => Migrate(args[1..]),
         _ => Fail($"Unknown command '{args[0]}'. Try 'migrator --help'.")
     };
 }
@@ -94,6 +97,46 @@ static int ExtractIr(string[] args)
     Console.WriteLine($"  index: {summary.ProjectIrPath}");
     var failed = results.Count - ok;
     return failed > 0 ? 2 : 0;
+}
+
+static int Migrate(string[] args)
+{
+    var outDir = OptionValue(args, "--out");
+    if (OptionValue(args, "--source") is null || outDir is null) return Fail("migrate needs --source <dir> and --out <dir>.");
+
+    // Stage 1: IR (same as `ir`). Per-unit failures (exit 2) do not stop generation; real errors (exit 1) do.
+    var irExit = ExtractIr(args);
+    if (irExit == 1) return 1;
+
+    var configPath = OptionValue(args, "--config") ?? FindEnginesJson();
+    if (configPath is null || !File.Exists(configPath)) return Fail("engines.json not found. Pass --config <path>.");
+
+    var targetId = OptionValue(args, "--target") ?? "react-app";
+    var load = EngineLoader.Load(configPath);
+    foreach (var d in load.Diagnostics.Where(d => d.Severity != DiagnosticSeverity.Info))
+        Console.Error.WriteLine($"[{d.Severity.ToString().ToUpperInvariant()}] {d.Message}");
+    if (load.Registry.FindTarget(targetId) is not IProjectTargetEngine target)
+        return Fail($"Target engine '{targetId}' is not loaded or cannot generate a whole project. Check engines.json.");
+
+    var depthText = OptionValue(args, "--depth");
+    int? depth = depthText is null ? 1 : depthText.Equals("all", StringComparison.OrdinalIgnoreCase) ? null : int.TryParse(depthText, out var d1) ? d1 : 1;
+
+    GenerationResult result;
+    try
+    {
+        result = target.GenerateProject(Path.Combine(outDir, "ir"), Path.Combine(outDir, targetId), new GenerationOptions { EntryForm = OptionValue(args, "--entry"), Depth = depth });
+    }
+    catch (Exception ex) when (ex is IOException or InvalidOperationException or InvalidDataException)
+    {
+        return Fail($"Generation failed: {ex.Message}");
+    }
+
+    Console.WriteLine($"{targetId}: generated {result.GeneratedUnits.Count} unit(s): {string.Join(", ", result.GeneratedUnits)}");
+    Console.WriteLine($"  not generated: {result.SkippedUnits.Count}; {result.Files.Count} file(s) -> {result.OutputDirectory}");
+    foreach (var group in result.Issues.GroupBy(i => i.Category).OrderByDescending(g => g.Count()))
+        Console.WriteLine($"  {group.Key,-22} {group.Count()}");
+    Console.WriteLine($"  report: {Path.Combine(result.OutputDirectory, "MIGRATION_REPORT.md")}");
+    return result.Issues.Any(i => i.Category == "generation-failed") ? 2 : 0;
 }
 
 static string? OptionValue(string[] args, string name)
