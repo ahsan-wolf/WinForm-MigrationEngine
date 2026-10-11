@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -166,7 +167,7 @@ public static partial class WinFormsDesignerParser
         if (!result.ControlDeclarationOrder.Contains(controlId)) result.ControlDeclarationOrder.Add(controlId);
     }
 
-    private static string Describe(StatementSyntax stmt)
+    private static string Describe(SyntaxNode stmt)
     {
         var text = WhitespaceRegex().Replace(stmt.ToString(), " ").Trim();
         return text.Length <= 200 ? text : text[..200] + "...";
@@ -289,6 +290,14 @@ public static partial class WinFormsDesignerParser
         if (invoke.Expression is not MemberAccessExpressionSyntax access) return false;
         if (!TryFlatten(access.Expression, out var root, out var receiver) || root != "this") return false;
 
+        // this.tlp.SetColumnSpan(this.child, 2)  (also SetRowSpan / SetColumn / SetRow)
+        if (methodName is "SetColumn" or "SetRow" or "SetColumnSpan" or "SetRowSpan" && receiver.Count == 1)
+            return HandleTableCell(invoke, methodName, result);
+
+        // this.tlp.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F))
+        if (methodName == "Add" && receiver is [var tableId, "ColumnStyles" or "RowStyles"])
+            return HandleTableStyle(invoke, tableId, receiver[1], result);
+
         if (methodName is "Add" or "AddRange") return HandleCollectionAdd(invoke, receiver, methodName == "AddRange", result);
 
         return false;
@@ -347,6 +356,58 @@ public static partial class WinFormsDesignerParser
             result.ParentOf[child] = parentId;
             if (slot.Length > 0) Attrs(result, child)["ParentSlot"] = slot;
         }
+
+        // TableLayoutPanel: Controls.Add(child, column, row). Literal coordinates are recorded independently; anything
+        // computed is reported instead of guessed.
+        if (!isRange && slot.Length == 0 && args.Count == 3)
+        {
+            var attrs = Attrs(result, children[0]);
+            var complete = true;
+            if (int.TryParse(args[1].Expression.ToString(), out var column)) attrs["TableLayout.Column"] = column.ToString(); else complete = false;
+            if (int.TryParse(args[2].Expression.ToString(), out var row)) attrs["TableLayout.Row"] = row.ToString(); else complete = false;
+            if (!complete) result.Unhandled.Add("cell coordinates are not literals: " + Describe(invoke));
+        }
         return children.Count > 0;
+    }
+
+    private static bool HandleTableCell(InvocationExpressionSyntax invoke, string methodName, DesignerParseResult result)
+    {
+        var args = invoke.ArgumentList.Arguments;
+        if (args.Count != 2 || !TryGetThisMemberName(args[0].Expression, out var childId)
+            || !int.TryParse(args[1].Expression.ToString(), out var value))
+            return false;
+
+        Attrs(result, childId)[$"TableLayout.{methodName["Set".Length..]}"] = value.ToString(); // Column | Row | ColumnSpan | RowSpan
+        return true;
+    }
+
+    /// <summary>Accumulates a JSON array in the container's ColumnStyles / RowStyles attribute: [{"SizeType":"Percent","Value":50}].</summary>
+    private static bool HandleTableStyle(InvocationExpressionSyntax invoke, string tableId, string kind, DesignerParseResult result)
+    {
+        var args = invoke.ArgumentList.Arguments;
+        if (args.Count != 1 || args[0].Expression is not ObjectCreationExpressionSyntax { ArgumentList: { } ctorArgs } creation) return false;
+
+        var parts = ctorArgs.Arguments;
+        if (parts.Count > 2) return false;
+
+        // new ColumnStyle() is WinForms' default: AutoSize.
+        var sizeType = parts.Count == 0 ? "AutoSize" : parts[0].ToString();
+        sizeType = sizeType[(sizeType.LastIndexOf('.') + 1)..];
+        double? size = null;
+        if (parts.Count == 2)
+        {
+            if (!double.TryParse(parts[1].ToString().TrimEnd('F', 'f'), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var number))
+                return false;
+            size = number;
+        }
+
+        var attrs = Attrs(result, tableId);
+        Touch(result, tableId);
+        var list = attrs.TryGetValue(kind, out var existing)
+            ? JsonSerializer.Deserialize<List<Dictionary<string, object?>>>(existing) ?? new()
+            : new List<Dictionary<string, object?>>();
+        list.Add(new Dictionary<string, object?> { ["SizeType"] = sizeType, ["Value"] = size });
+        attrs[kind] = JsonSerializer.Serialize(list);
+        return true;
     }
 }
