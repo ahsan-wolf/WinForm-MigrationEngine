@@ -54,13 +54,14 @@ public static partial class ServiceEmitter
 
     private static readonly JsonSerializerOptions JsonIn = new() { PropertyNameCaseInsensitive = true };
 
-    public static ContractEmitResult Emit(string contractFile, IReadOnlyList<UnitIr> units, bool all, string appDir, List<string> files)
+    public static ContractEmitResult Emit(string contractFile, IReadOnlyList<UnitIr> units, bool all, string appDir, List<string> files,
+        IEnumerable<WebFormsMigrator.IR.Models.MemberIr>? extraMembers = null)
     {
         var contract = JsonSerializer.Deserialize<AssemblyContract>(File.ReadAllText(contractFile), JsonIn)
                        ?? throw new InvalidDataException($"'{contractFile}' is empty.");
         var byFull = contract.Types.ToDictionary(t => t.FullName, StringComparer.Ordinal);
         var mapper = new TsTypeMapper(contract.Types);
-        var usage = UsageScanner.Scan(contract, units, all);
+        var usage = UsageScanner.Scan(contract, units, all, extraMembers);
         var result = new ContractEmitResult { Assembly = contract.Name, CallSites = usage.CallSites, Scope = all ? "all" : "used" };
 
         // 1. Facade methods first: their signatures pull in the data types they need.

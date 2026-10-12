@@ -150,6 +150,7 @@ public interface ITargetEngine : IEngine {
 public interface IProjectAwareSourceEngine : ISourceEngine { IEnumerable<IIrExtractor> CreateExtractors(ProjectAnalysis a); } // needs whole-project knowledge (UserControl inlining)
 public interface IIrProjectionProvider { IEnumerable<IIrProjection> Projections { get; } }   // technology-specific facet files (WinForms: layout)
 public interface IUnsupportedReporter { IEnumerable<string> FindUnsupported(IrExtractionContext c); } // unhandled constructs -> project.ir.json Shared.Unsupported
+public interface ISupportSourceEngine { SupportFileIr ExtractSupport(ProjectAnalysis a); }   // the project's own non-UI classes -> ir/support.ir.json (WinForms-owned sidecar)
 public interface IProjectTargetEngine : ITargetEngine { GenerationResult GenerateProject(string irFolder, string outDir, GenerationOptions o); } // whole-app generation from the IR FOLDER only (never a source engine)
 ```
 Host pieces: `EngineRegistry`, `EngineLoader` (reads `engines.json`), `SourceIrRunner` (per-unit failure isolation), `IrFileWriter` + `IIrProjection` (facet files), `WinNavigation` (see §4.2).
@@ -196,6 +197,7 @@ PageIr  (one per Form/UserControl)             # == complete.ir.json shape
 | `{Form}.control-properties.ir.json` | Flat list: `Id, TagName, Attributes` (all props + event wiring) | `control-properties.ir.json` |
 | `{Form}.code-behind.ir.json` | `Name` + `Members[]` (bodies included) | `code-behind.ir.json` |
 | `{Form}.layout.ir.json` | Per-control layout facts: `Dock, Anchor[], Location, Size, TabIndex, Margin, Padding, Visible, Enabled, TableLayout {Row, Column, RowSpan, ColumnSpan}`; `TableDefinition {Columns[], Rows[]}` on a `TableLayoutPanel`. `null` = not set / not a literal | `html-css.ir.json` (WinForms has no HTML/CSS; layout is the equivalent facet) |
+| `support.ir.json` | Project-level sidecar (not per unit): the app's own non-UI classes — static helper modules (`main`), data classes, structs, enums (nested ones flattened, `Container` set). Members reuse `MemberIr`; modifiers as `mod:const/auto/accessors/...` in `Attributes` | — |
 | `project.ir.json` | `ProjectIr` index: `Source`, `Forms[]`/`UserControls[]` (`{Name, Kind, IrFile}`), `Shared` (`Unsupported` filled from unhandled designer statements; `Settings`/`Resources`/`Dependencies` still empty), `Failures[]` | — |
 
 Rules:

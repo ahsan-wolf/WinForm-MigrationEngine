@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Migrator.Engine.Projections;
+using Migrator.Engine.Support;
 using WebFormsMigrator.IR.Models;
 
 namespace Migrator.Target.React.Generation;
@@ -16,6 +17,9 @@ public sealed class IrFolder
     private static readonly JsonSerializerOptions Json = new() { PropertyNameCaseInsensitive = true };
 
     public ProjectIr Project { get; private init; } = new();
+
+    /// <summary>The project's own non-UI classes (support.ir.json), when the source engine extracted any.</summary>
+    public SupportFileIr? Support { get; private init; }
     public IReadOnlyDictionary<string, UnitIr> Units { get; private init; } = new Dictionary<string, UnitIr>();
 
     public static IrFolder Load(string irFolder)
@@ -40,6 +44,8 @@ public sealed class IrFolder
 
             units[entry.Name] = new UnitIr(entry.Name, entry.Kind, page, layout);
         }
-        return new IrFolder { Project = project, Units = units };
+        var supportPath = Path.Combine(irFolder, "support.ir.json");
+        var support = File.Exists(supportPath) ? JsonSerializer.Deserialize<SupportFileIr>(File.ReadAllText(supportPath), Json) : null;
+        return new IrFolder { Project = project, Units = units, Support = support };
     }
 }

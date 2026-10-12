@@ -145,6 +145,12 @@ checked, value, readOnly), form fields are `f.<name>` (initial values from their
   the rows, so code reads them at once. Translated: `Items` / `SelectedItems` / `CheckedItems` / `SelectedIndices` / `Columns` (`.Count`, indexer, `foreach`, `Add`, `Insert`, `RemoveAt`, `Clear`, `SelectedItems.Clear()`),
   `new ListViewItem(...)` (text, `string[]`, text + image key), item `Text/Checked/Selected/Tag/Name`, `SubItems.Add/Clear/Count`, `SubItems[k].Text` (literal `k` for writes), own helpers returning `ListViewItem`.
   `Refresh/Invalidate/Update/Begin/EndUpdate/Focus` on any control are dropped with a comment. Not translated (stays TODO): `ListViewItemSorter`/`Sort`, `item.Index`, `Items.Remove(item)`, image lists, groups.
+- **Project classes (`src/support/index.ts`):** the source engine also extracts the app's own non-form classes (`ISupportSourceEngine` -> `ir/support.ir.json`; static helpers like `main`, `Preferences`, `ECMConfiguration`,
+  data classes, structs, nested enums). The React target emits them as one module (enums -> `export enum`, classes -> `export class` with static/instance members; overloads become `Foo`, `Foo_2`; constructors merged into
+  the longest, extra parameters default to `null!`; properties with accessors -> `get`/`set`), translated by the same rules and compile gate as page methods (stubs keep every member callable and typed). Pages call them as in C#
+  (`main.GetImageListKey(...)`, `Preferences.MyPreferences`, `new BrowseFolderOptions()`), awaited when async. Static fields without an initializer get sample data for contract types (`fixtures.X[0]`, `// MOCK`) or `new T()`
+  for project classes. Contract types used only by these classes are emitted too. Limits: UI inside them (MessageBox, closing forms) and `ConfigurationManager`/registry/file access stay TODO; base types are not generated;
+  `ref`/`out` methods are stubs; classes are emitted in an order that keeps static initializers valid (one module, no import cycles).
 - **Constructor arguments -> props:** a form's constructor (`.ctor` member) parameters become optional props of the page. Contract data types default to a fixture row (`fixtures.UCMProfile[0]`, lists to the fixture list; `// MOCK`),
   and `field = argument;` statements seed the field model from the prop, so a page opens on its own and its Load handler has data. Other constructor statements are kept as `// TODO` notes. The opener passing real values is
   not wired yet (constructor arguments at `new Form(...)` call sites are still a TODO in the caller).
@@ -154,9 +160,8 @@ checked, value, readOnly), form fields are `f.<name>` (initial values from their
   whose opener passes constructor arguments (not translated yet), which the entry form cannot reach.
 - **Button.DialogResult:** clicking a button whose designer sets `DialogResult` runs its Click handler then `onClose(result)`, as WinForms closes the dialog (not part of translation; applies in every mode).
 
-Pilot numbers (ECMNavigator, 17 forms, 706 methods): 332 complete (47%), 230 partial, 144 not translated (68 demoted by the gate; 339 complete before the gate); `tsc` 0 errors, build and lint clean. What blocks the rest, from the report:
-**grid and container members** (`dgv.Rows`, `pnl.Controls`), **the app's own static classes** (`main.*`, `Preferences.*`, `ECMConfiguration.*`: not in
-the IR yet), `ref`/`out` arguments (`TryParse`), `string.Format` with specifiers, event subscriptions in code, constructors of WinForms types. Everything is listed per method in `MIGRATION_REPORT.md`.
+Pilot numbers (ECMNavigator, 17 forms, 706 methods): 375 complete (53%), 209 partial, 122 not translated (81 demoted by the gate); plus 33 project classes with 157 members (56 complete); `tsc` 0 errors, build and lint clean. What blocks the rest, from the report:
+**grid and container members** (`dgv.Rows`, `pnl.Controls`), `ref`/`out` arguments (`TryParse`), `string.Format` with specifiers, event subscriptions in code, constructors of WinForms types. Everything is listed per method in `MIGRATION_REPORT.md`.
 Rule-translated code is deterministic but **unreviewed**: check logic, async behaviour and every TODO.
 
 ## Commands
