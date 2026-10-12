@@ -1,9 +1,26 @@
 # WinForms Modernization Engine — Project Plan & Analysis
 
-**Status:** Initial plan (v0.1) · **Date:** 2026-10-10 · **Owner:** TBD
+**Status:** v0.3 — P0, P1 done; P2/P3 React slice done (see §0) · **Date:** 2026-10-12 · **Owner:** TBD
 **Related docs:** `CLAUDE.md` (rules & architecture) · `SKILLS.md` (control mappings) · `WINFORMS_MIGRATION_PROMPT.md`
 
 > Estimates are **planning-grade (±30%)**, in person-days (PD), and assume reuse of the existing WebFormsMigrator IR platform. They must be re-baselined after the Phase 1 spike and the first pilot application.
+
+---
+
+## 0. Progress snapshot (as of 2026-10-12)
+
+| Phase | State | Notes |
+|---|---|---|
+| **P0 Foundation** | ✅ done (M0 met) | `net10.0` solution; engine contracts, registry, `engines.json` allow-list, plugin loader with isolated load contexts and schema check; `migrator engines`. M0 verified with throwaway plugins (valid / wrong-schema / missing / unlisted) — no test projects, per rule. |
+| **P1 WinForms source engine** | 🟡 largely done | Prototype ported to real `IIrExtractor`s (tree → members → semantics → workflows → navigation); project analyzer; **six IR files + `project.ir.json`**; designer hardening (menus, tabs, split panels, grid columns, TableLayout cells/styles, items, DataBindings, tooltips, `.resx`); unhandled statements reported. `migrator ir` works end to end. |
+| **P2 UI library** | 🟡 React MVP | `ui-spec` 0.1.0 + `@wfm/ui-react` (20 components: form, menus, toolbar, status bar, split, panel, label/button/textbox/combobox/checkbox, progress, picture, grid, context menu, dialog service, `WfUnsupported`), scoped to the pilot's startup form. Missing: ListView, TreeView, tabs, radio group, date picker, group box. `ui-angular` / `ui-html` not started. |
+| **P3 Target engines** | 🟡 React slice | `migrator migrate` generates an app from the IR folder + `ui-spec`: layout from Dock/Location (no pixels), `ShowDialog` -> dialog service, state for inputs, mock grid rows, `MIGRATION_REPORT.md`. Pilot: 17 forms generated; install, `tsc`, build and lint with zero errors. `migrate --contract` emits typed mock services from an assembly contract (secrets omitted). Angular and HTML+jQuery targets not started. |
+| **Tooling** | ✅ | `migrator contract` (public API of a managed assembly from metadata only, never executed); `tools/win-ir-viewer` (React page for reviewing IR). |
+| P4 LLM / P5 report polish / P6 pilots | ⏳ P4 next | Handler bodies are still commented C# (so most generated buttons do nothing). P4 (Ollama) is the next slice. The first pilot run (ECMNavigator) is in `docs/PILOT_FINDINGS.md`. |
+
+**P1 remaining (small):** externalize `SemanticKeywords` (1 PD); populate `Shared.Settings/Resources/Dependencies`; handlers in a third partial file; multi-level workflow steps; flag controls created at runtime (loops, `Controls.Add` in code). The real pilot run is done: 36/36 units extract (892 controls, 420 workflows, 0 unresolved handlers) after three extractor bugs it exposed were fixed (overloaded handlers, navigation in helper methods, file dialogs counted as navigation). M1-lite is met (startup form -> React shell that builds and renders); full M1 needs handler translation (P4).
+
+**Decisions taken so far:** D1 -> engine on `net10.0`; shared IR still `net8.0`. D3 (interim) -> `ProjectReference` to a sibling checkout via `build/IrReference.props`; **the WebFormsMigrator repo is never modified from here**. D6 -> pilot is ECMNavigator (35 forms + 1 user control). NavigationIr gap -> WinForms vocabulary on existing fields via `WinNavigation`. Pilot backend `ECMLibrary` is a SOAP web-service client (not a database layer): the app needs a thin REST layer behind a typed `ecmService`; secrets are never emitted to the browser. Local inputs (assemblies) live in git-ignored `local-inputs/`, derived contracts in `local-outputs/`; neither is ever committed.
 
 ---
 
@@ -280,6 +297,8 @@ New control → `ui-spec` → all three libraries → SKILLS row. New engine →
 | R10 | Schema churn breaks consumers | L | M | Additive-only changes, `IrSchema.Version`, engines declare supported schema range. |
 | R11 | Large grids perform poorly in browser | M | M | Virtualization / server-side paging in `WfDataGrid`; flagged in report. |
 | R12 | Parallel-run / change-management friction | M | M | Out of engine scope; include rollout guidance in docs. |
+| R13 | Shared IR repo is a sibling checkout (`ProjectReference`); path drift or net8/net10 divergence breaks the build | M | M | Single switch in `build/IrReference.props`; `WebFormsMigratorRoot` override; move to a NuGet feed (D3). |
+| R14 | Verification so far used hand-written fixtures; real designers (helper calls, loops, third-party controls) may expose gaps | H | M | Pilot run (D6); `Shared.Unsupported` makes gaps visible instead of silent. |
 
 ---
 
@@ -287,23 +306,24 @@ New control → `ui-spec` → all three libraries → SKILLS row. New engine →
 
 | ID | Decision | Recommendation |
 |---|---|---|
-| D1 | Runtime target for the new engine and shared IR packages | `net10.0`; multi-target shared packages during transition. |
+| D1 | Runtime target for the new engine and shared IR packages | `net10.0`; multi-target shared packages during transition. **Engine: decided (net10.0). Shared IR packages: still net8.0 — owner of that repo to decide.** |
 | D2 | npm scope/names (`@wfm/*`) and registry (public vs private) | Private registry or local `npm pack` initially. |
-| D3 | How shared IR packages are published | Local NuGet feed first; proper feed later. |
+| D3 | How shared IR packages are published | Local NuGet feed first; proper feed later. **Interim in use: `ProjectReference` to sibling checkout (`build/IrReference.props`).** |
 | D4 | Grid/tree/chart internals and their licenses | Prefer permissive licenses; hide behind `Wf*`. |
 | D5 | Angular baseline version | 17+ standalone (current LTS-supported line at start of work). |
-| D6 | Pilot app selection (small / medium / large) | Choose before P1 starts; drives mapping priorities. |
+| D6 | Pilot app selection (small / medium / large) | Choose before P1 starts; drives mapping priorities. **Still open and now blocking P1 sign-off.** |
 | D7 | Cloud LLM allowed for non-sensitive code? | Default local-only; cloud opt-in via `llm-config`. |
 | D8 | Include binary-only input (P7)? | Defer until after pilots. |
 
 ---
 
-## 11. Next Steps (first 2 weeks)
-1. Confirm decisions D1, D2, D6.
-2. Create the standalone repo; create branch `feature/foundation`; scaffold solution and engine registry (P0).
-3. Build and run the existing WinForms extractor prototype against the sample form in a real .NET environment; log gaps (P1 spike).
-4. Draft `ui-spec` for the MVP control set; implement `WfButton`, `WfTextBox`, `WfDataGrid` in React as the contract proof.
-5. Run M1: sample form → IR → React app.
+## 11. Next Steps
+Original first-two-weeks list, with status: D1 confirmed; D2 and D6 still open · P0 scaffold done · P1 spike done (gaps fixed: form-level events, `ClientSize` noise node, `MessageBox.Show` as navigation, step order) · `ui-spec` + `WfButton`/`WfTextBox`/`WfDataGrid` (P2) next · M1 after that.
+
+Next, in order:
+1. Pilot `Designer.cs` run (D6) → close P1 gaps found there.
+2. P2: `ui-spec` MVP control set + tokens, then the React library (contract proof).
+3. P3 shared generator core (spec-driven binder, Dock/Anchor→CSS deriver, naming, routes), then the React target → M1.
 
 ---
 
@@ -318,11 +338,11 @@ New control → `ui-spec` → all three libraries → SKILLS row. New engine →
 | Learnings: 100 s HTTP timeout bug, delimiter non-compliance of small models, anonymous-node noise in web IR | Built into rules in `CLAUDE.md` |
 
 ## Appendix B — Deliverables checklist
-- [ ] `WinFormsMigrator` repo/solution with engine host and plugin loader
-- [ ] `Migrator.Source.WinForms` (IR: 6 files/form + `project.ir.json`)
+- [x] `WinFormsMigrator` repo/solution with engine host and plugin loader
+- [x] `Migrator.Source.WinForms` (IR: 6 files/form + `project.ir.json`) — pending pilot validation
 - [ ] `ui-library/` — `ui-spec`, `ui-react`, `ui-angular`, `ui-html`
 - [ ] `Migrator.Target.React` / `.Angular` / `.Html`
 - [ ] LLM prompts in `llm-config/`
 - [ ] `MIGRATION_REPORT.md` generator
-- [ ] Docs: IR schema, engine authoring guide, control catalog
+- [ ] Docs: IR schema, control catalog (engine authoring guide exists: `docs/ENGINE_AUTHORING.md`)
 - [ ] Pilot results and backlog

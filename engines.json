@@ -4,6 +4,8 @@
   // or plugins/<assembly>/<assembly>.dll. "options" is passed to the module's (EngineOptions) constructor.
   "pluginsDirectory": "plugins",
   "engines": [
-    { "id": "winforms", "enabled": true, "assembly": "Migrator.Source.WinForms", "options": {} }
+    { "id": "winforms", "enabled": true, "assembly": "Migrator.Source.WinForms", "options": {} },
+    { "id": "react-app", "enabled": true, "assembly": "Migrator.Target.React",
+      "options": { "uiSpecPath": "ui-library/ui-spec/controls.json", "uiLibraryPath": "ui-library/ui-react" } }
   ]
 }
