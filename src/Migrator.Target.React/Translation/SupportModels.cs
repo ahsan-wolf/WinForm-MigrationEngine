@@ -89,7 +89,7 @@ public sealed class SupportRegistry
                                 break;
                             case MemberAccessExpressionSyntax ma:
                                 var method = ma.Name.Identifier.Text;
-                                if (PageTranslator.FacadeName(ma.Expression) is { } facade && vocabulary.IsFacade(facade) && !cls.Fields.ContainsKey(facade)
+                                if (PageTranslator.FacadeName(ma.Expression, vocabulary) is { } facade && vocabulary.IsFacade(facade) && !cls.Fields.ContainsKey(facade)
                                     && Enumerable.Range(0, 16).Any(n => vocabulary.FindCall(facade, method, n) is not null))
                                     direct.Add(key);
                                 break;

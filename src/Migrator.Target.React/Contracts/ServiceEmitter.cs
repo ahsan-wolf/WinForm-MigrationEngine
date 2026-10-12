@@ -20,6 +20,9 @@ public sealed class ContractEmitResult
     public List<string> Notes { get; } = new();
     public string Scope { get; init; } = "used";
 
+    /// <summary>First namespace segments of the contract's types (e.g. the assembly's root namespace): code like `Root.Facade.Method(...)` names a type by namespace.</summary>
+    public HashSet<string> NamespaceRoots { get; } = new(StringComparer.Ordinal);
+
     // What the translator needs to call the generated service and use its types.
     public string InstanceName { get; set; } = "";
     public string ServiceImport { get; set; } = "";
@@ -63,6 +66,8 @@ public static partial class ServiceEmitter
         var mapper = new TsTypeMapper(contract.Types);
         var usage = UsageScanner.Scan(contract, units, all, extraMembers);
         var result = new ContractEmitResult { Assembly = contract.Name, CallSites = usage.CallSites, Scope = all ? "all" : "used" };
+        result.NamespaceRoots.Add(contract.Name);
+        foreach (var t in contract.Types) if (t.FullName.Contains('.')) result.NamespaceRoots.Add(t.FullName[..t.FullName.IndexOf('.')]);
 
         // 1. Facade methods first: their signatures pull in the data types they need.
         var facades = new List<(string Name, SortedDictionary<string, List<Overload>> Methods)>();
