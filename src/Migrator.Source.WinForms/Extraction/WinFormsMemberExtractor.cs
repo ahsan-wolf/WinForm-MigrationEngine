@@ -28,7 +28,9 @@ public sealed class WinFormsMemberExtractor : IIrExtractor
             switch (member)
             {
                 case PropertyDeclarationSyntax prop:
-                    target.Members.Add(Simple(MemberKind.Property, prop.Identifier.Text, prop.Type.ToString(), prop.Modifiers));
+                    var property = Simple(MemberKind.Property, prop.Identifier.Text, prop.Type.ToString(), prop.Modifiers);
+                    property.Body = prop.Initializer?.Value.ToString(); // auto-property initializer; for fields/properties Body is the initial value expression
+                    target.Members.Add(property);
                     break;
 
                 case FieldDeclarationSyntax field:
@@ -36,7 +38,9 @@ public sealed class WinFormsMemberExtractor : IIrExtractor
                     {
                         var name = v.Identifier.Text;
                         if (controlFields.Contains(name) || name == "components") continue;
-                        target.Members.Add(Simple(MemberKind.Field, name, field.Declaration.Type.ToString(), field.Modifiers));
+                        var fieldMember = Simple(MemberKind.Field, name, field.Declaration.Type.ToString(), field.Modifiers);
+                        fieldMember.Body = v.Initializer?.Value.ToString(); // initial value expression (constants such as c_NoFilter = "..." matter to translated code)
+                        target.Members.Add(fieldMember);
                     }
                     break;
 
