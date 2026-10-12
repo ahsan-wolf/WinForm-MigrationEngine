@@ -44,7 +44,11 @@ public static class PageTranslator
             Generated = env.Generated,
             Output = output
         };
-        foreach (var node in Walk(root).Skip(1)) scope.Controls.Add(node.Id);
+        foreach (var node in Walk(root).Skip(1))
+        {
+            scope.Controls.Add(node.Id);
+            if (node.TagName == "System.Windows.Forms.ListView") scope.ListViews.Add(node.Id);
+        }
 
         foreach (var m in unit.Page.Members.Where(m => m.Kind is MemberKind.Field or MemberKind.Property))
             scope.Fields.TryAdd(m.Name, m);

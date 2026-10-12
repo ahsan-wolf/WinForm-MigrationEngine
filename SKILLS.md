@@ -53,7 +53,7 @@ Event naming (canonical → React / Angular / HTML): `click → onClick / (wfCli
 | `DataGridView` | `WfDataGrid` | `rows, columns[], selectionMode, sortable, pageSize, readOnly, allowAdd, allowDelete` | `rowSelect, cellClick, cellDoubleClick, cellEdit, rowAction, sort` |
 | ↳ columns | `WfGridColumn` types: `text, checkbox, combo, button, link, image` | `field, header, format, width, frozen, render` | — |
 | `TreeView` | `WfTreeView` | `nodes, checkboxes, lazy` | `select, expand, check` |
-| `ListView` | `WfListView` | `items, columns, view(details\|icons\|tiles), groups` | `selectionChange, itemActivate` |
+| `ListView` | `WfListView` | `items, columns, checkBoxes, multiSelect, disabled` (icons/tiles/groups not yet) | `selectionChange, itemCheckedChange, itemActivate, click, doubleClick, keyUp, columnClick` |
 | `TabControl` / `TabPage` | `WfTabs` / `WfTabPage` | `activeTab, tabs[]` | `tabChange` |
 | `SplitContainer` | `WfSplit` | `orientation, sizes` | `resize` |
 | `Panel` | `WfPanel` | `visible, scroll` | — |
