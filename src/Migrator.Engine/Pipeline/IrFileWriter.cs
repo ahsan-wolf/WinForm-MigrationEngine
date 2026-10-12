@@ -14,6 +14,7 @@ public sealed record IrWriteSummary(string ProjectIrPath, IReadOnlyList<string> 
 public static class IrFileWriter
 {
     public const string CompleteSuffix = "complete";
+    public const string SupportFileName = "support.ir.json";
     private const int MaxUnsupportedPerUnit = 50;
 
     /// <summary>Indented PascalCase, matching the existing IR samples.</summary>
@@ -62,6 +63,9 @@ public static class IrFileWriter
             var entry = new ProjectUnitIr { Name = name, Kind = result.Unit.Kind.ToString(), IrFile = $"{name}/{completeFile}" };
             (result.Unit.Kind == SourceUnitKind.UserControl ? project.UserControls : project.Forms).Add(entry);
         }
+
+        if (engine is ISupportSourceEngine supportEngine && supportEngine.ExtractSupport(analysis) is { Classes.Count: > 0 } support)
+            WriteJson(Path.Combine(irRoot, SupportFileName), support, written);
 
         var projectPath = Path.Combine(irRoot, "project.ir.json");
         WriteJson(projectPath, project, written);
