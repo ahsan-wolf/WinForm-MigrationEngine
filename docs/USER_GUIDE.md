@@ -1,0 +1,151 @@
+# User guide — running the WinForms Migration Engine
+
+This guide is for the person who runs a migration: you point the tool at a legacy WinForms project and get a React app, an intermediate model (the IR) and a report of what still needs manual work.
+For architecture see `PROJECT_DOCUMENTATION.md`; for rules and git workflow see `CLAUDE.md`; for control mappings see `SKILLS.md`.
+
+## 1. What you get
+
+| Output | Where | What it is |
+|---|---|---|
+| **IR** | `<out>/ir/` | A framework-neutral model of the app: per form/user control a `complete` file plus `controls`, `control-properties`, `code-behind`, `layout`; `support.ir.json` (the app's own non-form classes); `project.ir.json` (index, failures, unsupported constructs) |
+| **React app** | `<out>/react-app/` | Vite + React 18 + TypeScript app that imports only `@wfm/ui-react`: one page per form, a dialog service for `ShowDialog`, translated code-behind, mock data, `src/support/` for the app's own classes |
+| **Report** | `<out>/react-app/MIGRATION_REPORT.md` | Counts, what was translated, what is TODO and why, contract notes (omitted secrets), controls with no equivalent |
+
+It produces a **minimum working application**: it builds, screens render, controls are wired to real state and translated handlers, data is **mock** data. It does **not** guarantee that translated business logic is correct — review everything marked `TODO`, `MOCK` or `LLM-translated`.
+
+## 2. Prerequisites
+
+- **.NET SDK 10** (the engine targets `net10.0`) and a current **Node.js LTS** with npm.
+- A sibling checkout of the shared IR repository (`..\MIgration Engine 2` relative to this repo). The engine only *references* it and never edits it. Another location: `-p:WebFormsMigratorRoot=<path>` on `dotnet build`.
+- The legacy project's **source** (`*.cs`, `*.Designer.cs`, `.resx`). Binary-only inputs are possible but lossy.
+- Optional: the legacy app's backend library (a managed DLL) if you want typed mock services (section 7).
+- Not needed now: Ollama (planned LLM tier).
+
+## 3. One-time setup
+
+```bash
+dotnet build WinFormsMigrator.sln
+cd ui-library/ui-react && npm ci && npm run build && cd ../..
+```
+`engines.json` lists the enabled engines (`winforms` source, `react-app` target) and where the `ui-spec` and the library live. Only listed engines load.
+
+## 4. Quick start
+
+```bash
+# IR only (inspect what was understood)
+dotnet run --project src/Migrator.Cli -- ir --source "<winforms project folder>" --out "<output folder>"
+
+# Whole migration: IR + React app, rule-based translation, compile check
+dotnet run --project src/Migrator.Cli -- migrate --source "<winforms project folder>" --out "<output folder>" \
+    --translate rules --compile-gate --depth all [--contract <contract.json>]
+
+# Run the generated app
+cd "<output folder>/react-app"
+npm install          # first time (the compile gate already did it if you passed --compile-gate)
+npm run dev          # http://localhost:5173
+```
+Use an output folder **outside the repository**. Never commit generated output derived from a customer application.
+
+## 5. Command reference
+
+| Command | Purpose |
+|---|---|
+| `engines [--config <engines.json>]` | List the engines that load (diagnostics for the rest) |
+| `ir --source <dir> --out <dir> [--engine <id>]` | Extract the IR only |
+| `migrate --source <dir> --out <dir> [options]` | IR step, then generate the app into `<out>/react-app` |
+| `contract --assembly <dll> --out <dir>` | Read a managed DLL's public API from metadata only (never loaded or run) |
+
+`migrate` options:
+
+| Option | Meaning |
+|---|---|
+| `--target react-app` | Target engine (only React exists today; Angular and HTML+jQuery are planned) |
+| `--entry <form>` | Entry form (default: the startup form from `Program.cs`) |
+| `--depth <n\|all>` | How many `Show/ShowDialog` hops from the entry form to generate (default 1; `all` = everything reachable) |
+| `--translate none\|rules\|llm` | `none`: handlers stay commented C#. `rules`: deterministic C# -> TypeScript. `llm` currently behaves like `rules` (LLM tier planned) |
+| `--compile-gate` | Run `npm install` if needed, then `tsc`; methods that do not compile are demoted back to commented C# and the page is regenerated (up to 5 rounds). Without the flag the gate runs only if dependencies already exist; `--no-compile-gate` skips it |
+| `--contract <file>` (repeatable) | Turn a backend contract into typed services, fixtures and types in the app |
+| `--contract-scope used\|all` | Emit only what the generated code uses (default) or everything |
+
+The console ends with counts: units extracted, pages generated, methods complete/partial/not translated, support classes, remaining TypeScript errors.
+
+## 6. Reading the results
+
+### 6.1 The report (`MIGRATION_REPORT.md`)
+- **Translation table** — per form: methods, complete, partial, not translated. *Complete* = every statement translated. *Partial* = some statements stayed as commented C# with a TODO. *Not translated* = the whole method stays commented (a typed stub keeps callers compiling).
+- **Most common reasons** — the fastest way to see what blocks more automation (for example `ref`/`out` arguments, `ConfigurationManager`).
+- **Project classes** — the same for `src/support/index.ts`.
+- **Manual work by category** — controls with no library component, navigation that needs a decision, grids whose columns are created in code, non-visual components, contract notes, compile errors outside translated methods.
+
+### 6.2 Markers in generated code
+| Marker | Meaning |
+|---|---|
+| `// TODO: not translated — <reason>` + commented C# | The rules could not translate this statement faithfully; the original is kept |
+| `// TODO: wire to real API — X not resolvable from IR` | A call or type the IR/contract does not describe |
+| `// MOCK — ...` | Sample or fake data (fixture rows, sample list rows, constructor-argument defaults) |
+| `// inferred — check against backend contract` | A type guessed from columns or formats |
+| `// dropped (no browser equivalent: ...)` | Appearance-only or UI-loop code (Cursor, `DoEvents`, Refresh) that has no behaviour in a browser |
+| `// LLM-translated — verify` | Reserved for the LLM tier (not generated yet) |
+| `<WfUnsupported .../>` | A control with no library component |
+
+### 6.3 What the generated app looks like
+- `src/pages/<Form>Page.tsx` — one component per form. Controls are `Wf*` components; control properties live in `vm` (`vm.txtSearch.text`) and form fields in `f`, both from `useWfModel` (reads are immediate, writes re-render once, so translated WinForms code maps one to one).
+- `src/support/index.ts` — the app's own classes (`main`, `Preferences`, enums, data classes), called as in the original.
+- `src/services/<assembly>/` — typed mock service when a contract was given.
+- `src/legacy/*.cs.txt` — the original code-behind of every generated form, so nothing is lost.
+
+## 7. Backend libraries (contracts)
+
+Many WinForms apps call a backend client DLL. To get typed mock services instead of guesses:
+
+1. Put the DLL in the git-ignored `local-inputs/` and run `contract --assembly local-inputs/<name>.dll --out local-outputs` (it reads metadata only; the DLL is never loaded or executed).
+2. Pass `local-outputs/<name>/contract.json` to `migrate --contract`.
+3. Members that look like secrets (password, key, license, connection string, credentials, token) are **omitted** or stripped and listed in the report as SERVER-ONLY. Secrets are never emitted to browser code.
+
+Never commit a DLL, a contract derived from a customer assembly, or any generated output.
+
+## 8. Running and checking the generated app
+
+```bash
+npm run dev       # development server
+npm run build     # production build (must pass)
+npm run lint      # must report 0 problems
+```
+**Dev launcher.** `http://localhost:5173/` opens the entry form. `?page=<Name>` (for example `?page=SearchResults`) opens one generated page on its own with mock data; `?page=` lists all pages. A page that throws while rendering shows its error text instead of a blank screen. Dialogs that the original opened with constructor arguments take them as optional props and fall back to fixture data, so they work standalone.
+
+What to click through: the menu and toolbar, each dialog from the entry form, lists and grids (their rows are mock data), `Close`/`OK`/`Cancel` buttons, and the pages in the launcher index.
+
+## 9. A typical working loop
+
+1. `ir` first on a new application: read `project.ir.json` (`Failures`, `Unsupported`) and open a few `*.complete.ir.json` to confirm the control tree and handlers are right. (A small React IR viewer exists on branch `feature/win-ir-viewer`; it is not merged to `main` yet.)
+2. `migrate --translate rules --compile-gate --depth all` and read the report's top reasons.
+3. Fix the cause at the right layer: **extractor** (something missing from the IR), **translator** (a missing rule, see `ENGINE_AUTHORING.md`), **UI library** (a missing control: add it to `ui-spec` and every `ui-*` package). Never patch generated output by hand and expect it to survive a rerun.
+4. Re-run; `tsc` and lint must stay at 0.
+5. Review the TODOs that remain with the people who know the application.
+
+## 10. Known limitations (read before promising anything)
+
+- Business logic is translated deterministically but **not verified**. Review async behaviour, mock data assumptions and every TODO.
+- Data is mock. The opener passing real arguments to dialogs, real services and authentication are not part of the generated app yet.
+- No pixel fidelity: layout is derived from Dock/Anchor/Location facts into flex/grid.
+- Not translated today: `ref`/`out`, event subscriptions in code, `string.Format` format specifiers, `ConfigurationManager`/registry/file access, GDI+/P/Invoke/COM, UI calls inside non-form classes, LINQ query syntax, lambdas, `dgv.Rows` and `pnl.Controls` members, runtime-created controls.
+- Controls without a library component yet: TreeView, tabs, radio group, date picker (they render as `WfUnsupported`).
+- Only the React target exists; Angular and HTML+jQuery are planned. See `PROJECT_PLAN.md` for the roadmap.
+
+## 11. Troubleshooting
+
+| Symptom | Cause / fix |
+|---|---|
+| `engines.json not found` | Run from the repo root or pass `--config <path>` |
+| Plugin DLL ignored | A DLL in `plugins/` that is not listed in `engines.json` is reported and never executed — list it |
+| `Cannot find @wfm/ui-react` or blank styles | Build the library first: `cd ui-library/ui-react && npm ci && npm run build` |
+| `npm run` fails on a path containing `&` or spaces | The generated scripts call `node ./node_modules/<tool>/bin/...` for that reason; do not replace them with `.bin` shims |
+| Compile gate does nothing | Dependencies are not installed: pass `--compile-gate` (installs) or run `npm install` first |
+| Page is blank in the browser | Hard refresh; open `?page=<Name>` to see the render error; check the console |
+| Two copies of React / hooks error | The generated Vite config dedupes React; re-generate rather than editing it |
+| `?page=X` does nothing | Name must match a file in `src/pages` (with or without the `Page` suffix); use `?page=` to list |
+| Tool output differs between runs | It should not: the generators are deterministic. Compare IR first (`ir` step), then the translator version |
+
+## 12. Git workflow (when changing the tool itself)
+
+Branch from the latest `main` (`feature/…`, `fix/…`, `docs/…`), commit in small logical commits, **never push or open PRs from the tool/agent**; the maintainer pushes. The exact command block is in `CLAUDE.md` section 0.2. Do not add test projects, Storybook or demo apps to this repo.

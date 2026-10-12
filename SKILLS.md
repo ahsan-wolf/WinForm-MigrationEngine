@@ -344,6 +344,8 @@ Custom events on UserControls (`public event EventHandler Saved;`) → React cal
 | `Settings.Default.X` (user settings) | `localStorage` wrapper / settings context | settings service | `localStorage` |
 | `Application.StartupPath` / file paths ⛔ | not applicable (server) | | | TODO |
 | Static/global form fields | app-state service (Context / injectable) | injectable singleton | module-level object |
+| **As built (React):** control properties and form fields in generated pages | one `useWfModel` per page: `vm.<id>.<prop>` (text, enabled, visible, checked, value, readOnly, ListView `items`/`columns`) and `f.<field>` (initial values from the C# initializers); deep proxy = immediate reads, one batched re-render | | |
+| **As built:** the app's own static classes (`main`, `Preferences`, ...) | module `src/support/index.ts`: `export class main { static ... }`; pages call `main.X(...)`; static fields start as sample data (`// MOCK`) | | |
 | `Form.Tag` / passing data to child form | route state / props | `Router.navigate(..., {state})` / `@Input` | `sessionStorage` / query string |
 | `FormMode` (Add/Edit) pattern | `mode` state | `mode = signal<'Add'|'Edit'>` | `data-mode` / variable |
 
@@ -370,6 +372,7 @@ Per target:
 - **React:** `services/actorService.ts` using `fetch`; optional `useActors()` hook (+ TanStack Query).
 - **Angular:** `services/actor.service.ts` using `HttpClient`, `providedIn:'root'`.
 - **jQuery:** `services/actorService.js` using `$.ajax`/`fetch` returning Promises.
+- **As built (React):** the ECMLibrary-style backend is a *contract*, not SQL: `migrate --contract` emits `src/services/<assembly>/{types,fixtures,service}.ts` (typed mock service, secret-looking members omitted); translated code calls `await ecmLibrary.UCM.X(...)`.
 - **Mock backend:** `mocks/db.json` + `json-server` (or MSW). Fixture rows are plausible and shaped by the inferred model. Marker: `// MOCK — replace with real implementation`.
 
 ---
@@ -405,6 +408,8 @@ Per target:
 | Returning data via public property after `ShowDialog` | modal result payload | `afterClosed()` payload | callback arg |
 
 Generate `routes.*` from `NavigationIr` entries + main form. Dialog forms are **not** routes; they are components opened by the dialog service.
+
+**As built (React):** constructor parameters of a form become optional props of its page (contract data types default to a fixture row, `// MOCK`; `field = arg;` seeds the field model); `Button.DialogResult` closes the dialog after the Click handler with that result; the generated `main.tsx` is also a **dev launcher**: `?page=<Name>` renders one page on its own, `?page=` lists them, and a render error is shown instead of a blank screen.
 
 ---
 
@@ -478,7 +483,12 @@ All auth is **mock**: no token validation. Mark every file `// MOCK — replace 
 | `using (var x = …)` | remove; `try/finally` if disposable matters |
 | `Console.WriteLine` / `Debug.WriteLine` | `console.log` |
 | `MessageBox.Show` | Skill 5 |
-| `this.txtX.Text` | state variable `x` |
+| `this.txtX.Text` | state variable `x` (generated React: `vm.txtX.text`) |
+| `lv.Items.Add(new ListViewItem(...))`, `lv.SelectedItems`, `lv.Columns.Add(...)` | `vm.lv.items.push(wfListItem(...))`, `vm.lv.items.filter((it) => it.selected)`, `vm.lv.columns.push({ header, width })` |
+| `x.Equals(y)` | `x === y` (via the `==` rule, incl. `DialogResult`) |
+| `&` / `\|` between two conditions | `&&` / `\|\|` |
+| `main.X(...)`, `Preferences.P`, `enum_E.V`, `new Data()` (project classes) | `main.X(...)`, `Preferences.P`, `enum_E.V`, `new Data()` imported from `../support` |
+| `Refresh()/Invalidate()/BeginUpdate()/Focus()` | dropped with a comment |
 | `sender as Button` | `event.currentTarget` |
 | `ViewState["Key"]` / `Session["Key"]` | app-state field |
 
@@ -501,6 +511,10 @@ unknown calls become `// TODO: wire to real API`.
 | Third-party suites (DevExpress, Telerik, Infragistics, Syncfusion) | map to vendor's web equivalent (list in report); otherwise manual |
 | Crystal Reports / ReportViewer | server PDF + `<iframe>` |
 | Localization via `.resx` | i18n JSON (`react-i18next` / `@ngx-translate`) — mechanical; list in report |
+| `ConfigurationManager` / `app.config` sections, registry, `Environment.UserName` | TODO (server-supplied config); never emit connection strings or keys |
+| `ref` / `out` parameters | the generated method takes the value only and is a stub; callers with `ref` arguments stay TODO |
+| UI calls inside non-form classes (`MessageBox`, closing a form) | TODO (dialogs are a React hook of the page) |
+| Base types of project classes, `typeof`, lambdas, LINQ query syntax, `goto`, `lock` | TODO + original kept as a comment |
 
 Placeholder: `<WfUnsupported type="System.Windows.Forms.X" reason="Not migrated — see MIGRATION_REPORT.md" />` (React) · `<wf-unsupported …>` (Angular) · `<div data-wf="unsupported" data-type="…">` (HTML). Rendered as a visible ⚠ box by the library.
 
@@ -647,7 +661,15 @@ Generators read these from `ControlNodeIr.Attributes` / `PageIr` (never from the
 | Unrecognized designer statement | `project.ir.json` `Shared.Unsupported` | goes to `MIGRATION_REPORT.md`; never dropped |
 
 ### 18.3a React target (`Migrator.Target.React`) - as built
-Reads the IR folder + `ui-spec`; pages import only `@wfm/ui-react`. Dialogs: `ShowDialog` -> `dialog.show(close => <XPage onClose={close}/>)`, `Close/Hide` -> `onClose?.()`. Layout: Dock/Location -> top chrome, free rows (clustered by Y), left/fill/right band, bottom chrome. External binary dependencies: `migrate --contract` emits `src/services/<assembly>/` (types, fixtures, mock service); secret-looking members are omitted. Handler bodies stay commented C# until translation (P4).
+Reads the IR folder (including `support.ir.json`) + `ui-spec`; pages import only `@wfm/ui-react`. Dialogs: `ShowDialog` -> `dialog.show(close => <XPage onClose={close}/>)`, `Close/Hide` -> `onClose?.()`. Layout: Dock/Location -> top chrome, free rows (clustered by Y), left/fill/right band, bottom chrome. External binary dependencies: `migrate --contract` emits `src/services/<assembly>/` (types, fixtures, mock service); secret-looking members are omitted. Methods: `--translate rules` (deterministic C# -> TS, statement-level fallback, `--compile-gate` demotes anything `tsc` rejects); without it handler bodies stay commented C#. Project classes -> `src/support/index.ts`. Conventions and the translator extension steps: `docs/ENGINE_AUTHORING.md`; how to run: `docs/USER_GUIDE.md`.
+
+### 18.2b Optional source-engine capabilities (as built)
+| Interface | Purpose | WinForms |
+|---|---|---|
+| `IProjectAwareSourceEngine` | extractors needing the whole project | UserControl inlining |
+| `IIrProjectionProvider` | technology-specific facet files | `layout` |
+| `IUnsupportedReporter` | unhandled constructs -> `project.ir.json` | designer statements |
+| `ISupportSourceEngine` | the project's own non-UI classes -> `ir/support.ir.json` | `main`, `Preferences`, enums, data classes |
 
 ### 18.4 Branch & report reminder
 Every addition is done on a **new branch**, committed locally, **not pushed**; finish with the push + fetch/update command block from `CLAUDE.md` §0.2.

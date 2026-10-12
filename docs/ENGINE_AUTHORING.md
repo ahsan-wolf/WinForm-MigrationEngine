@@ -100,7 +100,7 @@ Generated pages import only `@wfm/ui-react`.
 | Grids | designer columns -> `WfGridColumn[]`; typed mock rows marked `// MOCK`; grids with columns created in code get a TODO |
 | Output | `src/pages/*.tsx`, `src/legacy/*.cs.txt`, app shell (package.json, vite, tsconfig, eslint), `MIGRATION_REPORT.md` |
 
-Known limits: `Show()` opens as a dialog (no router yet); no auth/mock services; TreeView/Tabs/RadioGroup/DatePicker/GroupBox have no library component yet
+Known limits: `Show()` opens as a dialog (no router yet); no auth; TreeView/Tabs/RadioGroup/DatePicker have no library component yet
 (they become `WfUnsupported`); the generated app links the local `@wfm/ui-react` with `file:` (Vite `resolve.dedupe` keeps a single React).
 
 ## Assembly contract (`migrator contract`)
@@ -115,7 +115,7 @@ Write output to a git-ignored folder (`local-outputs/`); do not commit the assem
 generated app: `src/services/<assembly>/types.ts` (DTO interfaces + enum unions), `fixtures.ts` (deterministic fake rows) and `service.ts` (a Promise-based
 `<Assembly>Service` interface with one method per **static facade method the generated forms call**, plus a `mock...Service` and an exported instance). Names mirror the C# API
 (`ecmLibrary.UCM.CheckInList(...)`), so translated handlers map 1:1; every call is async. C# -> TS mapping follows CLAUDE.md §8 (`Guid`/`DateTime` -> `string`,
-`DataTable` -> `Row[]` marked inferred, unknown external types -> `unknown`). Pages do not call the service yet.
+`DataTable` -> `Row[]` marked inferred, unknown external types -> `unknown`). With `--translate rules` translated pages and project classes call the service (`await ecmLibrary.UCM.X(...)`).
 
 **Secrets never reach the browser.** Names matching password/secret/encryptionkey/licensecode/connectionstring/credential/token/api-key are handled by rule:
 - a method whose name or return type is secret-like, or that takes a secret as a plain `string`/primitive (e.g. `password`), is **omitted** (listed as SERVER-ONLY in the report);
@@ -164,9 +164,23 @@ Pilot numbers (ECMNavigator, 17 forms, 706 methods): 375 complete (53%), 209 par
 **grid and container members** (`dgv.Rows`, `pnl.Controls`), `ref`/`out` arguments (`TryParse`), `string.Format` with specifiers, event subscriptions in code, constructors of WinForms types. Everything is listed per method in `MIGRATION_REPORT.md`.
 Rule-translated code is deterministic but **unreviewed**: check logic, async behaviour and every TODO.
 
+## Extending the translator (rules)
+1. Find the reason in `MIGRATION_REPORT.md` (top reasons) or the commented statement (`// TODO: not translated — <reason>`).
+2. Add the rule in `Translation/MethodTranslator.cs` at the narrowest point: `Invoke` (calls), `MemberAccess` (members), `Create` (constructors), `Binary`/`Assign` (operators), `Stmt*` (statements). Throw `Untranslatable(reason)` for anything you cannot do faithfully (statement-level fallback keeps the original), `Dropped(reason)` for appearance-only code.
+3. If it needs page knowledge, add it to `PageScope` (filled by `PageTranslator`) rather than a global. If it needs a runtime helper, add it to the library (`ui-react`) or `src/lib/csharp.ts` and let the generator import it from the emitted text.
+4. Re-run the pilot with `--compile-gate`: `tsc` must stay at 0 errors and `npm run lint` at 0. A rule that produces code `tsc` rejects is demoted automatically, but fix the rule.
+5. Record user-visible behaviour here and in SKILLS.md (Skill 14); keep determinism (same IR -> same output).
+
+## Project classes IR (`support.ir.json`) conventions
+`SupportFileIr { SchemaVersion, Classes[] }`; `SupportClassIr { Name, Kind class|struct|enum, IsStatic, Container, BaseType, RelativePath, Members[], EnumValues[], Unsupported[] }`. Members are `MemberIr`:
+fields/auto-properties carry the initializer in `Body`; methods the full body; constructors are methods named `.ctor`; properties with accessors have `Body = "{ get {...} set {...} }"` and the attribute `mod:accessors`;
+modifiers appear as `mod:const`, `mod:readonly`, `mod:auto`, `mod:async`. Nested types are flattened (`Container` names the outer class). A target must treat the file as optional.
+
 ## Commands
 ```bash
 dotnet build WinFormsMigrator.sln
 dotnet run --project src/Migrator.Cli -- engines [--config path/to/engines.json]
-dotnet run --project src/Migrator.Cli -- ir --source <winforms-folder> --out <dir>   # six IR files per unit under <dir>/ir/<Form>/ + <dir>/ir/project.ir.json
+dotnet run --project src/Migrator.Cli -- ir --source <winforms-folder> --out <dir>   # six IR files per unit under <dir>/ir/<Form>/, <dir>/ir/support.ir.json, <dir>/ir/project.ir.json
+dotnet run --project src/Migrator.Cli -- migrate --source <dir> --out <dir> [--translate rules] [--compile-gate] [--contract <contract.json>] [--entry <form>] [--depth <n|all>]
+dotnet run --project src/Migrator.Cli -- contract --assembly <dll> --out <dir>      # public API from metadata only; use a git-ignored folder
 ```

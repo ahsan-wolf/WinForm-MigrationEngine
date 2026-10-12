@@ -1,6 +1,7 @@
 # CLAUDE.md — WinForms Migration Engine (standalone, modular)
 
 Project guidance for Claude (and any agent). Read this first, then `SKILLS.md` for control-by-control mappings.
+Humans: `README.md` → `docs/USER_GUIDE.md` (run it) · `docs/PROJECT_DOCUMENTATION.md` (as-built architecture) · `docs/ENGINE_AUTHORING.md` (extend it) · `docs/PROJECT_PLAN.md` (status & roadmap).
 This repo is a **separate project** from `WebFormsMigrator`. It reuses the same IR schema and contracts, but owns its own solution, engines, and UI library.
 
 ---
@@ -244,7 +245,7 @@ The controls live in a **separate, UI-independent library** under `ui-library/`.
 | `@wfm/ui-angular` | Angular 17+ standalone components/directives implementing the spec |
 | `@wfm/ui-html` | HTML/CSS + vanilla JS web-friendly components; jQuery adapter (`$.fn.wfDataGrid`, …) |
 
-**As built:** `ui-spec` 0.1.0 (`controls.json` + `tokens.css`) and `@wfm/ui-react` 0.1.0 exist, with the MVP set the pilot's startup form needs (see `ui-library/README.md`). `ui-angular` and `ui-html` are not started. Generators read `controls.json` as data (`winformsTypes`, `props[].from/transform`, `events[].from`).
+**As built:** `ui-spec` 0.1.0 (`controls.json` + `tokens.css`) and `@wfm/ui-react` 0.1.0 exist, with 22 components (form, menus, toolbar, status bar, panel, group box, split, inputs, grid, list view, dialog service, `useWfModel`; see `ui-library/README.md`). `ui-angular` and `ui-html` are not started. Generators read `controls.json` as data (`winformsTypes`, `props[].from/transform`, `events[].from`).
 
 Hard rules:
 1. **Library-first generation.** Generated pages import `Wf*` components only. They never import AG Grid / DataTables / Material / jstree etc. directly — those are the library's private implementation detail (peer deps).
