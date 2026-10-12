@@ -103,8 +103,18 @@ Source.* ✗ Target.*   Target.* ✗ Target.*   Source.* ✗ Source.*   (engines
 ```
 Engines communicate **only through `PageIr` / `ProjectIr`**.
 
+> **As built:** the contracts live in `Migrator.Engine` (§3), so `Source.*` / `Target.*` reference `Engine` **for contracts only** — the arrow
+> "Engine -> Source/Target" above is logical (the host loads them by name from `engines.json`), not a project reference. `Migrator.Engine`
+> references no engine. `Migrator.Cli` is the composition root: it references the built-in engines only so they land in the app directory.
+
 ### 2.2 Shared IR (reference, never copy)
-Consume `WebFormsMigrator.IR` (models) and `WebFormsMigrator.IR.Contracts` (`IIrExtractor`, `IIrGenerator`, `IrPipelineRegistry`, `LlmRegistry`, `ILlmClient`, `PromptTemplate`) as **NuGet packages** (preferred; local `dotnet pack` feed until published) or a git submodule. Do not fork or duplicate them. If a model change is needed, make it additive in the owning project and bump `IrSchema.Version`.
+Consume `WebFormsMigrator.IR` (models) and `WebFormsMigrator.IR.Contracts` (`IIrExtractor`, `IIrGenerator`, `IrPipelineRegistry`, `LlmRegistry`, `ILlmClient`, `PromptTemplate`) as **NuGet packages** (preferred; local `dotnet pack` feed until published), a git submodule, or — **the current interim** — a `ProjectReference` to a sibling checkout of the WebFormsMigrator repo. Do not fork or duplicate them.
+
+**How it is wired:** `build/IrReference.props` is the *only* place that decides this; projects `<Import>` it. Default = `ProjectReference` to `..\..\MIgration Engine 2` (override with `-p:WebFormsMigratorRoot=<path>`); once packages exist, `-p:UseSharedIrPackages=true -p:SharedIrVersion=<x.y.z>`. No C# changes either way (same namespaces).
+
+**This repo never edits the WebFormsMigrator repo.** If WinForms needs something the shared IR does not model, adapt on our side (see §4.2: `WinNavigation`, attribute conventions) or, only if truly required, make an additive change in the owning project and bump `IrSchema.Version`.
+
+Real contract shapes: `IIrExtractor { string Facet; void Extract(IrExtractionContext, PageIr) }`, `IIrGenerator { string Target; void Generate(PageIr, string outputDirectory) }`, `IrExtractionContext { FilePath, MarkupContent, CodeBehindContent }` (for WinForms: Designer.cs text, code-behind text).
 
 ---
 
@@ -117,30 +127,37 @@ An **engine** is a self-contained module of one of two kinds:
 | **Source Engine** | Analyze a legacy technology → produce IR | WinForms (now) · WPF · VB6 · Delphi · Web Forms (existing, separate repo) |
 | **Target Engine** | Consume IR → generate an app | react-app, angular-app, html-jquery-app · vue-app, blazor-app |
 
-Proposed contracts (live in `Migrator.Engine`; build on the existing `IIrExtractor` / `IIrGenerator`):
+Contracts (implemented in `Migrator.Engine`; build on the real `IIrExtractor` / `IIrGenerator`):
 
 ```csharp
-public interface IEngineModule { void Register(IEngineRegistry registry); }          // entry point of every engine/plugin
+public interface IEngine { string Id { get; } Version Version { get; } Version SchemaVersion { get; } }   // identity every engine exposes
+public interface IEngineModule { void Register(IEngineRegistry registry); }          // entry point of every engine/plugin; optional ctor (EngineOptions)
+public interface IEngineRegistry { void RegisterSource(ISourceEngine e); void RegisterTarget(ITargetEngine e); }
 
-public interface ISourceEngine {
-    string Id { get; }                         // "winforms"
+public interface ISourceEngine : IEngine {
     string Technology { get; }                 // "WinForms"
-    IProjectAnalyzer Analyzer { get; }         // finds Forms/UserControls, startup form, deps
-    IEnumerable<IIrExtractor> Extractors { get; }   // ordered: tree -> members -> semantics -> workflows/navigation
+    IProjectAnalyzer Analyzer { get; }         // Analyze(root) -> ProjectAnalysis { Forms, UserControls, StartupForm, FrameworkVersion }
+    IEnumerable<IIrExtractor> Extractors { get; }   // ordered: tree -> members -> semantics -> workflows -> navigation
 }
 
-public interface ITargetEngine {
-    string Id { get; }                         // "react-app"
+public interface ITargetEngine : IEngine {
     IIrGenerator Generator { get; }
     string UiLibraryPackage { get; }           // "@wfm/ui-react"
     IReadOnlyList<string> RequiredSpecVersion { get; }   // compatible ui-spec range
 }
+
+// Optional capabilities a source engine may implement (the host checks with `is`):
+public interface IProjectAwareSourceEngine : ISourceEngine { IEnumerable<IIrExtractor> CreateExtractors(ProjectAnalysis a); } // needs whole-project knowledge (UserControl inlining)
+public interface IIrProjectionProvider { IEnumerable<IIrProjection> Projections { get; } }   // technology-specific facet files (WinForms: layout)
+public interface IUnsupportedReporter { IEnumerable<string> FindUnsupported(IrExtractionContext c); } // unhandled constructs -> project.ir.json Shared.Unsupported
+public interface IProjectTargetEngine : ITargetEngine { GenerationResult GenerateProject(string irFolder, string outDir, GenerationOptions o); } // whole-app generation from the IR FOLDER only (never a source engine)
 ```
+Host pieces: `EngineRegistry`, `EngineLoader` (reads `engines.json`), `SourceIrRunner` (per-unit failure isolation), `IrFileWriter` + `IIrProjection` (facet files), `WinNavigation` (see §4.2).
 
 Rules:
-1. `engines.json` lists enabled engines; the host loads built-in engines plus any assembly in `plugins/` that exposes an `IEngineModule`. **Adding an engine must not require editing `Migrator.Engine`.**
+1. `engines.json` is the **allow-list** of enabled engines. Built-in engines resolve from the app directory; others from `plugins/<assembly>.dll` or `plugins/<assembly>/<assembly>.dll` (own `AssemblyLoadContext`; host/contract assemblies are shared). A DLL in `plugins/` that is *not listed* is reported as a warning and **never executed**. **Adding an engine must not require editing `Migrator.Engine`.**
 2. Pipeline order is declared by the source engine's extractor list (same as `IrPipelineRegistry.BuildIr()`).
-3. Every engine exposes `Id`, `Version`, `SchemaVersion` it targets. The host refuses to run an engine whose schema range doesn't match.
+3. Every engine exposes `Id`, `Version`, `SchemaVersion` it targets. The registry refuses an engine whose schema does not match: same major; while major is `0` the minor must match too (0.x is unstable); otherwise engine minor <= host minor.
 4. Engines hold no global state; configuration arrives via constructor options (bound from `engines.json`).
 5. Failure isolation: an engine failure on one Form is logged and reported; it never aborts the whole run.
 6. New engine checklist: new project under `src/` → implement contract → register in `engines.json` → add its mapping section to `SKILLS.md` (Skill 18) → add `llm-config` prompt if LLM-assisted. **Nothing else changes.**
@@ -178,8 +195,8 @@ PageIr  (one per Form/UserControl)             # == complete.ir.json shape
 | `{Form}.controls.ir.json` | Control tree only: `Name, Text, ControlType, Children` | `controls.ir.json` |
 | `{Form}.control-properties.ir.json` | Flat list: `Id, TagName, Attributes` (all props + event wiring) | `control-properties.ir.json` |
 | `{Form}.code-behind.ir.json` | `Name` + `Members[]` (bodies included) | `code-behind.ir.json` |
-| `{Form}.layout.ir.json` | Per-control layout facts: `Dock, Anchor, Location, Size, TabIndex, Margin, Padding, Visible, Enabled, TableLayout cell/span` | `html-css.ir.json` (WinForms has no HTML/CSS; layout is the equivalent facet) |
-| `project.ir.json` | `ProjectIr` index | — |
+| `{Form}.layout.ir.json` | Per-control layout facts: `Dock, Anchor[], Location, Size, TabIndex, Margin, Padding, Visible, Enabled, TableLayout {Row, Column, RowSpan, ColumnSpan}`; `TableDefinition {Columns[], Rows[]}` on a `TableLayoutPanel`. `null` = not set / not a literal | `html-css.ir.json` (WinForms has no HTML/CSS; layout is the equivalent facet) |
+| `project.ir.json` | `ProjectIr` index: `Source`, `Forms[]`/`UserControls[]` (`{Name, Kind, IrFile}`), `Shared` (`Unsupported` filled from unhandled designer statements; `Settings`/`Resources`/`Dependencies` still empty), `Failures[]` | — |
 
 Rules:
 - **One extraction, many projections.** Facet files are *derived from* `complete.ir.json`, never separately re-extracted, so they cannot diverge.
@@ -193,11 +210,20 @@ Rules:
 - `RootControl.Id` = class name; `RootControl.TagName` = base type (`System.Windows.Forms.Form` / `UserControl`).
 - Event wiring: `Attributes["OnClick"] = "btnSave_Click"` (same key style as ASP.NET `OnClick`).
 - Base type is read from the code-behind class first, then designer, then defaults to `Form`.
+- Root event wiring (`this.Load += ...`) is `RootControl.Attributes["OnLoad"]`; a custom base class stays as the root `TagName` (e.g. `BaseForm`).
+- **Navigation** reuses the shared web-shaped `NavigationIr` without changing it. Always create/read through `Migrator.Engine.Navigation.WinNavigation`: `SourceControlId` = trigger control, `TriggerEvent` = event, `Target` = target form (empty for Close/Hide/Exit), `TargetType` = `Show | ShowDialog | Close | Hide | Exit`. The handler is the `WorkflowIr` with the same control + event (`FindWorkflow`). `Show/ShowDialog` count only on `new T()` or a local initialised with one (so `MessageBox.Show` is never navigation). If richer data is ever needed (DialogResult, ctor args), add a WinForms-owned sidecar file — do not change `NavigationIr`.
+- Real IR enums: `MemberIr.Kind` = `MemberKind` (Property, Field, Method, Event), `Visibility` = Public/Protected/Private/Internal; `PageIr.RootControl` is nullable; `MemberIr.Attributes` lists attribute names.
+- **Designer facts without a property of their own** are stored under dotted pseudo-attribute keys that cannot collide with C# property names: `ParentSlot` (Items, DropDownItems, TabPages, Columns, Panel1, Panel2), `TableLayout.Row/Column/RowSpan/ColumnSpan`, `ColumnStyles`/`RowStyles` (JSON), `Items` (JSON string array), `DataBinding.<Property>` (= `source.Member`), `ToolTip`, `DefaultCellStyle.*`. `.resx` Text/ToolTip values are merged when not set in code (code wins). Full table: `docs/ENGINE_AUTHORING.md`.
+- `this.X = new T()` declares a control **only** when `X` is a field of the class; otherwise it is a root property (`ClientSize`, `AutoScaleDimensions`).
+- Designer statements the parser does not understand are listed in `project.ir.json` `Shared.Unsupported` (`"{Unit}: {statement}"`, capped at 50 per unit) — never silently dropped.
 - Generators consume IR only. If something is missing from IR, **fix the extractor**, not the generator.
 
 ### 4.3 Known extractor limitations (carry into every report)
 - Handlers in a third partial-class file aren't resolved.
-- Only direct method calls become workflow steps (not 2+ levels deep); step order should follow call order — if the extractor orders by declaration, fix it.
+- Only direct method calls become workflow steps (not 2+ levels deep); steps follow **call order** (implemented).
+- A handler name inside an inlined UserControl that equals a form method name would be attributed to the form.
+- `Controls.Add` order in designer code is reverse z-order, so child order is not visual order (generators order by TabIndex/Dock, Skill 4).
+- Non-string `.resx` resources (images, icons) and culture-specific `.resx` files are not read; items added by helper methods/loops and layout computed at runtime are not seen.
 - No pixel/visual fidelity (layout facts only).
 - Binary-only inputs (EXE/DLL without source) are members-first and lossy; no event wiring unless wired with `+=` in code.
 
@@ -213,6 +239,8 @@ The controls live in a **separate, UI-independent library** under `ui-library/`.
 | `@wfm/ui-react` | React 18 + TS components implementing the spec |
 | `@wfm/ui-angular` | Angular 17+ standalone components/directives implementing the spec |
 | `@wfm/ui-html` | HTML/CSS + vanilla JS web-friendly components; jQuery adapter (`$.fn.wfDataGrid`, …) |
+
+**As built:** `ui-spec` 0.1.0 (`controls.json` + `tokens.css`) and `@wfm/ui-react` 0.1.0 exist, with the MVP set the pilot's startup form needs (see `ui-library/README.md`). `ui-angular` and `ui-html` are not started. Generators read `controls.json` as data (`winformsTypes`, `props[].from/transform`, `events[].from`).
 
 Hard rules:
 1. **Library-first generation.** Generated pages import `Wf*` components only. They never import AG Grid / DataTables / Material / jstree etc. directly — those are the library's private implementation detail (peer deps).
@@ -239,6 +267,7 @@ Small local models (e.g. phi4-mini ≈ 3.8B) are good at mechanical translation,
 | Control/feature with no library component | `<WfUnsupported …/>` + `// TODO: no {Target} equivalent generated — replace manually` |
 | Type inferred from columns/format | `// inferred — check against backend contract` |
 | Mock auth / mock API / in-memory state | `// MOCK — replace with real implementation` |
+| Member/method of an external contract that looks like a secret (password, key, license, connection string, credentials) | Omitted from generated services, or a credentials-object parameter is stripped and the operation kept; listed in `MIGRATION_REPORT.md` (SERVER-ONLY). Never in browser code |
 
 Never silently drop code: untranslatable code stays as a commented original C# block + TODO + entry in `MIGRATION_REPORT.md`.
 
@@ -283,8 +312,10 @@ Migration run steps: Analyze (find Designer/code-behind pairs, UserControls firs
 ## 10. Commands (reference)
 ```bash
 dotnet build WinFormsMigrator.sln
-dotnet run --project src/Migrator.Cli -- migrate --source <path> --target react-app --out <dir>
-dotnet run --project src/Migrator.Cli -- ir --source <path> --out <dir>      # IR only, no generation
+dotnet run --project src/Migrator.Cli -- engines [--config engines.json]       # EXISTS: list engines that load
+dotnet run --project src/Migrator.Cli -- ir --source <path> --out <dir>      # EXISTS: IR only -> six files per unit + project.ir.json
+dotnet run --project src/Migrator.Cli -- migrate --source <path> --out <dir> [--target react-app] [--entry <form>] [--depth <n|all>] [--contract <contract.json>]...   # EXISTS: ir step + app into <out>/react-app
+dotnet run --project src/Migrator.Cli -- contract --assembly <dll> --out <dir>   # EXISTS: public API of a managed assembly from metadata only (never executed); use a git-ignored folder
 set WFM_LLM_TARGET=react-app                                                   # opt-in LLM translation
 cd ui-library/ui-react && npm ci && npm run build && npm run lint
 ```
