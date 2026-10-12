@@ -145,6 +145,8 @@ checked, value, readOnly), form fields are `f.<name>` (initial values from their
   the rows, so code reads them at once. Translated: `Items` / `SelectedItems` / `CheckedItems` / `SelectedIndices` / `Columns` (`.Count`, indexer, `foreach`, `Add`, `Insert`, `RemoveAt`, `Clear`, `SelectedItems.Clear()`),
   `new ListViewItem(...)` (text, `string[]`, text + image key), item `Text/Checked/Selected/Tag/Name`, `SubItems.Add/Clear/Count`, `SubItems[k].Text` (literal `k` for writes), own helpers returning `ListViewItem`.
   `Refresh/Invalidate/Update/Begin/EndUpdate/Focus` on any control are dropped with a comment. Not translated (stays TODO): `ListViewItemSorter`/`Sort`, `item.Index`, `Items.Remove(item)`, image lists, groups.
+- **Dev launcher:** the generated `main.tsx` opens the entry form by default; `?page=<Name>` (e.g. `?page=SearchResults`) renders one generated page on its own with mock data and `?page=` lists all pages. Needed for forms
+  whose opener passes constructor arguments (not translated yet), which the entry form cannot reach.
 - **Button.DialogResult:** clicking a button whose designer sets `DialogResult` runs its Click handler then `onClose(result)`, as WinForms closes the dialog (not part of translation; applies in every mode).
 
 Pilot numbers (ECMNavigator, 17 forms, 706 methods): 332 complete (47%), 230 partial, 144 not translated (68 demoted by the gate; 339 complete before the gate); `tsc` 0 errors, build and lint clean. What blocks the rest, from the report:
