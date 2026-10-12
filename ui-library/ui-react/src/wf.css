@@ -17,6 +17,7 @@ textarea.wf-textbox { height: auto; padding: var(--wf-space-1); }
 .wf-picturebox { max-width: 100%; } .wf-picturebox-empty { min-width: 24px; min-height: 24px; background: var(--wf-color-surface); border: 1px dashed var(--wf-color-border); }
 .wf-unsupported { padding: var(--wf-space-1) var(--wf-space-2); background: var(--wf-color-warning-bg); border: 1px solid var(--wf-color-warning-border); border-radius: var(--wf-radius); }
 
+.wf-groupbox { border: 1px solid var(--wf-color-border); margin: 0; padding: var(--wf-space-2); min-width: 0; } .wf-groupbox legend { padding: 0 var(--wf-space-1); }
 .wf-panel { display: block; position: relative; } .wf-panel-scroll { overflow: auto; }
 .wf-split { display: flex; min-height: 0; flex: 1 1 auto; } .wf-split-horizontal { flex-direction: column; }
 .wf-split-first { overflow: auto; } .wf-split-second { flex: 1 1 0; overflow: auto; min-width: 0; min-height: 0; }
