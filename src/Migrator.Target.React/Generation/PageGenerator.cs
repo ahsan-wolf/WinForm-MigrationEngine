@@ -68,7 +68,7 @@ public sealed partial class PageGenerator
         {
             Unit = unit;
             Component = component;
-            Names = new NameScope(new[] { "onClose", "dialog", "useState", "useWfDialog", "props", "_props", component, component + "Props" });
+            Names = new NameScope(new[] { "onClose", "dialog", "useState", "useWfDialog", "useWfModel", "vm", "f", "props", "_props", component, component + "Props" });
             Methods = unit.Page.Members.Where(m => m.Kind == MemberKind.Method)
                 .GroupBy(m => m.Name).ToDictionary(g => g.Key, g => g.FirstOrDefault(m => m.Parameters.Count == 2) ?? g.First());
         }
@@ -84,7 +84,22 @@ public sealed partial class PageGenerator
         public List<string> States { get; } = new();
         public List<string> TopLevel { get; } = new();
         public Dictionary<string, Handler> Handlers { get; } = new();
-        public Dictionary<string, string> Setters { get; } = new();
+        public HashSet<string> StatefulIds { get; } = new();
+
+        /// <summary>Control id -> WinForms property used in code -> TS initial value. Becomes `const vm = useWfModel({...})`.</summary>
+        public SortedDictionary<string, SortedDictionary<string, string>> Model { get; } = new(StringComparer.Ordinal);
+        public List<string> ModelComments { get; } = new();
+
+        /// <summary>True once JSX or code references `vm`; the model is declared only then (an unused declaration fails lint).</summary>
+        public bool UsesModel { get; set; }
+
+        public bool ModelHas(string id, string winFormsProp) => Model.TryGetValue(id, out var props) && props.ContainsKey(ModelKey(winFormsProp));
+
+        public void ModelSet(string id, string winFormsProp, string initial)
+        {
+            if (!Model.TryGetValue(id, out var props)) Model[id] = props = new SortedDictionary<string, string>(StringComparer.Ordinal);
+            props.TryAdd(ModelKey(winFormsProp), initial);
+        }
         public HashSet<string> ButtonIds { get; } = new();
         public List<GenerationIssue> Issues { get; } = new();
         public List<string> NonVisual { get; } = new();
@@ -101,6 +116,7 @@ public sealed partial class PageGenerator
         var component = _components[unit.Name];
         var c = new Ctx(unit, component);
         foreach (var n in Walk(root)) c.ById.TryAdd(n.Id, n);
+        Prescan(c, root);
 
         var jsx = RenderElement(root, c, isRoot: true) ?? throw new InvalidDataException($"{unit.Name}: root control produced no output.");
         var handlerCode = BuildHandlers(c);
@@ -111,6 +127,7 @@ public sealed partial class PageGenerator
 
         var lib = new List<string>(c.Lib);
         if (c.UsesDialog) lib.Add("useWfDialog");
+        if (c.UsesModel) lib.Add("useWfModel");
         lib.AddRange(c.LibTypes.Select(t => "type " + t));
         sb.AppendLine($"import {{ {string.Join(", ", lib)} }} from '@wfm/ui-react';");
         foreach (var (comp, file) in c.PageImports) sb.AppendLine($"import {{ {comp} }} from './{file}';");
@@ -123,7 +140,15 @@ public sealed partial class PageGenerator
         sb.AppendLine(c.UsesOnClose ? $"export function {component}({{ onClose }}: {component}Props) {{" : $"export function {component}(_props: {component}Props) {{");
         if (c.UsesDialog) sb.AppendLine("  const dialog = useWfDialog();");
         foreach (var s in c.States) sb.AppendLine("  " + s);
-        if (c.UsesDialog || c.States.Count > 0) sb.AppendLine();
+        if (c.UsesModel)
+        {
+            foreach (var comment in c.ModelComments) sb.AppendLine("  " + comment);
+            sb.AppendLine("  const vm = useWfModel({");
+            foreach (var (id, props) in c.Model)
+                sb.AppendLine($"    {Prop(id)}: {{ {string.Join(", ", props.Select(kv => $"{kv.Key}: {kv.Value}"))} }},");
+            sb.AppendLine("  });");
+        }
+        if (c.UsesDialog || c.States.Count > 0 || c.UsesModel) sb.AppendLine();
         foreach (var line in handlerCode) sb.AppendLine(line.Length == 0 ? "" : "  " + line);
         sb.AppendLine("  return (");
         foreach (var line in jsx) sb.AppendLine("    " + line);
@@ -181,12 +206,11 @@ public sealed partial class PageGenerator
             lines = wrapped;
         }
 
-        // Visible=false: state flag (toggled by code that is not translated).
-        if (!isRoot && node.Attributes.GetValueOrDefault("Visible") == "false")
+        // Visible: bound to the model when the designer hides the control or code toggles it.
+        if (!isRoot && c.ModelHas(node.Id, "Visible"))
         {
-            var flag = c.Names.Unique(Naming.StateName(node.Id) + "Visible");
-            c.States.Add($"const [{flag}] = useState(false); // TODO: Visible is toggled by code that is not translated");
-            lines = new List<string> { $"{{{flag} && (" }.Concat(Indent(lines)).Append(")}").ToList();
+            c.UsesModel = true;
+            lines = new List<string> { $"{{vm.{node.Id}.visible && (" }.Concat(Indent(lines)).Append(")}").ToList();
         }
         return lines;
     }
@@ -300,6 +324,54 @@ public sealed partial class PageGenerator
         if (RenderElement(node, c) is { } rendered) into.AddRange(rendered);
     }
 
+    // -------------------------------------------------------------------------------------------------- model
+
+    private static string ModelKey(string winFormsProp) => char.ToLowerInvariant(winFormsProp[0]) + winFormsProp[1..];
+
+    /// <summary>
+    /// Decides which control properties live in the model: user-editable inputs, hidden controls, and every Text/Enabled/Visible/Checked/
+    /// Value/ReadOnly the code-behind reads or writes (`btnSave.Enabled = false`, `this.Text = ...`), so translated code can use them 1:1.
+    /// </summary>
+    private void Prescan(Ctx c, ControlNodeIr root)
+    {
+        foreach (var node in c.ById.Values)
+        {
+            if (node == root) continue;
+            var spec = _spec.Find(node.TagName);
+            if (spec is not null && IsStateful(spec.Name))
+            {
+                c.StatefulIds.Add(node.Id);
+                AddToModel(c, node, spec.Name == "WfCheckBox" ? "Checked" : "Text");
+            }
+            if (node.Attributes.GetValueOrDefault("Visible") == "false") AddToModel(c, node, "Visible");
+        }
+
+        var code = string.Join("\n", c.Unit.Page.Members.Where(m => m.Kind == MemberKind.Method && m.Body != null).Select(m => m.Body));
+        foreach (Match m in UsedPropertyRegex().Matches(code))
+        {
+            var id = m.Groups[1].Value == "this" ? root.Id : m.Groups[1].Value;
+            if (!c.ById.TryGetValue(id, out var node)) continue;
+            if (node != root || m.Groups[2].Value is "Text" or "Enabled" or "Visible") AddToModel(c, node, m.Groups[2].Value);
+        }
+    }
+
+    private static void AddToModel(Ctx c, ControlNodeIr node, string winFormsProp)
+    {
+        var raw = node.Attributes.GetValueOrDefault(winFormsProp);
+        var initial = winFormsProp switch
+        {
+            "Text" => Str(raw ?? ""),
+            "Enabled" or "Visible" => raw == "false" ? "false" : "true",
+            "Checked" or "ReadOnly" => raw == "true" ? "true" : "false",
+            "Value" => int.TryParse(raw, out var n) ? n.ToString() : "0",
+            _ => "null"
+        };
+        c.ModelSet(node.Id, winFormsProp, initial);
+    }
+
+    [GeneratedRegex(@"\b(\w+)\s*\.\s*(Text|Enabled|Visible|Checked|Value|ReadOnly)\b")]
+    private static partial Regex UsedPropertyRegex();
+
     // ------------------------------------------------------------------------------------------------ props
 
     private void BuildProps(ControlNodeIr node, SpecControl spec, Ctx c, List<string> attrs, bool isRoot)
@@ -308,18 +380,24 @@ public sealed partial class PageGenerator
 
         foreach (var prop in spec.Props.Where(p => p.From.Length > 0))
         {
-            var key = prop.From.FirstOrDefault(f => node.Attributes.ContainsKey(f));
-            if (key is null) continue;
-            var raw = node.Attributes[key];
-
-            if (prop.Name is "value" or "checked" && IsStateful(spec.Name)) continue; // comes from state below
             if (prop.Name == "visible") continue; // handled by the Visible wrapper
             if (prop.Name == "icon") { NoteImages(c); continue; }
 
-            if (Convert(prop, key, raw, c, isRoot) is { } attr) attrs.Add(attr);
+            // A property that code reads/writes (or that is user-editable state) is bound to the model: vm.<id>.<prop>.
+            var modelProp = prop.From.FirstOrDefault(f => c.ModelHas(node.Id, f));
+            if (modelProp is not null)
+            {
+                c.UsesModel = true;
+                var access = $"vm.{node.Id}.{ModelKey(modelProp)}";
+                attrs.Add(prop.Transform == "invert" ? $"disabled={{!{access}}}" : $"{prop.Name}={{{access}}}");
+                continue;
+            }
+
+            var key = prop.From.FirstOrDefault(f => node.Attributes.ContainsKey(f));
+            if (key is null) continue;
+            if (Convert(prop, key, node.Attributes[key], c, isRoot) is { } attr) attrs.Add(attr);
         }
 
-        if (IsStateful(spec.Name)) AddState(node, spec, c, attrs);
         if (spec.Name == "WfDataGrid") AddGrid(node, c, attrs);
     }
 
@@ -366,30 +444,11 @@ public sealed partial class PageGenerator
         };
     }
 
-    private void AddState(ControlNodeIr node, SpecControl spec, Ctx c, List<string> attrs)
-    {
-        var name = c.Names.Unique(Naming.StateName(node.Id));
-        var setter = c.Names.Unique("set" + Naming.Pascal(name));
-        c.Setters[node.Id] = setter;
-
-        if (spec.Name == "WfCheckBox")
-        {
-            c.States.Add($"const [{name}, {setter}] = useState<boolean>({(node.Attributes.GetValueOrDefault("Checked") == "true" ? "true" : "false")});");
-            attrs.Add($"checked={{{name}}}");
-        }
-        else
-        {
-            c.States.Add($"const [{name}, {setter}] = useState<string>({Str(node.Attributes.GetValueOrDefault("Text") ?? "")});");
-            attrs.Add($"value={{{name}}}");
-        }
-    }
-
     private void AddGrid(ControlNodeIr node, Ctx c, List<string> attrs)
     {
         c.LibTypes.Add("WfGridColumn");
         var baseName = Naming.StateName(node.Id);
         var colsName = c.Names.Unique(baseName + "Columns");
-        var rowsName = c.Names.Unique(baseName + "Rows");
 
         var cols = node.Children.Where(ch => ch.Attributes.GetValueOrDefault("ParentSlot") == "Columns").ToList();
         var defs = new List<string>();
@@ -415,8 +474,10 @@ public sealed partial class PageGenerator
 
         var rows = Enumerable.Range(1, cols.Count == 0 ? 0 : 3).Select(i =>
             fields.ToDictionary(f => f.Field, f => (object)(f.Checkbox ? i % 2 == 1 : f.Format is "d" or "date" ? $"2026-01-{i:00}" : $"{f.Header} {i}"))).ToList();
-        c.States.Add($"const [{rowsName}] = useState<Record<string, unknown>[]>({JsonSerializer.Serialize(rows, JsonOut)}); // MOCK — replace with real implementation (inferred — check against backend contract)");
-        attrs.Add($"rows={{{rowsName}}}");
+        c.ModelComments.Add($"// MOCK — {node.Id} rows are fake sample data; replace with real implementation (inferred — check against backend contract)");
+        c.ModelSet(node.Id, "Rows", $"{JsonSerializer.Serialize(rows, JsonOut)} as Record<string, unknown>[]");
+        c.UsesModel = true;
+        attrs.Add($"rows={{vm.{node.Id}.rows}}");
         attrs.Add($"columns={{{colsName}}}");
     }
 
@@ -431,8 +492,12 @@ public sealed partial class PageGenerator
                 handlerName = GetHandler(node, ev.From, member, c, isRoot).Name;
 
             var isStateEvent = StateEvents.Contains((spec.Name, ev.Name));
-            if (isStateEvent && c.Setters.TryGetValue(node.Id, out var setter))
-                attrs.Add(handlerName == null ? $"{ev.React}={{{setter}}}" : $"{ev.React}={{(v) => {{ {setter}(v); {handlerName}(); }}}}");
+            if (isStateEvent && c.StatefulIds.Contains(node.Id))
+            {
+                c.UsesModel = true;
+                var target = spec.Name == "WfCheckBox" ? $"vm.{node.Id}.checked" : $"vm.{node.Id}.text";
+                attrs.Add(handlerName == null ? $"{ev.React}={{(v) => {{ {target} = v; }}}}" : $"{ev.React}={{(v) => {{ {target} = v; {handlerName}(); }}}}");
+            }
             else if (handlerName != null)
                 attrs.Add($"{ev.React}={{{handlerName}}}");
         }
@@ -562,6 +627,12 @@ public sealed partial class PageGenerator
     private static List<string> Indent(IEnumerable<string> lines) => lines.Select(l => l.Length == 0 ? l : "  " + l).ToList();
 
     private static string Str(string value) => JsonSerializer.Serialize(value, JsonOut);
+
+    /// <summary>Object-literal key: bare identifier when valid, quoted otherwise.</summary>
+    private static string Prop(string name) => IdentifierRegex().IsMatch(name) ? name : Str(name);
+
+    [GeneratedRegex(@"^[A-Za-z_$][\w$]*$")]
+    private static partial Regex IdentifierRegex();
 
     /// <summary>name="value" when it is safe in a JSX attribute, otherwise name={"value"} (JSX would decode entities in plain strings).</summary>
     private static string Attr(string name, string value) =>

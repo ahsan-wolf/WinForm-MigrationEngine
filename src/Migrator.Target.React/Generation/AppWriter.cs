@@ -94,6 +94,8 @@ public static class AppWriter
                 rules: {
                   ...reactHooks.configs.recommended.rules,
                   '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+                  // useWfModel returns a deliberately mutable model (WinForms-style imperative code: txt.Text = x). Do not enable the React Compiler here.
+                  'react-hooks/immutability': 'off',
                 },
               },
             );

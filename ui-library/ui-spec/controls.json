@@ -114,6 +114,10 @@
       "props": [], "events": [],
       "a11y": "Provided as a service: alert(message), confirm(message) -> Promise<boolean>, show(render) -> Promise<result>. Replaces MessageBox and ShowDialog (DialogResult).",
       "example": "const dialog = useWfDialog(); if (await dialog.confirm('Delete?')) { … }" },
+    { "name": "useWfModel", "winformsTypes": [], "service": "useWfModel",
+      "props": [], "events": [],
+      "a11y": "State helper, not a visual control. useWfModel(initial) returns a deep proxy: reads are immediate, writes re-render once (microtask-batched). Generated pages keep control properties (text, enabled, visible, checked, value, rows/items) and form fields in models so translated WinForms code maps 1:1.",
+      "example": "const vm = useWfModel({ txtSearch: { text: '', enabled: true } }); vm.txtSearch.text = 'abc';" },
     { "name": "WfUnsupported", "winformsTypes": [], "props": [ { "name": "type", "type": "string" }, { "name": "reason", "type": "string" } ], "events": [],
       "a11y": "Visible warning box; emitted for any control without a library component.", "example": "<WfUnsupported type=\"System.Windows.Forms.ListView\" reason=\"Not migrated — see MIGRATION_REPORT.md\" />" }
   ]

@@ -1,6 +1,7 @@
 import './wf.css';
 
 export { parseMnemonic, MnemonicText } from './mnemonic';
+export { useWfModel } from './model';
 export * from './components/Controls';
 export * from './components/Containers';
 export * from './components/Menus';
