@@ -100,7 +100,7 @@ Generated pages import only `@wfm/ui-react`.
 | Grids | designer columns -> `WfGridColumn[]`; typed mock rows marked `// MOCK`; grids with columns created in code get a TODO |
 | Output | `src/pages/*.tsx`, `src/legacy/*.cs.txt`, app shell (package.json, vite, tsconfig, eslint), `MIGRATION_REPORT.md` |
 
-Known limits: `Show()` opens as a dialog (no router yet); no auth/mock services; ListView/TreeView/Tabs/RadioGroup/DatePicker/GroupBox have no library component yet
+Known limits: `Show()` opens as a dialog (no router yet); no auth/mock services; TreeView/Tabs/RadioGroup/DatePicker/GroupBox have no library component yet
 (they become `WfUnsupported`); the generated app links the local `@wfm/ui-react` with `file:` (Vite `resolve.dedupe` keeps a single React).
 
 ## Assembly contract (`migrator contract`)
@@ -141,10 +141,14 @@ checked, value, readOnly), form fields are `f.<name>` (initial values from their
   method containing an error is demoted to commented C#, the page is regenerated (up to 5 rounds). An invented or mistyped API cannot ship. Errors outside translated methods are reported.
 - **Lint-clean by construction:** `const` for locals never reassigned in the emitted text, `_name` for locals nothing reads, usage-based declarations/imports (`dialog`, `vm`, `f`, service, types), an
   eslint-disable note on functions nothing calls, `use*` method names renamed `doUse*`. The generated eslint config turns `react-hooks/immutability`, `no-extra-boolean-cast` and `preserve-caught-error` off on purpose.
+- **ListView:** columns (designer `ColumnHeader` children) and items live in the model (`vm.<id>.columns`, `vm.<id>.items`, rows `{ text, subItems, checked, selected, tag }`); the page writes selection/check state back to
+  the rows, so code reads them at once. Translated: `Items` / `SelectedItems` / `CheckedItems` / `SelectedIndices` / `Columns` (`.Count`, indexer, `foreach`, `Add`, `Insert`, `RemoveAt`, `Clear`, `SelectedItems.Clear()`),
+  `new ListViewItem(...)` (text, `string[]`, text + image key), item `Text/Checked/Selected/Tag/Name`, `SubItems.Add/Clear/Count`, `SubItems[k].Text` (literal `k` for writes), own helpers returning `ListViewItem`.
+  `Refresh/Invalidate/Update/Begin/EndUpdate/Focus` on any control are dropped with a comment. Not translated (stays TODO): `ListViewItemSorter`/`Sort`, `item.Index`, `Items.Remove(item)`, image lists, groups.
 - **Button.DialogResult:** clicking a button whose designer sets `DialogResult` runs its Click handler then `onClose(result)`, as WinForms closes the dialog (not part of translation; applies in every mode).
 
-Pilot numbers (ECMNavigator, 17 forms, 706 methods): 321 complete (45%), 259 partial, 126 not translated (43 demoted by the gate); `tsc` 0 errors, build and lint clean. What blocks the rest, from the report:
-**ListView/grid members** (`lv.Items`, `lv.SelectedItems`, `dgv.Rows`, `pnl.Controls`: needs a `WfListView` and model collections), **the app's own static classes** (`main.*`, `Preferences.*`, `ECMConfiguration.*`: not in
+Pilot numbers (ECMNavigator, 17 forms, 706 methods): 332 complete (47%), 230 partial, 144 not translated (68 demoted by the gate; 339 complete before the gate); `tsc` 0 errors, build and lint clean. What blocks the rest, from the report:
+**grid and container members** (`dgv.Rows`, `pnl.Controls`), **the app's own static classes** (`main.*`, `Preferences.*`, `ECMConfiguration.*`: not in
 the IR yet), `ref`/`out` arguments (`TryParse`), `string.Format` with specifiers, event subscriptions in code, constructors of WinForms types. Everything is listed per method in `MIGRATION_REPORT.md`.
 Rule-translated code is deterministic but **unreviewed**: check logic, async behaviour and every TODO.
 

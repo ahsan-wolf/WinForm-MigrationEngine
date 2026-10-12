@@ -51,3 +51,11 @@ textarea.wf-textbox { height: auto; padding: var(--wf-space-1); }
 .wf-dialog { min-width: 320px; max-width: 90vw; max-height: 90vh; overflow: auto; background: var(--wf-color-bg); color: var(--wf-color-text); font: var(--wf-font-size) var(--wf-font-family); border: 1px solid var(--wf-color-border); border-radius: var(--wf-radius); box-shadow: var(--wf-shadow); }
 .wf-dialog-title { padding: var(--wf-space-2) var(--wf-space-3); border-bottom: 1px solid var(--wf-color-border); font-weight: 600; }
 .wf-dialog-body { padding: var(--wf-space-3); } .wf-dialog-actions { display: flex; gap: var(--wf-space-2); justify-content: flex-end; margin-top: var(--wf-space-3); }
+
+.wf-listview { overflow: auto; border: 1px solid var(--wf-color-border); background: var(--wf-color-bg); outline: none; }
+.wf-listview:focus-visible { outline: 2px solid var(--wf-color-accent); outline-offset: -2px; }
+.wf-listview table { border-collapse: collapse; width: 100%; }
+.wf-listview th { position: sticky; top: 0; background: var(--wf-color-surface); text-align: left; font-weight: 600; user-select: none; }
+.wf-listview th, .wf-listview td { padding: 3px var(--wf-space-2); border-bottom: 1px solid var(--wf-color-border); white-space: nowrap; }
+.wf-listview tbody tr:hover { background: var(--wf-color-hover); } .wf-listview .wf-row-selected, .wf-listview .wf-row-selected:hover { background: var(--wf-color-selected); }
+.wf-listview-check { width: 24px; text-align: center; }

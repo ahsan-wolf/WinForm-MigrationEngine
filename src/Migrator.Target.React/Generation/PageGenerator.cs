@@ -99,6 +99,7 @@ public sealed partial class PageGenerator
         public List<string> TopLevel { get; } = new();
         public Dictionary<string, Handler> Handlers { get; } = new();
         public HashSet<string> StatefulIds { get; } = new();
+        public HashSet<string> ListViewIds { get; } = new();
 
         /// <summary>Control id -> WinForms property used in code -> TS initial value. Becomes `const vm = useWfModel({...})`.</summary>
         public SortedDictionary<string, SortedDictionary<string, string>> Model { get; } = new(StringComparer.Ordinal);
@@ -160,6 +161,8 @@ public sealed partial class PageGenerator
             var typeText = text + "\n" + (usesFields ? fieldText : "");
             typeImports = tr.TypeImports.Where(t => Regex.IsMatch(typeText, $@"\b{Regex.Escape(t)}\b")).ToList();
             tr.UsesFormat = Regex.IsMatch(text, @"\bformatString\(");
+            foreach (var helper in new[] { "wfListItem", "wfListItemFromArray" }) if (Regex.IsMatch(text, $@"\b{helper}\(")) c.Lib.Add(helper);
+            if (Regex.IsMatch(text + "\n" + (usesFields ? fieldText : ""), @"\bWfListItem\b")) c.LibTypes.Add("WfListItem");
         }
 
         var sb = new StringBuilder();
@@ -322,7 +325,7 @@ public sealed partial class PageGenerator
         var children = node.Children.Where(ch => ch.Attributes.GetValueOrDefault("ParentSlot") != "Columns").ToList();
         return spec.Name switch
         {
-            "WfDataGrid" => new List<string>(),
+            "WfDataGrid" or "WfListView" => new List<string>(),
             "WfSplit" => RenderSplit(children, c),
             "WfForm" or "WfPanel" => RenderArranged(children, c),
             _ => RenderSequential(children, c)
@@ -407,6 +410,7 @@ public sealed partial class PageGenerator
                 AddToModel(c, node, spec.Name == "WfCheckBox" ? "Checked" : "Text");
             }
             if (node.Attributes.GetValueOrDefault("Visible") == "false") AddToModel(c, node, "Visible");
+            if (spec?.Name == "WfListView") { c.ListViewIds.Add(node.Id); AddListViewModel(c, node); }
         }
 
         var code = string.Join("\n", c.Unit.Page.Members.Where(m => m.Kind == MemberKind.Method && m.Body != null).Select(m => m.Body));
@@ -416,6 +420,17 @@ public sealed partial class PageGenerator
             if (!c.ById.TryGetValue(id, out var node)) continue;
             if (node != root || m.Groups[2].Value is "Text" or "Enabled" or "Visible") AddToModel(c, node, m.Groups[2].Value);
         }
+    }
+
+    /// <summary>Columns (from the designer's ColumnHeader children) and items live in the model so code can Columns.Add / Items.Add / SelectedItems.</summary>
+    private static void AddListViewModel(Ctx c, ControlNodeIr node)
+    {
+        c.LibTypes.Add("WfListColumn");
+        c.LibTypes.Add("WfListItem");
+        var cols = node.Children.Where(ch => ch.Attributes.GetValueOrDefault("ParentSlot") == "Columns")
+            .Select(ch => $"{{ header: {Str(ch.Attributes.GetValueOrDefault("Text") ?? ch.Id)}{(int.TryParse(ch.Attributes.GetValueOrDefault("Width"), out var w) ? $", width: {w}" : "")} }}");
+        c.ModelSet(node.Id, "Columns", $"[{string.Join(", ", cols)}] as WfListColumn[]");
+        c.ModelSet(node.Id, "Items", "[] as WfListItem[]");
     }
 
     private static void AddToModel(Ctx c, ControlNodeIr node, string winFormsProp)
@@ -462,6 +477,15 @@ public sealed partial class PageGenerator
         }
 
         if (spec.Name == "WfDataGrid") AddGrid(node, c, attrs);
+        if (spec.Name == "WfListView") AddListView(node, c, attrs);
+    }
+
+    private static void AddListView(ControlNodeIr node, Ctx c, List<string> attrs)
+    {
+        c.UsesModel = true;
+        attrs.Add($"columns={{vm.{node.Id}.columns}}");
+        attrs.Add($"items={{vm.{node.Id}.items}}");
+        if (node.Attributes.GetValueOrDefault("MultiSelect") == "false") attrs.Add("multiSelect={false}");
     }
 
     private static void NoteImages(Ctx c)
@@ -570,6 +594,17 @@ public sealed partial class PageGenerator
                 continue;
             }
 
+            // ListView selection and check state are written back to the model rows so SelectedItems / Items[i].Checked read them immediately.
+            if (spec.Name == "WfListView" && ev.Name is "selectionChange" or "itemCheckedChange" && c.ListViewIds.Contains(node.Id))
+            {
+                c.UsesModel = true;
+                var call = handlerName is null ? "" : $" {handlerName}();";
+                attrs.Add(ev.Name == "selectionChange"
+                    ? $"{ev.React}={{(sel) => {{ vm.{node.Id}.items.forEach((it, i) => {{ it.selected = sel.includes(i); }});{call} }}}}"
+                    : $"{ev.React}={{(i, v) => {{ vm.{node.Id}.items[i].checked = v;{call} }}}}");
+                continue;
+            }
+
             var isStateEvent = StateEvents.Contains((spec.Name, ev.Name));
             if (isStateEvent && c.StatefulIds.Contains(node.Id))
             {
@@ -618,7 +653,9 @@ public sealed partial class PageGenerator
         {
             // A function nothing calls (dead code in the original, or an event the library has no prop for) would fail lint: say so explicitly.
             // Only OTHER code counts: its own body (recursion, a local with the same name, a log label) is not a use.
-            var others = PageTranslator.StripStrings(string.Join("\n", jsx.Concat(tr.Methods.Where(m => m != t).SelectMany(m => m.Lines))
+            // A function with a parameter of the same name shadows it: its body does not use this function either.
+            var shadow = new System.Text.RegularExpressions.Regex($@"^(async )?function \w+\([^)]*(?<![\w.]){System.Text.RegularExpressions.Regex.Escape(t.TsName)}\s*[?:,)]");
+            var others = PageTranslator.StripStrings(string.Join("\n", jsx.Concat(tr.Methods.Where(m => m != t && !m.Lines.Any(l => shadow.IsMatch(l))).SelectMany(m => m.Lines))
                 .Where(l => !l.TrimStart().StartsWith("//", StringComparison.Ordinal))));
             var unused = !System.Text.RegularExpressions.Regex.IsMatch(others, $@"(?<![\w.]){System.Text.RegularExpressions.Regex.Escape(t.TsName)}\b");
             foreach (var l in t.Lines)

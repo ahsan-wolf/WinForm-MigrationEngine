@@ -25,7 +25,19 @@ internal sealed partial class MethodTranslator
         "Anchor", "Dock", "Size", "Location", "Font", "ForeColor", "BackColor", "BackgroundImage", "BackgroundImageLayout", "Cursor", "Icon",
         "TabIndex", "TabStop", "Padding", "Margin", "Width", "Height", "AutoSize", "Image", "ImageIndex", "ImageAlign", "TextAlign", "FlatStyle",
         "BorderStyle", "MinimumSize", "MaximumSize", "StartPosition", "WindowState", "FormBorderStyle", "ShowInTaskbar", "TopMost", "Opacity",
-        "ControlBox", "MaximizeBox", "MinimizeBox", "AutoScroll", "ToolTipText", "ClientSize", "Left", "Top", "Right", "Bottom"
+        "ControlBox", "MaximizeBox", "MinimizeBox", "AutoScroll", "ToolTipText", "ClientSize", "Left", "Top", "Right", "Bottom",
+        "SmallImageList", "LargeImageList", "StateImageList", "View", "FullRowSelect", "GridLines", "HideSelection", "HeaderStyle", "Scrollable"
+    };
+
+    /// <summary>Calls with no behaviour in the browser (repaint, layout batching, focus): dropped with a comment.</summary>
+    private static readonly HashSet<string> NoOpCalls = new(StringComparer.Ordinal)
+    {
+        "Refresh", "Invalidate", "Update", "BeginUpdate", "EndUpdate", "SuspendLayout", "ResumeLayout", "PerformLayout", "Focus"
+    };
+
+    private static readonly Dictionary<string, string> ListItemProps = new(StringComparer.Ordinal)
+    {
+        ["Text"] = "text", ["Checked"] = "checked", ["Selected"] = "selected", ["Tag"] = "tag", ["Name"] = "name", ["ImageKey"] = "imageKey"
     };
 
     private static readonly JsonSerializerOptions JsonOut = new() { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
@@ -37,6 +49,15 @@ internal sealed partial class MethodTranslator
     private readonly Dictionary<string, string> _formLocals = new(StringComparer.Ordinal);
     private readonly HashSet<string> _confirmLocals = new(StringComparer.Ordinal);
     private readonly HashSet<string> _catchVars = new(StringComparer.Ordinal);
+
+    /// <summary>Locals and parameters that hold a ListViewItem (declared as one, or initialised from a ListView collection).</summary>
+    private readonly HashSet<string> _itemLocals = new(StringComparer.Ordinal);
+
+    /// <summary>Locals initialised from lv.Items / lv.SelectedItems / lv.CheckedItems (arrays of items).</summary>
+    private readonly HashSet<string> _itemCollections = new(StringComparer.Ordinal);
+
+    /// <summary>The expression statement's own invocation: its value is unused, so `Items.Add(x)` can be a plain push.</summary>
+    private InvocationExpressionSyntax? _statementCall;
 
     /// <summary>Locals whose declaration could not be translated: anything depending on them falls back too (no dangling references).</summary>
     private readonly HashSet<string> _poisoned = new(StringComparer.Ordinal);
@@ -74,7 +95,11 @@ internal sealed partial class MethodTranslator
         var statements = declaration.Body?.Statements.ToList()
                          ?? (declaration.ExpressionBody is { } eb ? new List<StatementSyntax> { SyntaxFactory.ExpressionStatement(eb.Expression) } : new List<StatementSyntax>());
 
-        foreach (var p in _method!.Parameters) _locals.Add(p.Name);
+        foreach (var p in _method!.Parameters)
+        {
+            _locals.Add(p.Name);
+            if (p.Type == "ListViewItem") _itemLocals.Add(p.Name);
+        }
         CollectLocals(declaration);
 
         var lines = new List<string>();
@@ -102,6 +127,7 @@ internal sealed partial class MethodTranslator
             {
                 _locals.Add(v.Identifier.Text);
                 if (v.Parent is VariableDeclarationSyntax vd && IsOpaqueType(vd.Type)) _opaqueLocals.Add(v.Identifier.Text);
+                if (v.Parent is VariableDeclarationSyntax { Type: IdentifierNameSyntax { Identifier.Text: "ListViewItem" } }) _itemLocals.Add(v.Identifier.Text);
             }
         }
         foreach (var a in root.DescendantNodes().OfType<AssignmentExpressionSyntax>())
@@ -117,6 +143,7 @@ internal sealed partial class MethodTranslator
         {
             _locals.Add(f.Identifier.Text);
             if (IsOpaqueType(f.Type)) _opaqueLocals.Add(f.Identifier.Text);
+            if (f.Type is IdentifierNameSyntax { Identifier.Text: "ListViewItem" }) _itemLocals.Add(f.Identifier.Text);
         }
         foreach (var c in root.DescendantNodes().OfType<CatchDeclarationSyntax>())
             if (c.Identifier.Text is { Length: > 0 } name) { _locals.Add(name); _catchVars.Add(name); }
@@ -234,6 +261,8 @@ internal sealed partial class MethodTranslator
                 return For(f);
 
             case ForEachStatementSyntax fe:
+                if (fe.Type.IsVar && (ListCollectionOf(fe.Expression) is { Kind: "Items" or "SelectedItems" or "CheckedItems" }
+                                      || fe.Expression is IdentifierNameSyntax fc && _itemCollections.Contains(fc.Identifier.Text))) _itemLocals.Add(fe.Identifier.Text);
                 return Wrap($"for (const {fe.Identifier.Text} of {Ex(fe.Expression)}) {{", Body(fe.Statement), "}");
 
             case SwitchStatementSyntax sw:
@@ -365,6 +394,7 @@ internal sealed partial class MethodTranslator
 
     private List<string> ExpressionStatement(ExpressionSyntax e)
     {
+        _statementCall = e as InvocationExpressionSyntax;
         var text = Ex(e, top: true);
         if (text.Length == 0) return new List<string>();
         return new List<string> { text + ";" };
@@ -385,6 +415,8 @@ internal sealed partial class MethodTranslator
             }
 
             var init = v.Initializer?.Value;
+            if (decl.Type.IsVar && init is not null && IsListItem(init)) _itemLocals.Add(name);
+            if (init is not null && ListCollectionOf(init) is { Kind: "Items" or "SelectedItems" or "CheckedItems" }) _itemCollections.Add(name);
             var keyword = isConst || (init is not null && !_reassigned.Contains(name)) ? "const" : "let";
 
             // DialogResult r = MessageBox.Show(..., buttons) / frm.ShowDialog()
@@ -511,6 +543,8 @@ internal sealed partial class MethodTranslator
         var controlId = ControlOf(left);
         if (controlId is not null)
         {
+            if (_scope.ListViews.Contains(controlId) && name is "Items" or "SelectedItems" or "CheckedItems" or "Columns" or "SelectedIndices")
+                return ListCollection(controlId, name);
             if (ModelProps.Contains(name))
             {
                 _scope.Output.UsesViewModel = true;
@@ -552,12 +586,129 @@ internal sealed partial class MethodTranslator
 
         if (OpaqueName(left) is { } opaque) throw new Untranslatable($"member access on '{opaque}', whose type has no browser equivalent");
 
+        // ListViewItem members: item.Text, item.SubItems[1].Text, item.SubItems.Count, ...
+        if (SubItemText(ma, out var subItem, out var subIndex))
+        {
+            var itemText = Ex(subItem);
+            if (subIndex is LiteralExpressionSyntax { Token.Value: int k }) return k == 0 ? $"{itemText}.text" : $"{itemText}.subItems[{k - 1}]";
+            var index = Ex(subIndex);
+            return $"({index} === 0 ? {itemText}.text : {itemText}.subItems[{index} - 1])";
+        }
+        if (IsListItem(left))
+        {
+            if (ListItemProps.TryGetValue(name, out var prop)) return $"{Ex(left)}.{prop}";
+            if (name == "SubItems") return $"{Ex(left)}.subItems";
+            if (VisualProps.Contains(name) || name is "ForeColor" or "BackColor" or "UseItemStyleForSubItems") throw new Dropped($"item.{name} is appearance-only");
+            throw new Untranslatable($"ListViewItem member {name}");
+        }
+        if (left is MemberAccessExpressionSyntax { Name.Identifier.Text: "SubItems", Expression: var subOwner } && name == "Count" && IsListItem(subOwner))
+            return $"({Ex(subOwner)}.subItems.length + 1)";
+
         var receiver = Ex(left);
         return name switch
         {
             "Length" or "Count" => $"{receiver}.length",
             _ => $"{receiver}.{name}"
         };
+    }
+
+    // ------------------------------------------------------------------------------------------------- ListView
+
+    private string ListCollection(string id, string kind)
+    {
+        _scope.Output.UsesViewModel = true;
+        var items = $"vm.{id}.items";
+        return kind switch
+        {
+            "Items" => items,
+            "SelectedItems" => $"{items}.filter((it) => it.selected)",
+            "CheckedItems" => $"{items}.filter((it) => it.checked)",
+            "SelectedIndices" => $"{items}.flatMap((it, i) => (it.selected ? [i] : []))",
+            _ => $"vm.{id}.columns"
+        };
+    }
+
+    /// <summary>`lv.Items`, `lv.SelectedItems`, `lv.Columns`, ... on a ListView control of this page.</summary>
+    private (string Id, string Kind)? ListCollectionOf(ExpressionSyntax e) =>
+        e is MemberAccessExpressionSyntax { Name.Identifier.Text: "Items" or "SelectedItems" or "CheckedItems" or "Columns" or "SelectedIndices" } m
+        && ControlOf(m.Expression) is { } id && _scope.ListViews.Contains(id)
+            ? (id, m.Name.Identifier.Text) : null;
+
+    /// <summary>True when the expression is a ListViewItem: a typed local, or an element of Items/SelectedItems/CheckedItems.</summary>
+    private bool IsListItem(ExpressionSyntax e) => e switch
+    {
+        IdentifierNameSyntax id => _itemLocals.Contains(id.Identifier.Text) && !_poisoned.Contains(id.Identifier.Text),
+        ParenthesizedExpressionSyntax p => IsListItem(p.Expression),
+        ElementAccessExpressionSyntax el => ListCollectionOf(el.Expression) is { Kind: "Items" or "SelectedItems" or "CheckedItems" }
+                                            || el.Expression is IdentifierNameSyntax coll && _itemCollections.Contains(coll.Identifier.Text),
+        InvocationExpressionSyntax { Expression: IdentifierNameSyntax or MemberAccessExpressionSyntax { Expression: ThisExpressionSyntax } } call =>
+            _scope.Functions.TryGetValue(call.Expression is IdentifierNameSyntax fn ? fn.Identifier.Text : ((MemberAccessExpressionSyntax)call.Expression).Name.Identifier.Text, out var fs)
+            && fs.Any(x => x.Member.Type == "ListViewItem"),
+        _ => false
+    };
+
+    /// <summary>`item.SubItems[k].Text`: the item expression and index k.</summary>
+    private bool SubItemText(MemberAccessExpressionSyntax ma, out ExpressionSyntax item, out ExpressionSyntax index)
+    {
+        item = index = null!;
+        if (ma.Name.Identifier.Text != "Text"
+            || ma.Expression is not ElementAccessExpressionSyntax { Expression: MemberAccessExpressionSyntax { Name.Identifier.Text: "SubItems" } subs, ArgumentList.Arguments.Count: 1 } el
+            || !IsListItem(subs.Expression)) return false;
+        item = subs.Expression;
+        index = el.ArgumentList.Arguments[0].Expression;
+        return true;
+    }
+
+    /// <summary>Calls on lv.Items / lv.SelectedItems / lv.Columns / item.SubItems, translated onto the model arrays.</summary>
+    private string? ListMethod(ExpressionSyntax receiver, string method, InvocationExpressionSyntax inv)
+    {
+        var argList = inv.ArgumentList.Arguments;
+        if (receiver is MemberAccessExpressionSyntax { Name.Identifier.Text: "SubItems", Expression: var owner } && IsListItem(owner))
+        {
+            var sub = $"{Ex(owner)}.subItems";
+            return (method, argList.Count) switch
+            {
+                ("Add", 1) => $"{sub}.push({Ex(argList[0].Expression)})",
+                ("Clear", 0) => $"{sub}.splice(0)",
+                _ => throw new Untranslatable($"SubItems.{method}(...)")
+            };
+        }
+
+        if (ListCollectionOf(receiver) is not { } coll) return null;
+        var target = ListCollection(coll.Id, coll.Kind);
+        switch (coll.Kind, method, argList.Count)
+        {
+            case ("Items", "Add", 1):
+                var item = ListItemArgument(argList[0].Expression);
+                // As a statement the new item is not used; otherwise return the (proxied) item so later writes are observed.
+                return ReferenceEquals(inv, _statementCall) ? $"{target}.push({item})" : $"{target}[{target}.push({item}) - 1]";
+            case ("Items", "Insert", 2): return $"{target}.splice({Ex(argList[0].Expression)}, 0, {ListItemArgument(argList[1].Expression)})";
+            case ("Items", "RemoveAt", 1): return $"{target}.splice({Ex(argList[0].Expression)}, 1)";
+            case ("Items" or "Columns", "Clear", 0): return $"{target}.splice(0)";
+            case ("SelectedItems", "Clear", 0): return $"vm.{coll.Id}.items.forEach((it) => {{ it.selected = false; }})";
+            case ("Columns", "Add", 1 or 2 or 3) when argList[0].Expression is not ObjectCreationExpressionSyntax and not IdentifierNameSyntax:
+                var width = argList.Count >= 2 ? $", width: {Ex(argList[1].Expression)}" : "";
+                return $"{target}.push({{ header: {Ex(argList[0].Expression)}{width} }})";
+        }
+        throw new Untranslatable($"call to {coll.Id}.{coll.Kind}.{method}(...) is not translated");
+    }
+
+    /// <summary>An argument of Items.Add / Insert: an item (new ListViewItem, a local) or plain text that becomes a new item.</summary>
+    private string ListItemArgument(ExpressionSyntax arg) =>
+        IsListItem(arg) || arg is ObjectCreationExpressionSyntax { Type: IdentifierNameSyntax { Identifier.Text: "ListViewItem" } }
+            ? Ex(arg)
+            : $"wfListItem({Ex(arg)})";
+
+    private string CreateListItem(ObjectCreationExpressionSyntax oc)
+    {
+        var args = oc.ArgumentList?.Arguments ?? default;
+        if (args.Count == 0) return "wfListItem()";
+        var first = args[0].Expression;
+        var isArray = first is ArrayCreationExpressionSyntax or ImplicitArrayCreationExpressionSyntax
+                      || first is IdentifierNameSyntax id && _method?.Parameters.FirstOrDefault(p => p.Name == id.Identifier.Text)?.Type == "string[]";
+        if (args.Count == 1) return isArray ? $"wfListItemFromArray({Ex(first)})" : $"wfListItem({Ex(first)})";
+        if (args.Count == 2 && !isArray && args[1].Expression is LiteralExpressionSyntax { Token.Value: string }) return $"wfListItem({Ex(first)}, [], {Ex(args[1].Expression)})";
+        throw new Untranslatable("ListViewItem constructor overload");
     }
 
     /// <summary>The control id when the expression is `ctl` or `this.ctl` and names a control of this page.</summary>
@@ -717,6 +868,9 @@ internal sealed partial class MethodTranslator
         if (a.Left is IdentifierNameSyntax { Identifier.Text: "Cursor" } || a.Left is MemberAccessExpressionSyntax { Name.Identifier.Text: "Cursor", Expression: ThisExpressionSyntax })
             throw new Dropped("cursor");
 
+        if (a.Left is MemberAccessExpressionSyntax lm && SubItemText(lm, out _, out var subIdx) && subIdx is not LiteralExpressionSyntax)
+            throw new Untranslatable("assignment to SubItems[<expression>].Text");
+
         return $"{Ex(a.Left)} {op} {NullBang(a.Right, Ex(a.Right, top: true))}";
     }
 
@@ -737,6 +891,7 @@ internal sealed partial class MethodTranslator
             return args.Count == 1 ? $"[...{Ex(args[0].Expression)}]" : "[]";
         }
         if (type is "Dictionary" or "SortedDictionary" or "Hashtable" && args.Count == 0 && oc.Initializer is null) return "{}";
+        if (type == "ListViewItem") return CreateListItem(oc);
         if (type.EndsWith("Exception", StringComparison.Ordinal) || type == "Exception")
             return $"new Error({string.Join(", ", args.Take(1).Select(x => Ex(x.Expression)))})";
         if (type == "Guid" && args.Count == 0) return "crypto.randomUUID()";
@@ -834,7 +989,10 @@ internal sealed partial class MethodTranslator
         var typeName = StaticTypeName(receiver);
         if (typeName is not null) return StaticCall(typeName, method, inv, top);
 
-        // control.Method(...) is not translated (focus, Items.Add, Select, ...)
+        if (ListMethod(receiver, method, inv) is { } listCall) return listCall;
+        if (ControlOf(receiver) is not null && NoOpCalls.Contains(method)) throw new Dropped($"{method}() has no browser equivalent");
+
+        // control.Method(...) is not translated (Select, Sort, ...)
         if (ControlOf(receiver) is { } cid) throw new Untranslatable($"call to control member {cid}.{method}(...) (not supported by the library or the model yet)");
         if (receiver is MemberAccessExpressionSyntax { Expression: var inner } && ControlOf(inner) is { } cid2)
             throw new Untranslatable($"call to {cid2}.{((MemberAccessExpressionSyntax)receiver).Name.Identifier.Text}.{method}(...) (collection UI such as ListView/grid is not translated yet)");
@@ -849,6 +1007,8 @@ internal sealed partial class MethodTranslator
         var args = Args(inv);
         var recv = Ex(receiver);
         if (method == "ToString" && args.Count == 0) return $"String({recv})";
+        if (method == "Equals" && args.Count == 1)
+            return $"({Binary(SyntaxFactory.BinaryExpression(SyntaxKind.EqualsExpression, receiver, inv.ArgumentList.Arguments[0].Expression))})";
         if (method == "ContainsKey" && args.Count == 1) return $"({args[0]} in {recv})";
         if (InstanceSuffix(method, args) is { } suffix) return recv + suffix;
         throw new Untranslatable($"call to {Collapse(receiver)}.{method}(...) not resolvable from IR", wireToRealApi: true);

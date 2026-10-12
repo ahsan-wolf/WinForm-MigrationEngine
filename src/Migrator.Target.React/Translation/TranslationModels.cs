@@ -77,6 +77,9 @@ public sealed class PageScope
 {
     public string RootId { get; init; } = "";
     public HashSet<string> Controls { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>Controls of type ListView: their Items/SelectedItems/Columns live in the model (`vm.&lt;id&gt;.items`).</summary>
+    public HashSet<string> ListViews { get; } = new(StringComparer.Ordinal);
     public Dictionary<string, MemberIr> Fields { get; } = new(StringComparer.Ordinal);
     public Dictionary<string, List<MemberFunction>> Functions { get; } = new(StringComparer.Ordinal);
     public ContractVocabulary Vocabulary { get; init; } = ContractVocabulary.Empty;
@@ -164,6 +167,7 @@ public sealed class ContractVocabulary
             case "Boolean": return "boolean";
             case "Guid": return "string";
             case "DateTime": return "string";
+            case "ListViewItem": return "WfListItem";
         }
         if (_result is not null && _result.TypeNameBySimple.TryGetValue(name, out var ts))
         {
