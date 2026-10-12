@@ -215,6 +215,7 @@ Rules:
 - Real IR enums: `MemberIr.Kind` = `MemberKind` (Property, Field, Method, Event), `Visibility` = Public/Protected/Private/Internal; `PageIr.RootControl` is nullable; `MemberIr.Attributes` lists attribute names.
 - **Designer facts without a property of their own** are stored under dotted pseudo-attribute keys that cannot collide with C# property names: `ParentSlot` (Items, DropDownItems, TabPages, Columns, Panel1, Panel2), `TableLayout.Row/Column/RowSpan/ColumnSpan`, `ColumnStyles`/`RowStyles` (JSON), `Items` (JSON string array), `DataBinding.<Property>` (= `source.Member`), `ToolTip`, `DefaultCellStyle.*`. `.resx` Text/ToolTip values are merged when not set in code (code wins). Full table: `docs/ENGINE_AUTHORING.md`.
 - `this.X = new T()` declares a control **only** when `X` is a field of the class; otherwise it is a root property (`ClientSize`, `AutoScaleDimensions`).
+- For **fields and properties**, `MemberIr.Body` holds the initializer expression text (e.g. `"Add"`, `new List<string>()`); for methods it is the full body. Translation reads constants such as `c_NoFilter` from it.
 - Designer statements the parser does not understand are listed in `project.ir.json` `Shared.Unsupported` (`"{Unit}: {statement}"`, capped at 50 per unit) — never silently dropped.
 - Generators consume IR only. If something is missing from IR, **fix the extractor**, not the generator.
 
@@ -314,7 +315,7 @@ Migration run steps: Analyze (find Designer/code-behind pairs, UserControls firs
 dotnet build WinFormsMigrator.sln
 dotnet run --project src/Migrator.Cli -- engines [--config engines.json]       # EXISTS: list engines that load
 dotnet run --project src/Migrator.Cli -- ir --source <path> --out <dir>      # EXISTS: IR only -> six files per unit + project.ir.json
-dotnet run --project src/Migrator.Cli -- migrate --source <path> --out <dir> [--target react-app] [--entry <form>] [--depth <n|all>] [--contract <contract.json>]...   # EXISTS: ir step + app into <out>/react-app
+dotnet run --project src/Migrator.Cli -- migrate --source <path> --out <dir> [--target react-app] [--entry <form>] [--depth <n|all>] [--contract <contract.json>]... [--translate none|rules|llm] [--compile-gate]   # EXISTS: ir step + app into <out>/react-app; rules = deterministic C#->TS (llm tier planned)
 dotnet run --project src/Migrator.Cli -- contract --assembly <dll> --out <dir>   # EXISTS: public API of a managed assembly from metadata only (never executed); use a git-ignored folder
 set WFM_LLM_TARGET=react-app                                                   # opt-in LLM translation
 cd ui-library/ui-react && npm ci && npm run build && npm run lint

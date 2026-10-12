@@ -94,7 +94,7 @@ Generated pages import only `@wfm/ui-react`.
 | Layout | Dock/Location facts -> top chrome, free rows (clustered by Y, ordered by X), left/fill/right band, bottom chrome (`wfm-*` flex classes). No pixels. MenuStrip/ToolStrip default to top, StatusStrip to bottom |
 | State | One **model per page**: `const vm = useWfModel({ txtSearch: { text: "", enabled: true }, ... })` (declared only when referenced). Holds user-editable inputs (TextBox/ComboBox/CheckBox), hidden controls (`visible`), grid `rows`, and every Text/Enabled/Visible/Checked/Value/ReadOnly the code-behind reads or writes (`btnSave.Enabled = false`, `this.Text = ...`). JSX binds `text={vm.lbl.text}`, `disabled={!vm.btn.enabled}`, `{vm.pnl.visible && ...}`. The model is a deep proxy: reads are immediate, writes re-render once, so translated WinForms code maps 1:1 (no stale closures, no setters). The generated eslint config turns `react-hooks/immutability` off on purpose; do not enable the React Compiler on generated code |
 | Navigation | `ShowDialog` -> `await dialog.show(close => <XPage onClose={close}/>)`; `Close/Hide` -> `onClose?.()`; several targets in one handler -> first wired + TODO; target outside scope -> alert + TODO |
-| Handlers | **Not translated.** Each keeps its original C# as comments + TODO; the full code-behind of each page is in `src/legacy/*.cs.txt` (never dropped) |
+| Handlers | Not translated by default: each keeps its original C# as comments + TODO and the full code-behind is in `src/legacy/*.cs.txt`. With `--translate rules` every method of the page is translated (see below) |
 | Not rendered | non-visual components (ImageList, ToolTip, BindingSource, Timer, file dialogs, ...) are listed in the report |
 | Unsupported | no spec entry -> `WfUnsupported` + TODO + report entry; inlined user controls render as a panel |
 | Grids | designer columns -> `WfGridColumn[]`; typed mock rows marked `// MOCK`; grids with columns created in code get a TODO |
@@ -123,6 +123,30 @@ generated app: `src/services/<assembly>/types.ts` (DTO interfaces + enum unions)
 - secret-looking DTO properties are omitted.
 The filter is deliberately over-inclusive; the report lists everything it removed. Scope `used` scans the generated forms' members with a regex (aliases and
 `using static` calls are missed; a miss only means a method is not emitted).
+
+### Translation (`migrate --translate rules`)
+Deterministic C# -> TypeScript for **every method of a generated page** (not only wired handlers: most handlers are one-line delegations and the logic is in helpers),
+using Roslyn on the IR's method bodies. No LLM. Conventions (so the output is 1:1 with the C#): control properties are `vm.<id>.<prop>` (text, enabled, visible,
+checked, value, readOnly), form fields are `f.<name>` (initial values from their C# initializers, recorded in `MemberIr.Body` for fields/properties), `MessageBox.Show` is
+`await dialog.alert/confirm`, `ShowDialog()` is `await dialog.show(...)`, `Close()` is `onClose?.(result)`, contract facade calls are `await <instance>.<Facade>.<Method>(...)`
+(credentials parameters already stripped), `main.WriteErrorLog(MethodBase.GetCurrentMethod(), ex)` is `console.error(...)`, `DateTime` is an ISO string, `string.Format` becomes a template literal (or
+`formatString` for a non-literal format).
+
+- **Per statement fallback.** A statement the rules cannot translate faithfully stays as a commented original with `// TODO: not translated — <reason>` (or `// TODO: wire to real API — ...` for
+  references that cannot be resolved from the IR). A declaration that falls back *poisons* its name, so dependent statements fall back too (no dangling references).
+- **Dropped, with a comment:** appearance-only writes (Anchor, Dock, Size, Font, colors, Cursor, Icon, ...), `Application.DoEvents()`. They are not TODOs.
+- **Per method status:** Complete / Partial (TODOs inside) / Not translated (kept as commented C#; wired handlers keep the navigation-aware stub; untranslated helpers become typed no-op stubs so callers compile).
+- **async:** a fixpoint over the call graph: any method that awaits (dialog, service) is `async`, all callers `await` it.
+- **Compile gate** (`--compile-gate`: run `npm install` if needed; default: runs only when dependencies already exist; `--no-compile-gate`: skip): `tsc --noEmit` runs on the generated app, every translated
+  method containing an error is demoted to commented C#, the page is regenerated (up to 5 rounds). An invented or mistyped API cannot ship. Errors outside translated methods are reported.
+- **Lint-clean by construction:** `const` for locals never reassigned in the emitted text, `_name` for locals nothing reads, usage-based declarations/imports (`dialog`, `vm`, `f`, service, types), an
+  eslint-disable note on functions nothing calls, `use*` method names renamed `doUse*`. The generated eslint config turns `react-hooks/immutability`, `no-extra-boolean-cast` and `preserve-caught-error` off on purpose.
+- **Button.DialogResult:** clicking a button whose designer sets `DialogResult` runs its Click handler then `onClose(result)`, as WinForms closes the dialog (not part of translation; applies in every mode).
+
+Pilot numbers (ECMNavigator, 17 forms, 706 methods): 321 complete (45%), 259 partial, 126 not translated (43 demoted by the gate); `tsc` 0 errors, build and lint clean. What blocks the rest, from the report:
+**ListView/grid members** (`lv.Items`, `lv.SelectedItems`, `dgv.Rows`, `pnl.Controls`: needs a `WfListView` and model collections), **the app's own static classes** (`main.*`, `Preferences.*`, `ECMConfiguration.*`: not in
+the IR yet), `ref`/`out` arguments (`TryParse`), `string.Format` with specifiers, event subscriptions in code, constructors of WinForms types. Everything is listed per method in `MIGRATION_REPORT.md`.
+Rule-translated code is deterministic but **unreviewed**: check logic, async behaviour and every TODO.
 
 ## Commands
 ```bash
