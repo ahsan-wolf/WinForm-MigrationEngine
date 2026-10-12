@@ -105,19 +105,43 @@ public static class AppWriter
             """, files);
 
         Put(appDir, "src/main.tsx", $$"""
-            import { StrictMode } from 'react';
+            import { StrictMode, Suspense, lazy, type ComponentType } from 'react';
             import { createRoot } from 'react-dom/client';
             import { WfDialogProvider } from '@wfm/ui-react';
             import '@wfm/ui-react/styles.css';
             import './app.css';
             import { {{entryComponent}} } from './pages/{{entryComponent}}';
 
+            // Development launcher: `?page=<Name>` opens one generated page on its own (with mock data), `?page=` lists them all.
+            // Forms the entry form opens through ShowDialog() are normally reached from it, but those whose constructor arguments
+            // are not translated yet (see MIGRATION_REPORT.md) cannot be reached that way.
+            type PageProps = { onClose?: (result?: unknown) => void };
+            const loaders = import.meta.glob('./pages/*.tsx') as Record<string, () => Promise<Record<string, unknown>>>;
+            const pages = Object.entries(loaders).map(([path, load]) => {
+              const name = path.slice('./pages/'.length, -'.tsx'.length);
+              return { name, Page: lazy(async () => ({ default: (await load())[name] as ComponentType<PageProps> })) };
+            });
+            const requested = new URLSearchParams(window.location.search).get('page');
+            const selected = requested === null ? undefined : pages.find((p) => p.name === requested || p.name === requested + 'Page');
+
+            const goHome = () => { window.location.search = ''; };
+
+            function Index() {
+              return (
+                <ul>
+                  {pages.map((p) => <li key={p.name}><a href={`?page=${p.name}`}>{p.name}</a></li>)}
+                </ul>
+              );
+            }
+
+            const app = selected ? (
+              <Suspense fallback={null}><selected.Page onClose={goHome} /></Suspense>
+            ) : requested !== null ? <Index /> : <{{entryComponent}} />;
+
             // The entry form is the app shell; every ShowDialog() target opens through the dialog service.
             createRoot(document.getElementById('root')!).render(
               <StrictMode>
-                <WfDialogProvider>
-                  <{{entryComponent}} />
-                </WfDialogProvider>
+                <WfDialogProvider>{app}</WfDialogProvider>
               </StrictMode>,
             );
             """, files);
