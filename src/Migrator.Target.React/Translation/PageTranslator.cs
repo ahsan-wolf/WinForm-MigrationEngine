@@ -54,7 +54,7 @@ public static class PageTranslator
             scope.Fields.TryAdd(m.Name, m);
 
         // 1. Names. A wired handler method keeps the handler name derived from its first wiring (the wiring code uses the same name).
-        var methods = unit.Page.Members.Where(m => m.Kind == MemberKind.Method && m.Body != null).ToList();
+        var methods = unit.Page.Members.Where(m => m.Kind == MemberKind.Method && m.Name != ".ctor" && m.Body != null).ToList();
         var wiredMember = methods.GroupBy(m => m.Name)
             .ToDictionary(g => g.Key, g => g.FirstOrDefault(m => m.Parameters.Count == 2) ?? g.First());
         var translations = new List<MethodTranslation>();
@@ -85,7 +85,70 @@ public static class PageTranslator
         foreach (var field in scope.Fields.Values)
             output.FieldInitials[field.Name] = FieldInitial(scope, field);
 
+        // 5. Constructor arguments -> props.
+        var ctor = unit.Page.Members.Where(m => m.Kind == MemberKind.Method && m.Name == ".ctor" && m.Parameters.Count > 0)
+            .OrderByDescending(m => m.Parameters.Count).FirstOrDefault();
+        if (ctor is not null) BuildCtorProps(scope, output, names, ctor);
+
         return output;
+    }
+
+    /// <summary>
+    /// The form's constructor arguments become optional props. Mock defaults (a contract data type -> its fixture row) let the page open on its own;
+    /// `field = argument;` statements seed the field model from the prop. Anything else the constructor does is kept as a note.
+    /// </summary>
+    private static void BuildCtorProps(PageScope scope, PageTranslation output, NameScope names, MemberIr ctor)
+    {
+        output.FixturesImport = scope.Vocabulary.FixturesImport;
+        foreach (var p in ctor.Parameters)
+        {
+            var type = scope.Vocabulary.MapType(p.Type, output.TypeImports);
+            var local = names.Unique(SafeName(Naming.Camel(p.Name)));
+            string? def = null;
+            if (p.DefaultValue is not null)
+            {
+                try { def = new MethodTranslator(scope, null, constantContext: true).TranslateConstant(p.DefaultValue); }
+                catch (Untranslatable) { }
+                if (def == "null") def = null;
+            }
+            else if (type != "unknown")
+                def = MockDefault(scope, p.Type, type, output.FixturesImport.Length > 0);
+            output.CtorProps.Add(new CtorProp(p.Name, local, type, def));
+        }
+
+        var tree = CSharpSyntaxTree.ParseText("class __W { void __M() " + ctor.Body + " }");
+        var statements = tree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>().First().Body?.Statements ?? default;
+        foreach (var s in statements)
+        {
+            if (s is ExpressionStatementSyntax { Expression: InvocationExpressionSyntax { Expression: IdentifierNameSyntax { Identifier.Text: "InitializeComponent" } } }) continue;
+            if (s is ExpressionStatementSyntax { Expression: AssignmentExpressionSyntax { RawKind: (int)SyntaxKind.SimpleAssignmentExpression } a }
+                && FieldName(a.Left) is { } fieldName && scope.Fields.TryGetValue(fieldName, out var field)
+                && a.Right is IdentifierNameSyntax arg && output.CtorProps.FirstOrDefault(cp => cp.Key == arg.Identifier.Text) is { Default: not null } prop
+                && prop.Type != "unknown" && scope.Vocabulary.MapType(field.Type, new HashSet<string>()) == prop.Type)
+            {
+                output.FieldInitials[fieldName] = prop.Local;
+                continue;
+            }
+            output.CtorNotes.Add(Regex.Replace(s.ToString(), @"\s+", " ").Trim());
+        }
+    }
+
+    private static string? FieldName(ExpressionSyntax e) => e switch
+    {
+        IdentifierNameSyntax id => id.Identifier.Text,
+        MemberAccessExpressionSyntax { Expression: ThisExpressionSyntax } m => m.Name.Identifier.Text,
+        _ => null
+    };
+
+    /// <summary>A sample value for a constructor argument of a contract data type (first fixture row, or the fixture list), or a neutral primitive.</summary>
+    private static string? MockDefault(PageScope scope, string sourceType, string tsType, bool haveFixtures)
+    {
+        var parsed = SyntaxFactory.ParseTypeName(sourceType);
+        if (parsed is ArrayTypeSyntax { RankSpecifiers.Count: 1 } array && haveFixtures && scope.Vocabulary.DtoTypeName(Simple(array.ElementType)) is { } elementDto)
+            return $"fixtures.{elementDto}";
+        if (parsed is not ArrayTypeSyntax && haveFixtures && scope.Vocabulary.DtoTypeName(Simple(parsed)) is { } dto)
+            return $"fixtures.{dto}[0]";
+        return tsType switch { "string" => "\"\"", "number" => "0", "boolean" => "false", _ => null };
     }
 
     // --------------------------------------------------------------------------------------------------- async

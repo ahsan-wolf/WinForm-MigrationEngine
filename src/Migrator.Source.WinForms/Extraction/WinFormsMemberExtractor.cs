@@ -49,6 +49,19 @@ public sealed class WinFormsMemberExtractor : IIrExtractor
                         target.Members.Add(Simple(MemberKind.Event, v.Identifier.Text, evt.Declaration.Type.ToString(), evt.Modifiers));
                     break;
 
+                case ConstructorDeclarationSyntax ctor when !ctor.Modifiers.Any(m => m.Text == "static"):
+                    // Recorded as a method named ".ctor": its parameters become the page's inputs (props) in generators.
+                    var ctorIr = Simple(MemberKind.Method, ".ctor", "void", ctor.Modifiers);
+                    ctorIr.Parameters = ctor.ParameterList.Parameters.Select(p => new ParameterIr
+                    {
+                        Name = p.Identifier.Text,
+                        Type = p.Type?.ToString() ?? "object",
+                        DefaultValue = p.Default?.Value.ToString()
+                    }).ToList();
+                    ctorIr.Body = ctor.Body?.ToString() ?? ctor.ExpressionBody?.ToString();
+                    target.Members.Add(ctorIr);
+                    break;
+
                 case MethodDeclarationSyntax method when !DesignerBoilerplateMethods.Contains(method.Identifier.Text):
                     var ir = Simple(MemberKind.Method, method.Identifier.Text, method.ReturnType.ToString(), method.Modifiers);
                     ir.Parameters = method.ParameterList.Parameters.Select(p => new ParameterIr

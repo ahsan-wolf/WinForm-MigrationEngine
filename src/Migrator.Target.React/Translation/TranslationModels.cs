@@ -58,8 +58,18 @@ public sealed class PageTranslation
     /// <summary>True when translated code calls the generated `formatString` helper (string.Format with a non-literal format).</summary>
     public bool UsesFormat { get; set; }
     public SortedSet<string> PageImports { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>Constructor arguments of the original form, offered as optional props (with mock defaults where the type allows).</summary>
+    public List<CtorProp> CtorProps { get; } = new();
+
+    /// <summary>Constructor statements that are not a plain `field = argument;` copy (kept as comments).</summary>
+    public List<string> CtorNotes { get; } = new();
+    public string FixturesImport { get; set; } = "";
     public SortedSet<string> TypeImports { get; } = new(StringComparer.Ordinal);
 }
+
+/// <summary>One constructor argument: prop key (C# name), local name in the component, TS type, mock default (null = none).</summary>
+public sealed record CtorProp(string Key, string Local, string Type, string? Default);
 
 /// <summary>A callable page method with its generated TypeScript name.</summary>
 public sealed class MemberFunction
@@ -109,6 +119,7 @@ public sealed class ContractVocabulary
     public string InstanceName => _result?.InstanceName ?? "";
     public string ServiceImport => _result?.ServiceImport ?? "";
     public string TypesImport => _result?.TypesImport ?? "";
+    public string FixturesImport => TypesImport.EndsWith("/types", StringComparison.Ordinal) ? TypesImport[..^"/types".Length] + "/fixtures" : "";
 
     /// <summary>TypeScript name of an emitted contract data type or enum, by simple C# name; null when it was not emitted.</summary>
     public string? DtoTypeName(string simpleName) => _result is not null && _result.TypeNameBySimple.TryGetValue(simpleName, out var ts) ? ts : null;

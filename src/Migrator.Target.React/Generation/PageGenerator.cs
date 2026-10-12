@@ -139,6 +139,7 @@ public sealed partial class PageGenerator
 
         var jsx = RenderElement(root, c, isRoot: true) ?? throw new InvalidDataException($"{unit.Name}: root control produced no output.");
         var handlerCode = BuildFunctions(c, jsx);
+        SeedListViewSamples(c, handlerCode);
         var usesFields = false;
         string? serviceImport = null;
         List<string> typeImports = new();
@@ -158,7 +159,8 @@ public sealed partial class PageGenerator
             var instance = _translation!.Vocabulary.InstanceName;
             if (instance.Length > 0 && Regex.IsMatch(text, $@"\b{Regex.Escape(instance)}\."))
                 serviceImport = $"import {{ {instance} }} from '{_translation.Vocabulary.ServiceImport}';";
-            var typeText = text + "\n" + (usesFields ? fieldText : "");
+            var propsText = string.Join("\n", tr.CtorProps.Select(p => p.Type + " " + p.Default));
+            var typeText = text + "\n" + (usesFields ? fieldText : "") + "\n" + propsText;
             typeImports = tr.TypeImports.Where(t => Regex.IsMatch(typeText, $@"\b{Regex.Escape(t)}\b")).ToList();
             tr.UsesFormat = Regex.IsMatch(text, @"\bformatString\(");
             foreach (var helper in new[] { "wfListItem", "wfListItemFromArray" }) if (Regex.IsMatch(text, $@"\b{helper}\(")) c.Lib.Add(helper);
@@ -176,6 +178,8 @@ public sealed partial class PageGenerator
         sb.AppendLine($"import {{ {string.Join(", ", lib)} }} from '@wfm/ui-react';");
         foreach (var (comp, file) in c.PageImports) sb.AppendLine($"import {{ {comp} }} from './{file}';");
         if (c.Translation is { UsesFormat: true }) sb.AppendLine("import { formatString } from '../lib/csharp';");
+        if (c.Translation is { FixturesImport.Length: > 0 } fx && usesFields && fx.CtorProps.Any(p => p.Default != null && p.Default.Contains("fixtures.") && fx.FieldInitials.Values.Contains(p.Local)))
+            sb.AppendLine($"import {{ fixtures }} from '{fx.FixturesImport}';");
         if (serviceImport is not null) sb.AppendLine(serviceImport);
         if (typeImports.Count > 0 && _translation is not null)
             sb.AppendLine($"import type {{ {string.Join(", ", typeImports)} }} from '{_translation.Vocabulary.TypesImport}';");
@@ -183,9 +187,29 @@ public sealed partial class PageGenerator
         foreach (var t in c.TopLevel) sb.AppendLine(t);
         if (c.TopLevel.Count > 0) sb.AppendLine();
 
-        sb.AppendLine($"export interface {component}Props {{ onClose?: (result?: unknown) => void }}");
+        var ctorProps = c.Translation?.CtorProps ?? new List<CtorProp>();
+        // Only props that seed a field are destructured (an unused binding fails lint); all stay in the interface.
+        var usedProps = !usesFields ? new List<CtorProp>()
+            : ctorProps.Where(p => c.Translation!.FieldInitials.Values.Any(v => v == p.Local)).ToList();
+        if (ctorProps.Count == 0)
+            sb.AppendLine($"export interface {component}Props {{ onClose?: (result?: unknown) => void }}");
+        else
+        {
+            sb.AppendLine($"export interface {component}Props {{");
+            sb.AppendLine("  onClose?: (result?: unknown) => void;");
+            foreach (var p in ctorProps) sb.AppendLine($"  /** Constructor argument of the original form. */ {Prop(p.Key)}?: {p.Type};");
+            sb.AppendLine("}");
+        }
         sb.AppendLine();
-        sb.AppendLine(c.UsesOnClose ? $"export function {component}({{ onClose }}: {component}Props) {{" : $"export function {component}(_props: {component}Props) {{");
+        var bindings = new List<string>();
+        if (c.UsesOnClose) bindings.Add("onClose");
+        foreach (var p in usedProps)
+            bindings.Add((p.Key == p.Local ? p.Key : $"{p.Key}: {p.Local}") + (p.Default is null ? "" : $" = {p.Default}"));
+        if (usedProps.Any(p => p.Default?.Contains("fixtures.") == true))
+            sb.AppendLine("// MOCK — constructor-argument defaults are fixture rows so the page opens on its own; the opener passes the real values");
+        sb.AppendLine(bindings.Count > 0 ? $"export function {component}({{ {string.Join(", ", bindings)} }}: {component}Props) {{" : $"export function {component}(_props: {component}Props) {{");
+        foreach (var note in c.Translation?.CtorNotes ?? new List<string>())
+            sb.AppendLine($"  // TODO: constructor logic not translated: {note}");
         if (c.UsesDialog) sb.AppendLine("  const dialog = useWfDialog();");
         foreach (var s in c.States) sb.AppendLine("  " + s);
         if (c.UsesModel)
@@ -327,7 +351,7 @@ public sealed partial class PageGenerator
         {
             "WfDataGrid" or "WfListView" => new List<string>(),
             "WfSplit" => RenderSplit(children, c),
-            "WfForm" or "WfPanel" => RenderArranged(children, c),
+            "WfForm" or "WfPanel" or "WfGroupBox" => RenderArranged(children, c),
             _ => RenderSequential(children, c)
         };
     }
@@ -419,6 +443,33 @@ public sealed partial class PageGenerator
             var id = m.Groups[1].Value == "this" ? root.Id : m.Groups[1].Value;
             if (!c.ById.TryGetValue(id, out var node)) continue;
             if (node != root || m.Groups[2].Value is "Text" or "Enabled" or "Visible") AddToModel(c, node, m.Groups[2].Value);
+        }
+    }
+
+    /// <summary>
+    /// A ListView whose rows/columns the translated code never writes (the original fills it in code that stayed commented) would render empty.
+    /// It gets clearly marked sample rows (and sample columns when the designer has none) so the control is visible and testable.
+    /// </summary>
+    private static void SeedListViewSamples(Ctx c, List<string> handlerCode)
+    {
+        if (c.ListViewIds.Count == 0) return;
+        var code = string.Join("\n", handlerCode.Where(l => !l.TrimStart().StartsWith("//", StringComparison.Ordinal)));
+        foreach (var id in c.ListViewIds)
+        {
+            var key = Regex.Escape(id);
+            var writesItems = Regex.IsMatch(code, $@"\bvm\.{key}\.items(\.(push|splice)\b|\s*=[^=])");
+            var writesColumns = Regex.IsMatch(code, $@"\bvm\.{key}\.columns(\.(push|splice)\b|\s*=[^=])");
+            if (writesItems) continue;
+
+            var model = c.Model[id];
+            var designerColumns = Regex.Matches(model["columns"], @"header:").Count;
+            var count = designerColumns > 0 ? designerColumns : 3;
+            if (designerColumns == 0 && !writesColumns)
+                model["columns"] = "[" + string.Join(", ", Enumerable.Range(1, count).Select(i => $"{{ header: 'Column {i}' }}")) + "] as WfListColumn[]";
+            var rows = Enumerable.Range(1, 3).Select(r => "wfListItemFromArray([" + string.Join(", ", Enumerable.Range(1, count).Select(i => $"'Sample {r}.{i}'")) + "])");
+            model["items"] = "[" + string.Join(", ", rows) + "] as WfListItem[]";
+            c.Lib.Add("wfListItemFromArray");
+            c.ModelComments.Add($"// MOCK — {id} rows are sample data: the original fills it in code that is not translated; replace with real implementation");
         }
     }
 
