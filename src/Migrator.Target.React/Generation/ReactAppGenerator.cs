@@ -37,7 +37,8 @@ public sealed class ReactAppGenerator
         {
             try
             {
-                var emitted = ServiceEmitter.Emit(file, scopeUnits, options.ContractScope.Equals("all", StringComparison.OrdinalIgnoreCase), outputDirectory, result.Files);
+                var emitted = ServiceEmitter.Emit(file, scopeUnits, options.ContractScope.Equals("all", StringComparison.OrdinalIgnoreCase), outputDirectory, result.Files,
+                    ir.Support?.Classes.SelectMany(c => c.Members));
                 contracts.Add(emitted);
                 result.Issues.AddRange(emitted.OmittedMembers.Concat(emitted.OmittedMethods).Select(m => new GenerationIssue(emitted.Assembly, "contract-secret-omitted", m)));
                 result.Issues.AddRange(emitted.CredentialParametersStripped.Distinct().Select(m => new GenerationIssue(emitted.Assembly, "contract-credentials-stripped", $"{m}: credentials parameter removed; the server supplies it")));
@@ -52,9 +53,24 @@ public sealed class ReactAppGenerator
         // "llm" runs the rules first; the model tier itself is a later phase, so today it behaves like "rules".
         var translate = options.Translate.Equals("rules", StringComparison.OrdinalIgnoreCase) || options.Translate.Equals("llm", StringComparison.OrdinalIgnoreCase);
         var generated = new HashSet<string>(scope.Keys);
+        // The project's own non-UI classes become src/support/index.ts; their names are valid types in every translated page.
+        var vocabulary = new ContractVocabulary(contracts.FirstOrDefault());
+        SupportRegistry? supportRegistry = null;
+        if (translate && ir.Support is { Classes.Count: > 0 } supportFile)
+        {
+            supportRegistry = SupportRegistry.Build(supportFile);
+            foreach (var name in supportRegistry.Classes.Keys) vocabulary.SupportTypes.Add(name);
+            supportRegistry.ColorAsync(vocabulary);
+        }
         var env = translate
-            ? new TranslationEnv { Vocabulary = new ContractVocabulary(contracts.FirstOrDefault()), Components = components, Units = ir.Units, Generated = generated }
+            ? new TranslationEnv { Vocabulary = vocabulary, Components = components, Units = ir.Units, Generated = generated, Support = supportRegistry }
             : null;
+        SupportBuild? support = null;
+        if (env is not null && supportRegistry is not null)
+        {
+            support = new SupportBuild(supportRegistry, env, SupportTranslator.Emit(supportRegistry, env, new HashSet<string>(StringComparer.Ordinal)));
+            AppWriter.Put(outputDirectory, SupportTranslator.ModulePath, support.Module.Source, result.Files);
+        }
         var generator = new PageGenerator(spec, ir.Units, components, generated, env);
         var pages = new List<(string Unit, int Depth, GeneratedPage Page)>();
 
@@ -84,7 +100,7 @@ public sealed class ReactAppGenerator
             AppWriter.Write(outputDirectory, "migrated-" + Naming.Camel(Naming.StripPrefix(entry)).ToLowerInvariant(), entryComponent,
                 Path.GetFullPath(_options.UiLibraryPath), result.Files);
 
-        var gate = translate ? RunCompileGate(outputDirectory, options, generator, ir, pages, result) : new GateSummary();
+        var gate = translate ? RunCompileGate(outputDirectory, options, generator, ir, pages, result, support) : new GateSummary();
 
         if (translate)
         {
@@ -95,9 +111,17 @@ public sealed class ReactAppGenerator
             result.Stats["methods.not-translated"] = pages.Sum(p => p.Page.MethodsNotTranslated);
             result.Stats["methods.demoted-by-gate"] = pages.Sum(p => p.Page.MethodsDemoted);
             result.Stats["gate.remaining-errors"] = gate.RemainingErrors;
+            if (support is not null)
+            {
+                result.Stats["support.classes"] = support.Module.Classes;
+                result.Stats["support.methods"] = support.Module.Methods.Count;
+                result.Stats["support.complete"] = support.Module.Methods.Count(m => m.Status == TranslationStatus.Complete);
+                result.Stats["support.partial"] = support.Module.Methods.Count(m => m.Status == TranslationStatus.Partial);
+                result.Stats["support.not-translated"] = support.Module.Methods.Count(m => m.Status == TranslationStatus.NotTranslated);
+            }
         }
 
-        AppWriter.Put(outputDirectory, "MIGRATION_REPORT.md", Report(ir, entry, options, spec, pages, result, skippedOutOfScope, contracts, translate, gate), result.Files);
+        AppWriter.Put(outputDirectory, "MIGRATION_REPORT.md", Report(ir, entry, options, spec, pages, result, skippedOutOfScope, contracts, translate, gate, support?.Module), result.Files);
         return result;
     }
 
@@ -105,6 +129,16 @@ public sealed class ReactAppGenerator
     {
         AppWriter.Put(outputDirectory, $"src/pages/{page.ComponentName}.tsx", page.Source, result.Files);
         AppWriter.Put(outputDirectory, $"src/legacy/{page.ComponentName}.cs.txt", page.LegacySource, result.Files);
+    }
+
+    /// <summary>The support module with what is needed to regenerate it when the compile gate demotes one of its methods.</summary>
+    private sealed class SupportBuild
+    {
+        public SupportBuild(SupportRegistry registry, TranslationEnv env, SupportModule module) { Registry = registry; Env = env; Module = module; }
+        public SupportRegistry Registry { get; }
+        public TranslationEnv Env { get; }
+        public SupportModule Module { get; set; }
+        public HashSet<string> Demoted { get; } = new(StringComparer.Ordinal);
     }
 
     private sealed class GateSummary
@@ -121,7 +155,7 @@ public sealed class ReactAppGenerator
     /// Repeats a few times (demoting a callee can break its callers). Errors outside translated methods are reported, not fixed.
     /// </summary>
     private static GateSummary RunCompileGate(string appDir, GenerationOptions options, PageGenerator generator, IrFolder ir,
-        List<(string Unit, int Depth, GeneratedPage Page)> pages, GenerationResult result)
+        List<(string Unit, int Depth, GeneratedPage Page)> pages, GenerationResult result, SupportBuild? support)
     {
         var gate = new GateSummary();
         if (options.NoCompileGate)
@@ -154,8 +188,16 @@ public sealed class ReactAppGenerator
             if (diagnostics.Count == 0) break;
 
             var touched = new HashSet<string>(StringComparer.Ordinal);
+            var supportTouched = false;
             foreach (var d in diagnostics)
             {
+                if (support is not null && d.File == SupportTranslator.ModulePath)
+                {
+                    var supportRange = support.Module.Ranges.FirstOrDefault(r => r.Start <= d.Line && d.Line <= r.End);
+                    if (supportRange.Key is not null && support.Demoted.Add(supportRange.Key)) supportTouched = true;
+                    continue;
+                }
+
                 var index = pages.FindIndex(p => d.File == $"src/pages/{p.Page.ComponentName}.tsx");
                 if (index < 0) continue;
                 var range = pages[index].Page.MethodRanges.FirstOrDefault(r => r.Start <= d.Line && d.Line <= r.End);
@@ -163,7 +205,13 @@ public sealed class ReactAppGenerator
                 if (!demoted.TryGetValue(pages[index].Unit, out var set)) demoted[pages[index].Unit] = set = new HashSet<string>(StringComparer.Ordinal);
                 if (set.Add(range.TsName)) touched.Add(pages[index].Unit);
             }
-            if (touched.Count == 0) break;
+            if (touched.Count == 0 && !supportTouched) break;
+
+            if (supportTouched)
+            {
+                support!.Module = SupportTranslator.Emit(support.Registry, support.Env, support.Demoted);
+                AppWriter.Put(appDir, SupportTranslator.ModulePath, support.Module.Source, result.Files);
+            }
 
             foreach (var unit in touched)
             {
@@ -175,7 +223,7 @@ public sealed class ReactAppGenerator
             gate.Iterations++;
         }
 
-        gate.Demoted = demoted.Values.Sum(s => s.Count);
+        gate.Demoted = demoted.Values.Sum(s => s.Count) + (support?.Demoted.Count ?? 0);
         gate.RemainingErrors = diagnostics?.Count ?? 0;
         foreach (var d in (diagnostics ?? new()).Take(40))
             result.Issues.Add(new GenerationIssue(Path.GetFileNameWithoutExtension(d.File), "compile-error", $"{d.File}({d.Line}): {d.Code} {d.Message}"));
@@ -200,7 +248,7 @@ public sealed class ReactAppGenerator
     }
 
     private static string Report(IrFolder ir, string entry, GenerationOptions options, SpecCatalog spec,
-        List<(string Unit, int Depth, GeneratedPage Page)> pages, GenerationResult result, List<string> outOfScope, List<ContractEmitResult> contracts, bool translate, GateSummary gate)
+        List<(string Unit, int Depth, GeneratedPage Page)> pages, GenerationResult result, List<string> outOfScope, List<ContractEmitResult> contracts, bool translate, GateSummary gate, SupportModule? supportModule)
     {
         var sb = new StringBuilder();
         sb.AppendLine("# Migration report — react-app");
@@ -246,6 +294,26 @@ public sealed class ReactAppGenerator
                 sb.AppendLine();
                 sb.AppendLine("Most common reasons a statement stayed commented:");
                 foreach (var g in reasons) sb.AppendLine($"- {g.Count()}× {g.Key}");
+            }
+
+            if (supportModule is not null)
+            {
+                var sm = supportModule.Methods;
+                sb.AppendLine();
+                sb.AppendLine("### Project classes (`src/support/index.ts`)");
+                sb.AppendLine();
+                sb.AppendLine($"{supportModule.Classes} classes/enums from the project's own non-form code (`main`, `Preferences`, data classes, enums); {sm.Count} methods/accessors/constructors: "
+                              + $"**{sm.Count(m => m.Status == TranslationStatus.Complete)} complete**, {sm.Count(m => m.Status == TranslationStatus.Partial)} partial, "
+                              + $"{sm.Count(m => m.Status == TranslationStatus.NotTranslated)} not translated (typed stubs; original C# kept as comments).");
+                var supportReasons = sm.SelectMany(m => m.Reasons).Select(r => System.Text.RegularExpressions.Regex.Replace(r, @"'[^']*'", "'…'"))
+                    .GroupBy(r => r).OrderByDescending(g => g.Count()).Take(10).ToList();
+                if (supportReasons.Count > 0)
+                {
+                    sb.AppendLine();
+                    sb.AppendLine("Most common reasons in project classes:");
+                    foreach (var g in supportReasons) sb.AppendLine($"- {g.Count()}× {g.Key}");
+                }
+                foreach (var note in supportModule.Notes) sb.AppendLine($"- {note}");
             }
         }
 

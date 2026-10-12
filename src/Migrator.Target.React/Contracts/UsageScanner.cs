@@ -25,7 +25,7 @@ public static partial class UsageScanner
     /// Regex scan over member types and bodies. Matches simple type names that are unique in the contract. Misses calls through aliases or
     /// `using static`; a miss only means a method is not emitted.
     /// </summary>
-    public static ContractUsage Scan(AssemblyContract contract, IEnumerable<UnitIr> units, bool all)
+    public static ContractUsage Scan(AssemblyContract contract, IEnumerable<UnitIr> units, bool all, IEnumerable<WebFormsMigrator.IR.Models.MemberIr>? extraMembers = null)
     {
         var usage = new ContractUsage();
         var bySimple = contract.Types.Where(t => !t.FullName.Contains('+'))
@@ -39,7 +39,7 @@ public static partial class UsageScanner
             return usage;
         }
 
-        var texts = units.SelectMany(u => u.Page.Members)
+        var texts = units.SelectMany(u => u.Page.Members).Concat(extraMembers ?? Enumerable.Empty<WebFormsMigrator.IR.Models.MemberIr>())
             .Select(m => string.Join(' ', new[] { m.Type }.Concat(m.Parameters.Select(p => p.Type)).Append(m.Body ?? ""))).ToList();
 
         var words = new HashSet<string>(StringComparer.Ordinal);

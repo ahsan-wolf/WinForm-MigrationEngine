@@ -178,6 +178,13 @@ public sealed partial class PageGenerator
         sb.AppendLine($"import {{ {string.Join(", ", lib)} }} from '@wfm/ui-react';");
         foreach (var (comp, file) in c.PageImports) sb.AppendLine($"import {{ {comp} }} from './{file}';");
         if (c.Translation is { UsesFormat: true }) sb.AppendLine("import { formatString } from '../lib/csharp';");
+        if (_translation?.Support is { } supportRegistry)
+        {
+            var codeText = PageTranslator.StripStrings(string.Join("\n", handlerCode.Concat(jsx).Where(l => !l.TrimStart().StartsWith("//", StringComparison.Ordinal))
+                .Concat(c.Translation!.FieldInitials.Values).Concat(c.Translation.CtorProps.Select(p => p.Type + " " + p.Default))));
+            var used = supportRegistry.Classes.Keys.Where(n => Regex.IsMatch(codeText, $@"(?<![\w.]){Regex.Escape(n)}\b")).OrderBy(n => n, StringComparer.Ordinal).ToList();
+            if (used.Count > 0) sb.AppendLine($"import {{ {string.Join(", ", used)} }} from '../support';");
+        }
         if (c.Translation is { FixturesImport.Length: > 0 } fx && usesFields && fx.CtorProps.Any(p => p.Default != null && p.Default.Contains("fixtures.") && fx.FieldInitials.Values.Contains(p.Local)))
             sb.AppendLine($"import {{ fixtures }} from '{fx.FixturesImport}';");
         if (serviceImport is not null) sb.AppendLine(serviceImport);

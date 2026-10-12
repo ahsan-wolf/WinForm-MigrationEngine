@@ -78,6 +78,9 @@ public sealed class MemberFunction
     public string TsName { get; init; } = "";
     public bool IsAsync { get; set; }
 
+    /// <summary>Qualifier for calls from inside the same support class (<c>main.</c> or <c>this.</c>); empty for page functions.</summary>
+    public string Prefix { get; init; } = "";
+
     /// <summary>Event-handler shape (object sender, EventArgs e): callers' arguments are dropped.</summary>
     public bool IgnoresArgs { get; init; }
 }
@@ -90,6 +93,13 @@ public sealed class PageScope
 
     /// <summary>Controls of type ListView: their Items/SelectedItems/Columns live in the model (`vm.&lt;id&gt;.items`).</summary>
     public HashSet<string> ListViews { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>The project's own non-UI classes (`main`, `Preferences`, enums, data classes), emitted as <c>src/support</c>.</summary>
+    public IReadOnlyDictionary<string, SupportClassInfo> Support { get; init; } = new Dictionary<string, SupportClassInfo>();
+
+    /// <summary>True when translating a support class: fields are `Class.x` / `this.x`, and UI (dialogs, closing) is not available.</summary>
+    public bool IsModule { get; init; }
+    public string OwnerName { get; init; } = "";
     public Dictionary<string, MemberIr> Fields { get; } = new(StringComparer.Ordinal);
     public Dictionary<string, List<MemberFunction>> Functions { get; } = new(StringComparer.Ordinal);
     public ContractVocabulary Vocabulary { get; init; } = ContractVocabulary.Empty;
@@ -115,6 +125,9 @@ public sealed class ContractVocabulary
     private readonly ContractEmitResult? _result;
 
     public ContractVocabulary(ContractEmitResult? result) => _result = result;
+
+    /// <summary>Simple names of support classes/enums: valid TypeScript type names in generated code.</summary>
+    public HashSet<string> SupportTypes { get; } = new(StringComparer.Ordinal);
 
     public string InstanceName => _result?.InstanceName ?? "";
     public string ServiceImport => _result?.ServiceImport ?? "";
@@ -180,6 +193,7 @@ public sealed class ContractVocabulary
             case "DateTime": return "string";
             case "ListViewItem": return "WfListItem";
         }
+        if (SupportTypes.Contains(name)) return name;
         if (_result is not null && _result.TypeNameBySimple.TryGetValue(name, out var ts))
         {
             used.Add(ts);

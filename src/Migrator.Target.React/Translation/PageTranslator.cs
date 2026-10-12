@@ -13,6 +13,7 @@ public sealed class TranslationEnv
     public IReadOnlyDictionary<string, string> Components { get; init; } = new Dictionary<string, string>();
     public IReadOnlyDictionary<string, UnitIr> Units { get; init; } = new Dictionary<string, UnitIr>();
     public ISet<string> Generated { get; init; } = new HashSet<string>();
+    public SupportRegistry? Support { get; init; }
 }
 
 /// <summary>Where an event handler method is wired: first control + event that uses it.</summary>
@@ -42,6 +43,7 @@ public static class PageTranslator
             Components = env.Components,
             Units = env.Units,
             Generated = env.Generated,
+            Support = env.Support?.Classes ?? new Dictionary<string, SupportClassInfo>(),
             Output = output
         };
         foreach (var node in Walk(root).Skip(1))
@@ -141,7 +143,7 @@ public static class PageTranslator
     };
 
     /// <summary>A sample value for a constructor argument of a contract data type (first fixture row, or the fixture list), or a neutral primitive.</summary>
-    private static string? MockDefault(PageScope scope, string sourceType, string tsType, bool haveFixtures)
+    internal static string? MockDefault(PageScope scope, string sourceType, string tsType, bool haveFixtures)
     {
         var parsed = SyntaxFactory.ParseTypeName(sourceType);
         if (parsed is ArrayTypeSyntax { RankSpecifiers.Count: 1 } array && haveFixtures && scope.Vocabulary.DtoTypeName(Simple(array.ElementType)) is { } elementDto)
@@ -153,7 +155,7 @@ public static class PageTranslator
 
     // --------------------------------------------------------------------------------------------------- async
 
-    private static void ColorAsync(PageScope scope, List<MemberIr> methods)
+    internal static void ColorAsync(PageScope scope, List<MemberIr> methods)
     {
         var direct = new HashSet<string>(StringComparer.Ordinal);
         var calls = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
@@ -176,6 +178,11 @@ public static class PageTranslator
                         break;
                     case MemberAccessExpressionSyntax { Expression: ThisExpressionSyntax } t when scope.Functions.ContainsKey(t.Name.Identifier.Text):
                         called.Add(t.Name.Identifier.Text);
+                        break;
+                    case MemberAccessExpressionSyntax { Expression: IdentifierNameSyntax sid } sma
+                        when scope.Support.TryGetValue(sid.Identifier.Text, out var supportClass) && !scope.Fields.ContainsKey(sid.Identifier.Text)
+                             && supportClass.Functions.TryGetValue(sma.Name.Identifier.Text, out var supportFns):
+                        if (supportFns.Any(fn => fn.IsAsync)) direct.Add(m.Name);
                         break;
                     case MemberAccessExpressionSyntax ma:
                         var recv = ma.Expression.ToString();
@@ -203,7 +210,7 @@ public static class PageTranslator
             foreach (var fn in overloads) fn.IsAsync = asyncNames.Contains(fn.Member.Name);
     }
 
-    private static string? FacadeName(ExpressionSyntax e) => e switch
+    internal static string? FacadeName(ExpressionSyntax e) => e switch
     {
         IdentifierNameSyntax id => id.Identifier.Text,
         MemberAccessExpressionSyntax { Expression: IdentifierNameSyntax ns } m when ns.Identifier.Text is "ECMLibrary" or "System" => m.Name.Identifier.Text,
@@ -266,7 +273,7 @@ public static class PageTranslator
         t.Lines = lines;
     }
 
-    private static string Params(PageScope scope, MemberIr m, MemberFunction fn, string bodyText)
+    internal static string Params(PageScope scope, MemberIr m, MemberFunction fn, string bodyText)
     {
         var parts = new List<string>();
         foreach (var p in m.Parameters)
@@ -294,7 +301,7 @@ public static class PageTranslator
     }
 
     /// <summary>A neutral return value for a stubbed function so its callers still type-check.</summary>
-    private static string? DefaultReturn(PageScope scope, MemberIr m)
+    internal static string? DefaultReturn(PageScope scope, MemberIr m)
     {
         var ts = scope.Vocabulary.MapType(m.Type, scope.Output.TypeImports);
         return m.Type == "void" ? null : ts switch
@@ -307,7 +314,7 @@ public static class PageTranslator
         };
     }
 
-    private static string FieldInitial(PageScope scope, MemberIr field)
+    internal static string FieldInitial(PageScope scope, MemberIr field)
     {
         if (!string.IsNullOrWhiteSpace(field.Body))
         {
@@ -335,12 +342,22 @@ public static class PageTranslator
             _ when ts.EndsWith("[]") => $"[] as {ts}",
             _ when ts.StartsWith("Record<") => $"{{}} as {ts}",
             "unknown" => "undefined as unknown",
+            _ when scope.Support.TryGetValue(ts, out var supportType) => SupportDefault(supportType, ts),
             _ => $"null as unknown as {ts}"
         };
     }
 
+    /// <summary>Default for a field of a support type: the first enum value, or a new instance when the class needs no constructor arguments.</summary>
+    internal static string SupportDefault(SupportClassInfo type, string ts)
+    {
+        if (type.IsEnum) return type.Ir.EnumValues.Count > 0 ? $"{ts}.{type.Ir.EnumValues[0].Name}" : $"0 as {ts}";
+        if (type.Ir.IsStatic) return $"null as unknown as {ts}";
+        var ctors = type.Constructors.ToList();
+        return ctors.Count == 0 || ctors.Any(c => c.Parameters.All(p => p.DefaultValue != null)) ? $"new {ts}()" : $"null as unknown as {ts}";
+    }
+
     /// <summary>Reserved words get a suffix; `useX` would be mistaken for a React hook by the lint rules, so it becomes `doUseX`.</summary>
-    private static string SafeName(string name) =>
+    internal static string SafeName(string name) =>
         JsReserved.Contains(name) ? name + "_" : Regex.IsMatch(name, "^use[A-Z]") ? "do" + char.ToUpperInvariant(name[0]) + name[1..] : name;
 
     /// <summary>
@@ -348,7 +365,7 @@ public static class PageTranslator
     /// or used only by statements that fell back) becomes `_name`; (2) a `let x = init` that no emitted line reassigns becomes `const`.
     /// Decided on the emitted lines, so it always matches what ships.
     /// </summary>
-    private static List<string> RenameUnusedLocals(List<string> body)
+    internal static List<string> RenameUnusedLocals(List<string> body)
     {
         var result = new List<string>(body);
         string Code() => string.Join("\n", result.Where(l => !l.TrimStart().StartsWith("//", StringComparison.Ordinal)));
@@ -372,9 +389,21 @@ public static class PageTranslator
                 var renamed = Regex.Replace(result[i], $@"^(\s*(?:const|let) |\s*for \((?:const|let) )({e})\b|(catch \()({e})\)",
                     m => m.Groups[2].Success ? $"{m.Groups[1].Value}_{name}" : $"{m.Groups[3].Value}_{name})");
                 if (renamed == result[i]) continue;
-                result[i] = renamed;
-                break;
+                result[i] = renamed; // every declaration of the name: nothing reads it anywhere in the method
             }
+        }
+
+        // A loop variable the loop body never reads (the body may be commented out, or the name is reused elsewhere in the method).
+        for (var i = 0; i < result.Count; i++)
+        {
+            var loop = Regex.Match(result[i], @"^(\s*)for \(const (\w+) of ");
+            if (!loop.Success || result[i].TrimStart().StartsWith("//", StringComparison.Ordinal) || loop.Groups[2].Value.StartsWith('_')) continue;
+            var closing = loop.Groups[1].Value + "}";
+            var close = result.FindIndex(i + 1, l => l == closing);
+            if (close < 0) continue;
+            var inner = StripStrings(string.Join("\n", result.Skip(i + 1).Take(close - i - 1).Where(l => !l.TrimStart().StartsWith("//", StringComparison.Ordinal))));
+            if (!Regex.IsMatch(inner, $@"(?<![\w.]){Regex.Escape(loop.Groups[2].Value)}\b"))
+                result[i] = Regex.Replace(result[i], @"for \(const (\w+) of ", "for (const _$1 of ");
         }
 
         for (var i = 0; i < result.Count; i++)

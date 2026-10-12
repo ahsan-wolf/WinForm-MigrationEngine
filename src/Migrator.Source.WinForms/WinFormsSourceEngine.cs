@@ -1,5 +1,6 @@
 using Migrator.Engine.Contracts;
 using Migrator.Engine.Projections;
+using Migrator.Engine.Support;
 using Migrator.Source.WinForms.Extraction;
 using Migrator.Source.WinForms.Projections;
 using WebFormsMigrator.IR.Contracts;
@@ -7,7 +8,7 @@ using WebFormsMigrator.IR.Models;
 
 namespace Migrator.Source.WinForms;
 
-public sealed class WinFormsSourceEngine : IProjectAwareSourceEngine, IIrProjectionProvider, IUnsupportedReporter
+public sealed class WinFormsSourceEngine : IProjectAwareSourceEngine, IIrProjectionProvider, IUnsupportedReporter, ISupportSourceEngine
 {
     public string Id => "winforms";
     public string Technology => "WinForms";
@@ -28,6 +29,9 @@ public sealed class WinFormsSourceEngine : IProjectAwareSourceEngine, IIrProject
             u => new WinFormsSourceText(File.ReadAllText(u.DesignerPath), File.ReadAllText(u.CodeBehindPath), ResxReader.ReadSibling(u.CodeBehindPath)));
         return Pipeline(userControls);
     }
+
+    /// <summary>The project's own non-UI classes (helpers, data classes, enums), written as support.ir.json.</summary>
+    public SupportFileIr ExtractSupport(ProjectAnalysis analysis) => WinFormsSupportExtractor.Extract(analysis);
 
     /// <summary>WinForms-specific facet files on top of the generic ones the host writes (controls, control-properties, code-behind).</summary>
     public IEnumerable<IIrProjection> Projections { get; } = new IIrProjection[] { new WinFormsLayoutProjection() };

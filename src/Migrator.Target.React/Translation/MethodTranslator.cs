@@ -342,7 +342,15 @@ internal sealed partial class MethodTranslator
                     default: throw new Untranslatable("pattern-based switch label");
                 }
             }
-            lines.AddRange(Ind(Ind(section.Statements.SelectMany(Stmt))));
+            var sectionBody = section.Statements.SelectMany(Stmt).ToList();
+            // `case x: const y = ...` is a lexical declaration in a case clause: scope it with a block.
+            if (section.Statements.Any(st => st is LocalDeclarationStatementSyntax))
+            {
+                lines[^1] += " {";
+                lines.AddRange(Ind(Ind(sectionBody)));
+                lines.Add("  }");
+            }
+            else lines.AddRange(Ind(Ind(sectionBody)));
         }
         lines.Add("}");
         return lines;
@@ -506,6 +514,8 @@ internal sealed partial class MethodTranslator
         if (_poisoned.Contains(name)) throw new Untranslatable($"depends on '{name}', whose declaration was not translated");
         if (_locals.Contains(name)) return name;
         if (_formLocals.ContainsKey(name)) throw new Untranslatable($"dialog variable '{name}' used as a value (its properties/results are not translated)");
+        if (_scope.IsModule && _scope.Fields.TryGetValue(name, out var ownField))
+            return (ownField.IsStatic ? _scope.OwnerName + "." : "this.") + name;
         if (_scope.Fields.ContainsKey(name))
         {
             if (_constantContext) throw new Untranslatable($"field '{name}' referenced in an initializer");
@@ -553,6 +563,9 @@ internal sealed partial class MethodTranslator
             if (VisualProps.Contains(name)) throw new Dropped($"{controlId}.{name} is appearance-only");
             throw new Untranslatable($"control member {controlId}.{name} (not supported by the library or the model yet)");
         }
+
+        // Members of the project's own classes and enums (main.X, Preferences.MyPreferences, enum_Page.First).
+        if (SupportTypeOf(left) is { } supportType) return SupportMember(supportType, name);
 
         // Static members of well-known types.
         var typeName = StaticTypeName(left);
@@ -610,6 +623,56 @@ internal sealed partial class MethodTranslator
             "Length" or "Count" => $"{receiver}.length",
             _ => $"{receiver}.{name}"
         };
+    }
+
+    // -------------------------------------------------------------------------------------------- support classes
+
+    /// <summary>The support class (or nested enum/struct) an expression names, unless a local, field or control shadows it.</summary>
+    private SupportClassInfo? SupportTypeOf(ExpressionSyntax e)
+    {
+        if (_scope.Support.Count == 0) return null;
+        switch (e)
+        {
+            case IdentifierNameSyntax id:
+                var n = id.Identifier.Text;
+                if (_locals.Contains(n) || _poisoned.Contains(n) || _scope.Fields.ContainsKey(n) || _scope.Controls.Contains(n) || _formLocals.ContainsKey(n)) return null;
+                return _scope.Support.GetValueOrDefault(n);
+            case MemberAccessExpressionSyntax { Expression: IdentifierNameSyntax } m when SupportTypeOf(((MemberAccessExpressionSyntax)e).Expression) is { } outer
+                && _scope.Support.TryGetValue(m.Name.Identifier.Text, out var nested) && nested.Ir.Container == outer.Name:
+                return nested;
+            default:
+                return null;
+        }
+    }
+
+    private static string SupportMember(SupportClassInfo type, string name)
+    {
+        var exists = type.IsEnum ? type.Ir.EnumValues.Any(v => v.Name == name) : type.Fields.ContainsKey(name) || type.Functions.ContainsKey(name);
+        if (!exists) throw new Untranslatable($"{type.Name}.{name} not found in the extracted class");
+        return $"{type.Name}.{name}";
+    }
+
+    private string CallSupport(SupportClassInfo type, string method, InvocationExpressionSyntax inv, bool top)
+    {
+        var fn = type.Resolve(method, inv.ArgumentList.Arguments.Count) ?? throw new Untranslatable($"{type.Name}.{method}(...) not found in the extracted class", wireToRealApi: true);
+        var call = $"{type.Name}.{fn.TsName}({string.Join(", ", Args(inv))})";
+        return fn.IsAsync ? Await(call, top) : call;
+    }
+
+    private string CreateSupport(SupportClassInfo type, ObjectCreationExpressionSyntax oc)
+    {
+        var args = oc.ArgumentList?.Arguments ?? default;
+        var ctors = type.Constructors.ToList();
+        var chosen = ctors.OrderByDescending(c => c.Parameters.Count).FirstOrDefault();
+        var min = ctors.Count == 0 ? 0 : ctors.Min(c => c.Parameters.Count(p => p.DefaultValue == null));
+        var max = chosen?.Parameters.Count ?? 0;
+        if (args.Count < min || args.Count > max) throw new Untranslatable($"constructor of {type.Name} with {args.Count} argument(s) is not available");
+        var creation = $"new {type.Name}({string.Join(", ", Args(oc.ArgumentList ?? SyntaxFactory.ArgumentList()))})";
+        if (oc.Initializer is not { } init) return creation;
+
+        var fields = init.Expressions.Select(x => x is AssignmentExpressionSyntax { Left: IdentifierNameSyntax n } a
+            ? $"{n.Identifier.Text}: {Ex(a.Right)}" : throw new Untranslatable("collection initializer on a project class"));
+        return $"Object.assign({creation}, {{ {string.Join(", ", fields)} }})";
     }
 
     // ------------------------------------------------------------------------------------------------- ListView
@@ -810,9 +873,23 @@ internal sealed partial class MethodTranslator
 
         var left = Ex(b.Left);
         var right = Ex(b.Right);
+        // Non-short-circuit boolean `&` / `|` (both sides are conditions): `&&` / `||` (same result; a side effect on the right of a false `&` is skipped).
+        if (op is "&" or "|" && IsConditionLike(b.Left) && IsConditionLike(b.Right)) op = op == "&" ? "&&" : "||";
         op = op switch { "==" => "===", "!=" => "!==", _ => op };
         return $"{left} {op} {right}";
     }
+
+    /// <summary>Syntactically a boolean: a comparison, a logical operation, `!x`, `true`/`false`, or a parenthesised one.</summary>
+    private static bool IsConditionLike(ExpressionSyntax e) => e switch
+    {
+        ParenthesizedExpressionSyntax p => IsConditionLike(p.Expression),
+        PrefixUnaryExpressionSyntax u => u.IsKind(SyntaxKind.LogicalNotExpression),
+        LiteralExpressionSyntax l => l.IsKind(SyntaxKind.TrueLiteralExpression) || l.IsKind(SyntaxKind.FalseLiteralExpression),
+        BinaryExpressionSyntax b => b.Kind() is SyntaxKind.EqualsExpression or SyntaxKind.NotEqualsExpression or SyntaxKind.LessThanExpression
+            or SyntaxKind.LessThanOrEqualExpression or SyntaxKind.GreaterThanExpression or SyntaxKind.GreaterThanOrEqualExpression
+            or SyntaxKind.LogicalAndExpression or SyntaxKind.LogicalOrExpression,
+        _ => false
+    };
 
     private bool TryDialogCompare(BinaryExpressionSyntax b, out string result)
     {
@@ -892,6 +969,7 @@ internal sealed partial class MethodTranslator
         }
         if (type is "Dictionary" or "SortedDictionary" or "Hashtable" && args.Count == 0 && oc.Initializer is null) return "{}";
         if (type == "ListViewItem") return CreateListItem(oc);
+        if (_scope.Support.TryGetValue(type, out var supportNew) && !supportNew.IsEnum && !supportNew.Ir.IsStatic) return CreateSupport(supportNew, oc);
         if (type.EndsWith("Exception", StringComparison.Ordinal) || type == "Exception")
             return $"new Error({string.Join(", ", args.Take(1).Select(x => Ex(x.Expression)))})";
         if (type == "Guid" && args.Count == 0) return "crypto.randomUUID()";
@@ -937,10 +1015,12 @@ internal sealed partial class MethodTranslator
 
     private static string Await(string call, bool top) => top ? $"await {call}" : $"(await {call})";
 
-    private List<string> Args(InvocationExpressionSyntax inv)
+    private List<string> Args(InvocationExpressionSyntax inv) => Args(inv.ArgumentList);
+
+    private List<string> Args(ArgumentListSyntax arguments)
     {
         var list = new List<string>();
-        foreach (var arg in inv.ArgumentList.Arguments)
+        foreach (var arg in arguments.Arguments)
         {
             if (!arg.RefKindKeyword.IsKind(SyntaxKind.None)) throw new Untranslatable("ref/out argument");
             if (arg.NameColon is not null) throw new Untranslatable("named argument");
@@ -986,6 +1066,8 @@ internal sealed partial class MethodTranslator
             if (formType is not null) return ShowForm(formType, receiver is ObjectCreationExpressionSyntax { ArgumentList.Arguments.Count: > 0 }, top);
         }
 
+        if (SupportTypeOf(receiver) is { IsEnum: false } supportClass) return CallSupport(supportClass, method, inv, top);
+
         var typeName = StaticTypeName(receiver);
         if (typeName is not null) return StaticCall(typeName, method, inv, top);
 
@@ -1021,6 +1103,7 @@ internal sealed partial class MethodTranslator
 
     private string CloseCall()
     {
+        if (_scope.IsModule) throw new Untranslatable("closing the form from a non-form class");
         _scope.Output.UsesOnClose = true;
         var result = _pendingResult is null ? "" : Str(_pendingResult);
         _pendingResult = null;
@@ -1032,12 +1115,13 @@ internal sealed partial class MethodTranslator
         var argc = inv.ArgumentList.Arguments.Count;
         var fn = _scope.Resolve(name, argc) ?? throw new Untranslatable($"call to {name}(...) not resolvable from IR", wireToRealApi: true);
         var args = fn.IgnoresArgs ? new List<string>() : Args(inv);
-        var call = $"{fn.TsName}({string.Join(", ", args)})";
+        var call = $"{fn.Prefix}{fn.TsName}({string.Join(", ", args)})";
         return fn.IsAsync ? Await(call, top) : call;
     }
 
     private string MessageBox(InvocationExpressionSyntax inv, bool top)
     {
+        if (_scope.IsModule) throw new Untranslatable("MessageBox in a non-form class (dialogs are a React hook of the page)");
         var args = inv.ArgumentList.Arguments;
         if (args.Count == 0) throw new Untranslatable("MessageBox.Show()");
         _scope.Output.UsesDialog = true;
@@ -1051,6 +1135,7 @@ internal sealed partial class MethodTranslator
 
     private string ShowForm(string formType, bool hasArgs, bool top)
     {
+        if (_scope.IsModule) throw new Untranslatable("opening a form from a non-form class");
         _scope.Output.UsesDialog = true;
         if (!_scope.Generated.Contains(formType))
         {
