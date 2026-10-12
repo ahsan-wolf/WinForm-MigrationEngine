@@ -150,6 +150,7 @@ public interface ITargetEngine : IEngine {
 public interface IProjectAwareSourceEngine : ISourceEngine { IEnumerable<IIrExtractor> CreateExtractors(ProjectAnalysis a); } // needs whole-project knowledge (UserControl inlining)
 public interface IIrProjectionProvider { IEnumerable<IIrProjection> Projections { get; } }   // technology-specific facet files (WinForms: layout)
 public interface IUnsupportedReporter { IEnumerable<string> FindUnsupported(IrExtractionContext c); } // unhandled constructs -> project.ir.json Shared.Unsupported
+public interface IProjectTargetEngine : ITargetEngine { GenerationResult GenerateProject(string irFolder, string outDir, GenerationOptions o); } // whole-app generation from the IR FOLDER only (never a source engine)
 ```
 Host pieces: `EngineRegistry`, `EngineLoader` (reads `engines.json`), `SourceIrRunner` (per-unit failure isolation), `IrFileWriter` + `IIrProjection` (facet files), `WinNavigation` (see §4.2).
 
@@ -239,6 +240,8 @@ The controls live in a **separate, UI-independent library** under `ui-library/`.
 | `@wfm/ui-angular` | Angular 17+ standalone components/directives implementing the spec |
 | `@wfm/ui-html` | HTML/CSS + vanilla JS web-friendly components; jQuery adapter (`$.fn.wfDataGrid`, …) |
 
+**As built:** `ui-spec` 0.1.0 (`controls.json` + `tokens.css`) and `@wfm/ui-react` 0.1.0 exist, with the MVP set the pilot's startup form needs (see `ui-library/README.md`). `ui-angular` and `ui-html` are not started. Generators read `controls.json` as data (`winformsTypes`, `props[].from/transform`, `events[].from`).
+
 Hard rules:
 1. **Library-first generation.** Generated pages import `Wf*` components only. They never import AG Grid / DataTables / Material / jstree etc. directly — those are the library's private implementation detail (peer deps).
 2. **Zero coupling.** The library has no reference to IR, WinForms, the engine, or generated apps. It must be installable and usable by hand-written apps.
@@ -264,6 +267,7 @@ Small local models (e.g. phi4-mini ≈ 3.8B) are good at mechanical translation,
 | Control/feature with no library component | `<WfUnsupported …/>` + `// TODO: no {Target} equivalent generated — replace manually` |
 | Type inferred from columns/format | `// inferred — check against backend contract` |
 | Mock auth / mock API / in-memory state | `// MOCK — replace with real implementation` |
+| Member/method of an external contract that looks like a secret (password, key, license, connection string, credentials) | Omitted from generated services, or a credentials-object parameter is stripped and the operation kept; listed in `MIGRATION_REPORT.md` (SERVER-ONLY). Never in browser code |
 
 Never silently drop code: untranslatable code stays as a commented original C# block + TODO + entry in `MIGRATION_REPORT.md`.
 
@@ -310,7 +314,8 @@ Migration run steps: Analyze (find Designer/code-behind pairs, UserControls firs
 dotnet build WinFormsMigrator.sln
 dotnet run --project src/Migrator.Cli -- engines [--config engines.json]       # EXISTS: list engines that load
 dotnet run --project src/Migrator.Cli -- ir --source <path> --out <dir>      # EXISTS: IR only -> six files per unit + project.ir.json
-dotnet run --project src/Migrator.Cli -- migrate --source <path> --target react-app --out <dir>   # NOT YET (needs target engines, P3)
+dotnet run --project src/Migrator.Cli -- migrate --source <path> --out <dir> [--target react-app] [--entry <form>] [--depth <n|all>] [--contract <contract.json>]...   # EXISTS: ir step + app into <out>/react-app
+dotnet run --project src/Migrator.Cli -- contract --assembly <dll> --out <dir>   # EXISTS: public API of a managed assembly from metadata only (never executed); use a git-ignored folder
 set WFM_LLM_TARGET=react-app                                                   # opt-in LLM translation
 cd ui-library/ui-react && npm ci && npm run build && npm run lint
 ```

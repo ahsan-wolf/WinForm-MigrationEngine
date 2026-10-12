@@ -1,23 +1,26 @@
 # WinForms Modernization Engine — Project Plan & Analysis
 
-**Status:** v0.2 — P0 done, P1 largely done (see §0) · **Date:** 2026-10-11 · **Owner:** TBD
+**Status:** v0.3 — P0, P1 done; P2/P3 React slice done (see §0) · **Date:** 2026-10-12 · **Owner:** TBD
 **Related docs:** `CLAUDE.md` (rules & architecture) · `SKILLS.md` (control mappings) · `WINFORMS_MIGRATION_PROMPT.md`
 
 > Estimates are **planning-grade (±30%)**, in person-days (PD), and assume reuse of the existing WebFormsMigrator IR platform. They must be re-baselined after the Phase 1 spike and the first pilot application.
 
 ---
 
-## 0. Progress snapshot (as of 2026-10-11)
+## 0. Progress snapshot (as of 2026-10-12)
 
 | Phase | State | Notes |
 |---|---|---|
 | **P0 Foundation** | ✅ done (M0 met) | `net10.0` solution; engine contracts, registry, `engines.json` allow-list, plugin loader with isolated load contexts and schema check; `migrator engines`. M0 verified with throwaway plugins (valid / wrong-schema / missing / unlisted) — no test projects, per rule. |
 | **P1 WinForms source engine** | 🟡 largely done | Prototype ported to real `IIrExtractor`s (tree → members → semantics → workflows → navigation); project analyzer; **six IR files + `project.ir.json`**; designer hardening (menus, tabs, split panels, grid columns, TableLayout cells/styles, items, DataBindings, tooltips, `.resx`); unhandled statements reported. `migrator ir` works end to end. |
-| P2 UI library / P3 targets / P4 LLM / P5 report / P6 pilots | ⏳ not started | `ui-library/` untouched. |
+| **P2 UI library** | 🟡 React MVP | `ui-spec` 0.1.0 + `@wfm/ui-react` (20 components: form, menus, toolbar, status bar, split, panel, label/button/textbox/combobox/checkbox, progress, picture, grid, context menu, dialog service, `WfUnsupported`), scoped to the pilot's startup form. Missing: ListView, TreeView, tabs, radio group, date picker, group box. `ui-angular` / `ui-html` not started. |
+| **P3 Target engines** | 🟡 React slice | `migrator migrate` generates an app from the IR folder + `ui-spec`: layout from Dock/Location (no pixels), `ShowDialog` -> dialog service, state for inputs, mock grid rows, `MIGRATION_REPORT.md`. Pilot: 17 forms generated; install, `tsc`, build and lint with zero errors. `migrate --contract` emits typed mock services from an assembly contract (secrets omitted). Angular and HTML+jQuery targets not started. |
+| **Tooling** | ✅ | `migrator contract` (public API of a managed assembly from metadata only, never executed); `tools/win-ir-viewer` (React page for reviewing IR). |
+| P4 LLM / P5 report polish / P6 pilots | ⏳ P4 next | Handler bodies are still commented C# (so most generated buttons do nothing). P4 (Ollama) is the next slice. The first pilot run (ECMNavigator) is in `docs/PILOT_FINDINGS.md`. |
 
-**P1 remaining:** run a **real pilot Designer.cs** (all verification so far used hand-written fixtures — risk R14); externalize `SemanticKeywords` (1 PD); populate `Shared.Settings/Resources/Dependencies`; third-partial-file handler resolution; multi-level workflow steps. Milestone M1 (sample form → React) is blocked on P2/P3.
+**P1 remaining (small):** externalize `SemanticKeywords` (1 PD); populate `Shared.Settings/Resources/Dependencies`; handlers in a third partial file; multi-level workflow steps; flag controls created at runtime (loops, `Controls.Add` in code). The real pilot run is done: 36/36 units extract (892 controls, 420 workflows, 0 unresolved handlers) after three extractor bugs it exposed were fixed (overloaded handlers, navigation in helper methods, file dialogs counted as navigation). M1-lite is met (startup form -> React shell that builds and renders); full M1 needs handler translation (P4).
 
-**Decisions taken so far:** D1 → engine on `net10.0`; shared IR still `net8.0` (referenced from net10 without issue). D3 (interim) → `ProjectReference` to a sibling checkout via `build/IrReference.props`, NuGet switch ready; **the WebFormsMigrator repo is never modified from here**. NavigationIr gap → WinForms vocabulary mapped onto the existing fields via `WinNavigation` (no schema change).
+**Decisions taken so far:** D1 -> engine on `net10.0`; shared IR still `net8.0`. D3 (interim) -> `ProjectReference` to a sibling checkout via `build/IrReference.props`; **the WebFormsMigrator repo is never modified from here**. D6 -> pilot is ECMNavigator (35 forms + 1 user control). NavigationIr gap -> WinForms vocabulary on existing fields via `WinNavigation`. Pilot backend `ECMLibrary` is a SOAP web-service client (not a database layer): the app needs a thin REST layer behind a typed `ecmService`; secrets are never emitted to the browser. Local inputs (assemblies) live in git-ignored `local-inputs/`, derived contracts in `local-outputs/`; neither is ever committed.
 
 ---
 

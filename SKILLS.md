@@ -646,5 +646,8 @@ Generators read these from `ControlNodeIr.Attributes` / `PageIr` (never from the
 | Form events (`this.Load += ...`) | `RootControl.Attributes["OnLoad"]` + `WorkflowIr` | Skill 1 `Form.Load` |
 | Unrecognized designer statement | `project.ir.json` `Shared.Unsupported` | goes to `MIGRATION_REPORT.md`; never dropped |
 
+### 18.3a React target (`Migrator.Target.React`) - as built
+Reads the IR folder + `ui-spec`; pages import only `@wfm/ui-react`. Dialogs: `ShowDialog` -> `dialog.show(close => <XPage onClose={close}/>)`, `Close/Hide` -> `onClose?.()`. Layout: Dock/Location -> top chrome, free rows (clustered by Y), left/fill/right band, bottom chrome. External binary dependencies: `migrate --contract` emits `src/services/<assembly>/` (types, fixtures, mock service); secret-looking members are omitted. Handler bodies stay commented C# until translation (P4).
+
 ### 18.4 Branch & report reminder
 Every addition is done on a **new branch**, committed locally, **not pushed**; finish with the push + fetch/update command block from `CLAUDE.md` §0.2.
