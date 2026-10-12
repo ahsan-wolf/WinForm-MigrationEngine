@@ -3,6 +3,7 @@ using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Migrator.Engine.Contracts;
+using Migrator.Target.React.Translation;
 using Migrator.Target.React.Spec;
 using WebFormsMigrator.IR.Models;
 
@@ -18,6 +19,17 @@ public sealed class GeneratedPage
     public int Handlers { get; init; }
     public int NavigationHandlers { get; init; }
     public List<string> NonVisual { get; init; } = new();
+
+    // Translation (rules) results; all zero when translation is off.
+    public int MethodsTotal { get; set; }
+    public int MethodsComplete { get; set; }
+    public int MethodsPartial { get; set; }
+    public int MethodsNotTranslated { get; set; }
+    public int MethodsDemoted { get; set; }
+    public List<string> TodoReasons { get; } = new();
+
+    /// <summary>Line ranges (1-based, inclusive) of each translated function in Source; the compile gate maps TypeScript errors back to methods through them.</summary>
+    public List<(string TsName, int Start, int End)> MethodRanges { get; } = new();
 }
 
 /// <summary>
@@ -44,9 +56,11 @@ public sealed partial class PageGenerator
     private readonly IReadOnlyDictionary<string, UnitIr> _units;
     private readonly IReadOnlyDictionary<string, string> _components;
     private readonly ISet<string> _generated;
+    private readonly TranslationEnv? _translation;
 
-    public PageGenerator(SpecCatalog spec, IReadOnlyDictionary<string, UnitIr> units, IReadOnlyDictionary<string, string> components, ISet<string> generated)
+    public PageGenerator(SpecCatalog spec, IReadOnlyDictionary<string, UnitIr> units, IReadOnlyDictionary<string, string> components, ISet<string> generated, TranslationEnv? translation = null)
     {
+        _translation = translation;
         _spec = spec;
         _units = units;
         _components = components;
@@ -93,6 +107,8 @@ public sealed partial class PageGenerator
         /// <summary>True once JSX or code references `vm`; the model is declared only then (an unused declaration fails lint).</summary>
         public bool UsesModel { get; set; }
 
+        public PageTranslation? Translation { get; set; }
+
         public bool ModelHas(string id, string winFormsProp) => Model.TryGetValue(id, out var props) && props.ContainsKey(ModelKey(winFormsProp));
 
         public void ModelSet(string id, string winFormsProp, string initial)
@@ -110,16 +126,41 @@ public sealed partial class PageGenerator
         public void Issue(string category, string message) => Issues.Add(new GenerationIssue(Unit.Name, category, message));
     }
 
-    public GeneratedPage Generate(UnitIr unit)
+    public GeneratedPage Generate(UnitIr unit, ISet<string>? demoted = null)
     {
         var root = unit.Page.RootControl ?? throw new InvalidDataException($"{unit.Name} has no control tree.");
         var component = _components[unit.Name];
         var c = new Ctx(unit, component);
         foreach (var n in Walk(root)) c.ById.TryAdd(n.Id, n);
         Prescan(c, root);
+        if (_translation is not null)
+            c.Translation = PageTranslator.Translate(unit, c.Names, _translation, WiredHandlers(c, root), demoted ?? new HashSet<string>());
 
         var jsx = RenderElement(root, c, isRoot: true) ?? throw new InvalidDataException($"{unit.Name}: root control produced no output.");
-        var handlerCode = BuildHandlers(c);
+        var handlerCode = BuildFunctions(c, jsx);
+        var usesFields = false;
+        string? serviceImport = null;
+        List<string> typeImports = new();
+        if (c.Translation is { } tr)
+        {
+            // Everything the page declares or imports is decided from the text that is actually emitted: a method demoted by the
+            // compile gate, or a statement that fell back, must not leave an unused `dialog`, `vm`, import or type behind.
+            var fieldText = string.Join("\n", tr.FieldInitials.Values);
+            var text = string.Join("\n", jsx.Concat(handlerCode).Where(l => !l.TrimStart().StartsWith("//", StringComparison.Ordinal)));
+            c.UsesDialog = Regex.IsMatch(text, @"\bdialog\.");
+            c.UsesOnClose = Regex.IsMatch(text, @"\bonClose\b");
+            c.UsesModel = Regex.IsMatch(text, @"\bvm\.");
+            usesFields = Regex.IsMatch(text, @"\bf\.");
+            foreach (var comp in tr.PageImports.Where(p => Regex.IsMatch(text, $@"<{p}\b"))) c.PageImports[comp] = comp;
+            foreach (var comp in c.PageImports.Keys.ToList())
+                if (!Regex.IsMatch(text, $@"<{comp}\b")) c.PageImports.Remove(comp);
+            var instance = _translation!.Vocabulary.InstanceName;
+            if (instance.Length > 0 && Regex.IsMatch(text, $@"\b{Regex.Escape(instance)}\."))
+                serviceImport = $"import {{ {instance} }} from '{_translation.Vocabulary.ServiceImport}';";
+            var typeText = text + "\n" + (usesFields ? fieldText : "");
+            typeImports = tr.TypeImports.Where(t => Regex.IsMatch(typeText, $@"\b{Regex.Escape(t)}\b")).ToList();
+            tr.UsesFormat = Regex.IsMatch(text, @"\bformatString\(");
+        }
 
         var sb = new StringBuilder();
         sb.AppendLine($"// Generated by Migrator.Target.React from {unit.Name} ({unit.Page.RelativePath ?? "n/a"}). Not final: see MIGRATION_REPORT.md.");
@@ -127,10 +168,14 @@ public sealed partial class PageGenerator
 
         var lib = new List<string>(c.Lib);
         if (c.UsesDialog) lib.Add("useWfDialog");
-        if (c.UsesModel) lib.Add("useWfModel");
+        if (c.UsesModel || usesFields) lib.Add("useWfModel");
         lib.AddRange(c.LibTypes.Select(t => "type " + t));
         sb.AppendLine($"import {{ {string.Join(", ", lib)} }} from '@wfm/ui-react';");
         foreach (var (comp, file) in c.PageImports) sb.AppendLine($"import {{ {comp} }} from './{file}';");
+        if (c.Translation is { UsesFormat: true }) sb.AppendLine("import { formatString } from '../lib/csharp';");
+        if (serviceImport is not null) sb.AppendLine(serviceImport);
+        if (typeImports.Count > 0 && _translation is not null)
+            sb.AppendLine($"import type {{ {string.Join(", ", typeImports)} }} from '{_translation.Vocabulary.TypesImport}';");
         sb.AppendLine();
         foreach (var t in c.TopLevel) sb.AppendLine(t);
         if (c.TopLevel.Count > 0) sb.AppendLine();
@@ -148,7 +193,14 @@ public sealed partial class PageGenerator
                 sb.AppendLine($"    {Prop(id)}: {{ {string.Join(", ", props.Select(kv => $"{kv.Key}: {kv.Value}"))} }},");
             sb.AppendLine("  });");
         }
-        if (c.UsesDialog || c.States.Count > 0 || c.UsesModel) sb.AppendLine();
+        if (usesFields)
+        {
+            sb.AppendLine("  // Fields of the original form. Initial values come from their C# initializers (a default for the declared type otherwise).");
+            sb.AppendLine("  const f = useWfModel({");
+            foreach (var (name, initial) in c.Translation!.FieldInitials) sb.AppendLine($"    {Prop(name)}: {initial},");
+            sb.AppendLine("  });");
+        }
+        if (c.UsesDialog || c.States.Count > 0 || c.UsesModel || usesFields) sb.AppendLine();
         foreach (var line in handlerCode) sb.AppendLine(line.Length == 0 ? "" : "  " + line);
         sb.AppendLine("  return (");
         foreach (var line in jsx) sb.AppendLine("    " + line);
@@ -167,6 +219,17 @@ public sealed partial class PageGenerator
             NonVisual = c.NonVisual
         };
         page.Issues.AddRange(c.Issues);
+        if (c.Translation is { } stats)
+        {
+            page.MethodsTotal = stats.Methods.Count;
+            page.MethodsComplete = stats.Methods.Count(m => m.Status == TranslationStatus.Complete);
+            page.MethodsPartial = stats.Methods.Count(m => m.Status == TranslationStatus.Partial);
+            page.MethodsNotTranslated = stats.Methods.Count(m => m.Status == TranslationStatus.NotTranslated);
+            page.MethodsDemoted = stats.Methods.Count(m => m.Reasons.Contains("demoted by the TypeScript compile gate"));
+            foreach (var m in stats.Methods)
+                foreach (var reason in m.Reasons.Distinct()) page.TodoReasons.Add($"{m.Member.Name}: {reason}");
+            AddRanges(page, stats);
+        }
         return page;
     }
 
@@ -488,8 +551,24 @@ public sealed partial class PageGenerator
         foreach (var ev in spec.Events)
         {
             string? handlerName = null;
+            MemberIr? handlerMember = null;
             if (node.Attributes.TryGetValue("On" + ev.From, out var method) && c.Methods.TryGetValue(method, out var member))
+            {
+                handlerMember = member;
                 handlerName = GetHandler(node, ev.From, member, c, isRoot).Name;
+            }
+
+            // Button.DialogResult: clicking closes the dialog with that result (after the Click handler ran), with or without a handler.
+            if (spec.Name == "WfButton" && ev.Name == "click" && ButtonDialogResult(node) is { } closeWith)
+            {
+                c.UsesOnClose = true;
+                var isAsync = handlerMember is not null && c.Translation?.ByMember.TryGetValue(handlerMember, out var mt) == true && mt.IsAsync;
+                var close = $"onClose?.({Str(closeWith)});";
+                attrs.Add(handlerName is null ? $"{ev.React}={{() => {{ {close} }}}}"
+                    : isAsync ? $"{ev.React}={{async () => {{ await {handlerName}(); {close} }}}}"
+                    : $"{ev.React}={{() => {{ {handlerName}(); {close} }}}}");
+                continue;
+            }
 
             var isStateEvent = StateEvents.Contains((spec.Name, ev.Name));
             if (isStateEvent && c.StatefulIds.Contains(node.Id))
@@ -510,12 +589,18 @@ public sealed partial class PageGenerator
         }
     }
 
+    /// <summary>The DialogResult a button closes its dialog with (OK, Cancel, Yes, ...); null for None/absent.</summary>
+    private static string? ButtonDialogResult(ControlNodeIr node) =>
+        node.Attributes.GetValueOrDefault("DialogResult") is { Length: > 0 } raw && LastToken(raw) is var token && token != "None" ? token : null;
+
     private Handler GetHandler(ControlNodeIr node, string eventName, MemberIr member, Ctx c, bool isRoot)
     {
         var key = $"{node.Id}.{eventName}";
         if (c.Handlers.TryGetValue(key, out var existing)) return existing;
 
-        var name = c.Names.Unique("handle" + (isRoot ? "" : Naming.Pascal(Naming.StripPrefix(node.Id))) + Naming.Pascal(eventName));
+        var name = c.Translation is not null && c.Translation.ByMember.TryGetValue(member, out var translated)
+            ? translated.TsName
+            : c.Names.Unique(Naming.HandlerName(node.Id, eventName, isRoot));
         var handler = new Handler { Name = name, ControlId = node.Id, Event = eventName, Member = member, IsRoot = isRoot };
         c.Handlers[key] = handler;
         return handler;
@@ -523,10 +608,63 @@ public sealed partial class PageGenerator
 
     // ------------------------------------------------------------------------------------------- handlers
 
-    private List<string> BuildHandlers(Ctx c)
+    /// <summary>Functions for the component body: translated methods (and stubs for untranslated helpers) when translation is on, handler stubs otherwise.</summary>
+    private List<string> BuildFunctions(Ctx c, List<string> jsx)
+    {
+        if (c.Translation is not { } tr) return BuildHandlers(c, c.Handlers.Values);
+
+        var lines = new List<string>();
+        foreach (var t in tr.Methods.Where(t => t.Lines.Count > 0))
+        {
+            // A function nothing calls (dead code in the original, or an event the library has no prop for) would fail lint: say so explicitly.
+            // Only OTHER code counts: its own body (recursion, a local with the same name, a log label) is not a use.
+            var others = PageTranslator.StripStrings(string.Join("\n", jsx.Concat(tr.Methods.Where(m => m != t).SelectMany(m => m.Lines))
+                .Where(l => !l.TrimStart().StartsWith("//", StringComparison.Ordinal))));
+            var unused = !System.Text.RegularExpressions.Regex.IsMatch(others, $@"(?<![\w.]){System.Text.RegularExpressions.Regex.Escape(t.TsName)}\b");
+            foreach (var l in t.Lines)
+            {
+                if (unused && System.Text.RegularExpressions.Regex.IsMatch(l, $@"^(async )?function {System.Text.RegularExpressions.Regex.Escape(t.TsName)}\("))
+                    lines.Add("// eslint-disable-next-line @typescript-eslint/no-unused-vars -- not wired to any control or call; kept for the original logic");
+                lines.Add(l);
+            }
+        }
+
+        // Wired handlers the rules could not translate keep the navigation-aware stub.
+        var stubs = c.Handlers.Values
+            .Where(h => tr.ByMember.TryGetValue(h.Member, out var mt) && mt.Status == TranslationStatus.NotTranslated && mt.Lines.Count == 0)
+            .GroupBy(h => h.Name).Select(g => g.First());
+        lines.AddRange(BuildHandlers(c, stubs));
+        return lines;
+    }
+
+    private static Dictionary<string, WiredHandler> WiredHandlers(Ctx c, ControlNodeIr root)
+    {
+        var map = new Dictionary<string, WiredHandler>(StringComparer.Ordinal);
+        foreach (var node in Walk(root))
+            foreach (var (key, value) in node.Attributes)
+                if (EventRegex().IsMatch(key) && c.Methods.ContainsKey(value) && !map.ContainsKey(value))
+                    map[value] = new WiredHandler(node.Id, key[2..], ReferenceEquals(node, root));
+        return map;
+    }
+
+    private static void AddRanges(GeneratedPage page, PageTranslation tr)
+    {
+        var lines = page.Source.Split('\n');
+        var starts = new List<(string Name, int Line)>();
+        for (var i = 0; i < lines.Length; i++)
+        {
+            var m = System.Text.RegularExpressions.Regex.Match(lines[i], @"^  (?:async )?function (\w+)\(");
+            if (m.Success) starts.Add((m.Groups[1].Value, i + 1));
+        }
+        var ret = Array.FindIndex(lines, l => l.StartsWith("  return (", StringComparison.Ordinal)) + 1;
+        for (var i = 0; i < starts.Count; i++)
+            page.MethodRanges.Add((starts[i].Name, starts[i].Line, (i + 1 < starts.Count ? starts[i + 1].Line : ret > 0 ? ret : lines.Length) - 1));
+    }
+
+    private List<string> BuildHandlers(Ctx c, IEnumerable<Handler> handlers)
     {
         var lines = new List<string>();
-        foreach (var h in c.Handlers.Values)
+        foreach (var h in handlers)
         {
             var sites = c.Unit.Page.Navigations.Where(n => n.SourceControlId == h.ControlId && n.TriggerEvent == h.Event).ToList();
             var workflow = c.Unit.Page.Workflows.FirstOrDefault(w => w.TriggerControlId == h.ControlId && w.TriggerEvent == h.Event);

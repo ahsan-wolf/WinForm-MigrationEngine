@@ -46,6 +46,10 @@ public static partial class Naming
     public static string Component(string unitName, bool userControl) => Pascal(StripPrefix(unitName)) + (userControl ? "Control" : "Page");
 
     public static string StateName(string controlId) => Camel(StripPrefix(controlId));
+
+    /// <summary>cmdBrowse + Click -> handleBrowseClick; the form itself + Load -> handleLoad.</summary>
+    public static string HandlerName(string controlId, string eventName, bool isRoot) =>
+        "handle" + (isRoot ? "" : Pascal(StripPrefix(controlId))) + Pascal(eventName);
 }
 
 /// <summary>Hands out identifiers that are unique within one generated file.</summary>
