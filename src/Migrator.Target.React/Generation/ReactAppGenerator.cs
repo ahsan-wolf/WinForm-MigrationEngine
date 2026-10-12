@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json;
 using Migrator.Engine.Contracts;
 using Migrator.Target.React.Contracts;
+using Migrator.Target.React.Translation;
 using Migrator.Target.React.Spec;
 
 namespace Migrator.Target.React.Generation;
@@ -28,7 +29,33 @@ public sealed class ReactAppGenerator
         foreach (var name in scope.Keys) components[name] = taken.Unique(Naming.Component(name, ir.Units[name].IsUserControl));
 
         var result = new GenerationResult { OutputDirectory = outputDirectory };
-        var generator = new PageGenerator(spec, ir.Units, components, new HashSet<string>(scope.Keys));
+        var scopeUnits = scope.Keys.Select(n => ir.Units[n]).ToList();
+
+        // External contracts first: the translator needs their vocabulary (facade methods, type names) before any page is generated.
+        var contracts = new List<ContractEmitResult>();
+        foreach (var file in options.ContractFiles)
+        {
+            try
+            {
+                var emitted = ServiceEmitter.Emit(file, scopeUnits, options.ContractScope.Equals("all", StringComparison.OrdinalIgnoreCase), outputDirectory, result.Files);
+                contracts.Add(emitted);
+                result.Issues.AddRange(emitted.OmittedMembers.Concat(emitted.OmittedMethods).Select(m => new GenerationIssue(emitted.Assembly, "contract-secret-omitted", m)));
+                result.Issues.AddRange(emitted.CredentialParametersStripped.Distinct().Select(m => new GenerationIssue(emitted.Assembly, "contract-credentials-stripped", $"{m}: credentials parameter removed; the server supplies it")));
+                result.Issues.AddRange(emitted.Notes.Select(n => new GenerationIssue(emitted.Assembly, "contract-unmapped", n)));
+            }
+            catch (Exception ex) when (ex is IOException or JsonException or InvalidDataException)
+            {
+                result.Issues.Add(new GenerationIssue(Path.GetFileName(file), "generation-failed", $"contract could not be used: {ex.Message}"));
+            }
+        }
+
+        // "llm" runs the rules first; the model tier itself is a later phase, so today it behaves like "rules".
+        var translate = options.Translate.Equals("rules", StringComparison.OrdinalIgnoreCase) || options.Translate.Equals("llm", StringComparison.OrdinalIgnoreCase);
+        var generated = new HashSet<string>(scope.Keys);
+        var env = translate
+            ? new TranslationEnv { Vocabulary = new ContractVocabulary(contracts.FirstOrDefault()), Components = components, Units = ir.Units, Generated = generated }
+            : null;
+        var generator = new PageGenerator(spec, ir.Units, components, generated, env);
         var pages = new List<(string Unit, int Depth, GeneratedPage Page)>();
 
         foreach (var (name, depth) in scope)
@@ -36,8 +63,7 @@ public sealed class ReactAppGenerator
             try
             {
                 var page = generator.Generate(ir.Units[name]);
-                AppWriter.Put(outputDirectory, $"src/pages/{page.ComponentName}.tsx", page.Source, result.Files);
-                AppWriter.Put(outputDirectory, $"src/legacy/{page.ComponentName}.cs.txt", page.LegacySource, result.Files);
+                WritePage(outputDirectory, page, result);
                 pages.Add((name, depth, page));
                 result.GeneratedUnits.Add(name);
                 result.Issues.AddRange(page.Issues);
@@ -51,28 +77,6 @@ public sealed class ReactAppGenerator
             }
         }
 
-        // External contracts (binary-only dependencies): typed mock services, secrets omitted.
-        var contracts = new List<ContractEmitResult>();
-        if (options.ContractFiles.Count > 0)
-        {
-            var generatedUnits = result.GeneratedUnits.Select(n => ir.Units[n]).ToList();
-            foreach (var file in options.ContractFiles)
-            {
-                try
-                {
-                    var emitted = ServiceEmitter.Emit(file, generatedUnits, options.ContractScope.Equals("all", StringComparison.OrdinalIgnoreCase), outputDirectory, result.Files);
-                    contracts.Add(emitted);
-                    result.Issues.AddRange(emitted.OmittedMembers.Concat(emitted.OmittedMethods).Select(m => new GenerationIssue(emitted.Assembly, "contract-secret-omitted", m)));
-                    result.Issues.AddRange(emitted.CredentialParametersStripped.Distinct().Select(m => new GenerationIssue(emitted.Assembly, "contract-credentials-stripped", $"{m}: credentials parameter removed; the server supplies it")));
-                    result.Issues.AddRange(emitted.Notes.Select(n => new GenerationIssue(emitted.Assembly, "contract-unmapped", n)));
-                }
-                catch (Exception ex) when (ex is IOException or JsonException or InvalidDataException)
-                {
-                    result.Issues.Add(new GenerationIssue(Path.GetFileName(file), "generation-failed", $"contract could not be used: {ex.Message}"));
-                }
-            }
-        }
-
         var skippedOutOfScope = ir.Units.Keys.Where(n => !scope.ContainsKey(n)).OrderBy(n => n, StringComparer.Ordinal).ToList();
         result.SkippedUnits.AddRange(skippedOutOfScope);
 
@@ -80,8 +84,102 @@ public sealed class ReactAppGenerator
             AppWriter.Write(outputDirectory, "migrated-" + Naming.Camel(Naming.StripPrefix(entry)).ToLowerInvariant(), entryComponent,
                 Path.GetFullPath(_options.UiLibraryPath), result.Files);
 
-        AppWriter.Put(outputDirectory, "MIGRATION_REPORT.md", Report(ir, entry, options, spec, pages, result, skippedOutOfScope, contracts), result.Files);
+        var gate = translate ? RunCompileGate(outputDirectory, options, generator, ir, pages, result) : new GateSummary();
+
+        if (translate)
+        {
+            // Translation issues are listed per method in the report; counts also go to the console summary.
+            result.Stats["methods"] = pages.Sum(p => p.Page.MethodsTotal);
+            result.Stats["methods.complete"] = pages.Sum(p => p.Page.MethodsComplete);
+            result.Stats["methods.partial"] = pages.Sum(p => p.Page.MethodsPartial);
+            result.Stats["methods.not-translated"] = pages.Sum(p => p.Page.MethodsNotTranslated);
+            result.Stats["methods.demoted-by-gate"] = pages.Sum(p => p.Page.MethodsDemoted);
+            result.Stats["gate.remaining-errors"] = gate.RemainingErrors;
+        }
+
+        AppWriter.Put(outputDirectory, "MIGRATION_REPORT.md", Report(ir, entry, options, spec, pages, result, skippedOutOfScope, contracts, translate, gate), result.Files);
         return result;
+    }
+
+    private static void WritePage(string outputDirectory, GeneratedPage page, GenerationResult result)
+    {
+        AppWriter.Put(outputDirectory, $"src/pages/{page.ComponentName}.tsx", page.Source, result.Files);
+        AppWriter.Put(outputDirectory, $"src/legacy/{page.ComponentName}.cs.txt", page.LegacySource, result.Files);
+    }
+
+    private sealed class GateSummary
+    {
+        public bool Ran { get; set; }
+        public string Note { get; set; } = "";
+        public int Iterations { get; set; }
+        public int Demoted { get; set; }
+        public int RemainingErrors { get; set; }
+    }
+
+    /// <summary>
+    /// Runs tsc on the generated app; every translated method that contains an error is demoted to commented C# and its page regenerated.
+    /// Repeats a few times (demoting a callee can break its callers). Errors outside translated methods are reported, not fixed.
+    /// </summary>
+    private static GateSummary RunCompileGate(string appDir, GenerationOptions options, PageGenerator generator, IrFolder ir,
+        List<(string Unit, int Depth, GeneratedPage Page)> pages, GenerationResult result)
+    {
+        var gate = new GateSummary();
+        if (options.NoCompileGate)
+        {
+            gate.Note = "skipped (--no-compile-gate)";
+            return gate;
+        }
+        if (!CompileGate.CanRun(appDir))
+        {
+            if (!options.CompileGate)
+            {
+                gate.Note = "not run: dependencies are not installed (use --compile-gate to install them and run it)";
+                return gate;
+            }
+            if (!CompileGate.TryInstall(appDir, out var installError))
+            {
+                gate.Note = "not run: npm install failed: " + installError;
+                return gate;
+            }
+        }
+
+        var demoted = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
+        const int maxIterations = 5;
+        List<TscDiagnostic>? diagnostics = null;
+        for (var iteration = 0; iteration < maxIterations; iteration++)
+        {
+            diagnostics = CompileGate.RunTsc(appDir);
+            if (diagnostics is null) { gate.Note = "not run: tsc could not be started"; return gate; }
+            gate.Ran = true;
+            if (diagnostics.Count == 0) break;
+
+            var touched = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var d in diagnostics)
+            {
+                var index = pages.FindIndex(p => d.File == $"src/pages/{p.Page.ComponentName}.tsx");
+                if (index < 0) continue;
+                var range = pages[index].Page.MethodRanges.FirstOrDefault(r => r.Start <= d.Line && d.Line <= r.End);
+                if (range.TsName is null) continue;
+                if (!demoted.TryGetValue(pages[index].Unit, out var set)) demoted[pages[index].Unit] = set = new HashSet<string>(StringComparer.Ordinal);
+                if (set.Add(range.TsName)) touched.Add(pages[index].Unit);
+            }
+            if (touched.Count == 0) break;
+
+            foreach (var unit in touched)
+            {
+                var index = pages.FindIndex(p => p.Unit == unit);
+                var page = generator.Generate(ir.Units[unit], demoted[unit]);
+                pages[index] = (unit, pages[index].Depth, page);
+                WritePage(appDir, page, result);
+            }
+            gate.Iterations++;
+        }
+
+        gate.Demoted = demoted.Values.Sum(s => s.Count);
+        gate.RemainingErrors = diagnostics?.Count ?? 0;
+        foreach (var d in (diagnostics ?? new()).Take(40))
+            result.Issues.Add(new GenerationIssue(Path.GetFileNameWithoutExtension(d.File), "compile-error", $"{d.File}({d.Line}): {d.Code} {d.Message}"));
+        return gate;
     }
 
     /// <summary>Breadth-first over Show/ShowDialog navigation, bounded by depth (null = all reachable).</summary>
@@ -102,7 +200,7 @@ public sealed class ReactAppGenerator
     }
 
     private static string Report(IrFolder ir, string entry, GenerationOptions options, SpecCatalog spec,
-        List<(string Unit, int Depth, GeneratedPage Page)> pages, GenerationResult result, List<string> outOfScope, List<ContractEmitResult> contracts)
+        List<(string Unit, int Depth, GeneratedPage Page)> pages, GenerationResult result, List<string> outOfScope, List<ContractEmitResult> contracts, bool translate, GateSummary gate)
     {
         var sb = new StringBuilder();
         sb.AppendLine("# Migration report — react-app");
@@ -122,6 +220,35 @@ public sealed class ReactAppGenerator
         foreach (var (unit, depth, page) in pages)
             sb.AppendLine($"| {unit} | `{page.ComponentName}` | {depth} | {page.Controls} | {page.Handlers} | {page.NavigationHandlers} | {page.Issues.Count + page.NonVisual.Count} |");
 
+        if (translate)
+        {
+            var total = pages.Sum(p => p.Page.MethodsTotal);
+            var complete = pages.Sum(p => p.Page.MethodsComplete);
+            sb.AppendLine();
+            sb.AppendLine("## Translation (rules)");
+            sb.AppendLine();
+            sb.AppendLine($"{total} methods: **{complete} complete** ({(total == 0 ? 0 : 100 * complete / total)}%), {pages.Sum(p => p.Page.MethodsPartial)} partial (TODOs inside), " +
+                          $"{pages.Sum(p => p.Page.MethodsNotTranslated)} not translated (kept as commented C#; {pages.Sum(p => p.Page.MethodsDemoted)} of them demoted by the compile gate).");
+            sb.AppendLine(gate.Ran
+                ? $"Compile gate: ran ({gate.Iterations} regeneration round(s)); {gate.RemainingErrors} TypeScript error(s) remain."
+                : $"Compile gate: {(gate.Note.Length > 0 ? gate.Note : "not run")}.");
+            sb.AppendLine("Rule-translated code is deterministic but unreviewed: check business logic, async behaviour and everything marked TODO. Original C# is always kept (comments and `src/legacy/`).");
+            sb.AppendLine();
+            sb.AppendLine("| Form | Methods | Complete | Partial | Not translated |");
+            sb.AppendLine("|---|---:|---:|---:|---:|");
+            foreach (var (unit, _, page) in pages)
+                sb.AppendLine($"| {unit} | {page.MethodsTotal} | {page.MethodsComplete} | {page.MethodsPartial} | {page.MethodsNotTranslated} |");
+
+            var reasons = pages.SelectMany(p => p.Page.TodoReasons).Select(r => r[(r.IndexOf(": ", StringComparison.Ordinal) + 2)..])
+                .Select(r => System.Text.RegularExpressions.Regex.Replace(r, @"'[^']*'", "'…'")).GroupBy(r => r).OrderByDescending(g => g.Count()).Take(20).ToList();
+            if (reasons.Count > 0)
+            {
+                sb.AppendLine();
+                sb.AppendLine("Most common reasons a statement stayed commented:");
+                foreach (var g in reasons) sb.AppendLine($"- {g.Count()}× {g.Key}");
+            }
+        }
+
         sb.AppendLine();
         sb.AppendLine("## Manual work by category");
         var order = new[]
@@ -135,6 +262,7 @@ public sealed class ReactAppGenerator
             ("user-control-inlined", "User controls rendered as panels"),
             ("image-resource", "Designer images not extracted"),
             ("non-visual", "Non-visual components (not rendered)"),
+            ("compile-error", "TypeScript errors that remain after the compile gate (not inside translated methods)"),
             ("contract-secret-omitted", "Secret-looking members omitted from generated services (SERVER-ONLY)"),
             ("contract-credentials-stripped", "Service methods kept with their credentials parameter removed (server-side concern)"),
             ("contract-unmapped", "Contract types without a TypeScript mapping (`unknown`)")

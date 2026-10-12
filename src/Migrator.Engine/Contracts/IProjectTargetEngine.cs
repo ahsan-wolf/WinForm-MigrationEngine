@@ -14,6 +14,15 @@ public sealed class GenerationOptions
 
     /// <summary>"used" (default): only types/methods the generated forms reference. "all": every public data type and static method.</summary>
     public string ContractScope { get; init; } = "used";
+
+    /// <summary>"none" (default: handlers stay commented C#), "rules" (deterministic C# -> TS) or "llm" (rules, then a local model for the rest; opt-in).</summary>
+    public string Translate { get; init; } = "none";
+
+    /// <summary>Run the TypeScript compiler on the generated app and demote translated methods that fail it. Installs npm dependencies first if they are missing.</summary>
+    public bool CompileGate { get; init; }
+
+    /// <summary>Skip the compile gate even when dependencies are installed (analysis: shows the raw TypeScript errors of translated code).</summary>
+    public bool NoCompileGate { get; init; }
 }
 
 public sealed record GenerationIssue(string Unit, string Category, string Message);
@@ -25,6 +34,9 @@ public sealed class GenerationResult
     public List<string> SkippedUnits { get; } = new();
     public List<string> Files { get; } = new();
     public List<GenerationIssue> Issues { get; } = new();
+
+    /// <summary>Named counters for the console summary (e.g. "methods.complete").</summary>
+    public Dictionary<string, int> Stats { get; } = new();
 }
 
 /// <summary>

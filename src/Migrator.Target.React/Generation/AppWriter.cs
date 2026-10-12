@@ -93,7 +93,10 @@ public static class AppWriter
                 plugins: { 'react-hooks': reactHooks },
                 rules: {
                   ...reactHooks.configs.recommended.rules,
-                  '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+                  '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' }],
+                  // Stylistic rules that translated C# trips on without any bug: `!!x` kept from `!string.IsNullOrEmpty(x)`, and rethrown errors.
+                  'no-extra-boolean-cast': 'off',
+                  'preserve-caught-error': 'off',
                   // useWfModel returns a deliberately mutable model (WinForms-style imperative code: txt.Text = x). Do not enable the React Compiler here.
                   'react-hooks/immutability': 'off',
                 },
@@ -117,6 +120,14 @@ public static class AppWriter
                 </WfDialogProvider>
               </StrictMode>,
             );
+            """, files);
+
+        // Runtime helpers for translated C# (string.Format with a non-literal format string).
+        Put(appDir, "src/lib/csharp.ts", """
+            // Helpers used by code translated from C#. Format specifiers ({0:N2}) are not interpreted: values are converted with String().
+            export function formatString(format: string, ...args: unknown[]): string {
+              return format.replace(/\{(\d+)(?::[^}]*)?\}/g, (_match, index: string) => String(args[Number(index)] ?? ''));
+            }
             """, files);
 
         // Layout helpers used by generated pages (flex rows/columns derived from Dock and Location; never pixels).

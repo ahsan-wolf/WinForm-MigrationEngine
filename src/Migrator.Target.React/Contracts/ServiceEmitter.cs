@@ -19,7 +19,21 @@ public sealed class ContractEmitResult
     public List<string> CredentialParametersStripped { get; } = new();
     public List<string> Notes { get; } = new();
     public string Scope { get; init; } = "used";
+
+    // What the translator needs to call the generated service and use its types.
+    public string InstanceName { get; set; } = "";
+    public string ServiceImport { get; set; } = "";
+    public string TypesImport { get; set; } = "";
+    public TsTypeMapper Mapper { get; set; } = null!;
+
+    /// <summary>facade type -> method -> overloads (original parameter count and the indexes kept after credential stripping).</summary>
+    public Dictionary<string, Dictionary<string, List<CallSignature>>> Facades { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>Simple C# type name -> TypeScript name, for the data types and enums that were actually emitted.</summary>
+    public Dictionary<string, string> TypeNameBySimple { get; } = new(StringComparer.Ordinal);
 }
+
+public sealed record CallSignature(int ParamCount, int[] Keep);
 
 /// <summary>
 /// Emits typed TypeScript from an assembly contract: DTO interfaces, enums, a Promise-based service interface (one method per used
@@ -28,7 +42,7 @@ public sealed class ContractEmitResult
 /// </summary>
 public static partial class ServiceEmitter
 {
-    private sealed record Overload(MethodContract Method, List<string> ParamNames, List<TsType> Params, TsType Return);
+    private sealed record Overload(MethodContract Method, List<string> ParamNames, List<TsType> Params, TsType Return, int OriginalCount, int[] Keep);
 
     private static readonly HashSet<string> Reserved = new(StringComparer.Ordinal)
     {
@@ -58,10 +72,12 @@ public static partial class ServiceEmitter
             foreach (var m in type.Methods.Where(m => m.IsStatic && !m.IsConstructor && names.Contains(m.Name)))
             {
                 if (SecretFilter.IsSecretMethod(m)) { result.OmittedMethods.Add($"{type.Name}.{m.Name}"); continue; }
-                var kept = m.Parameters.Where(p => !SecretFilter.IsCredentialObject(p)).ToList();
+                var keep = m.Parameters.Select((p, i) => (p, i)).Where(x => !SecretFilter.IsCredentialObject(x.p)).ToList();
+                var kept = keep.Select(x => x.p).ToList();
                 if (kept.Count != m.Parameters.Count) result.CredentialParametersStripped.Add($"{type.Name}.{m.Name}");
                 if (!methods.TryGetValue(m.Name, out var list)) methods[m.Name] = list = new();
-                list.Add(new Overload(m, kept.Select(p => p.Name).ToList(), kept.Select(p => mapper.Map(p.Type)).ToList(), mapper.Map(m.ReturnType)));
+                list.Add(new Overload(m, kept.Select(p => p.Name).ToList(), kept.Select(p => mapper.Map(p.Type)).ToList(), mapper.Map(m.ReturnType),
+                    m.Parameters.Count, keep.Select(x => x.i).ToArray()));
             }
             if (methods.Count > 0) facades.Add((mapper.NameOf(full), methods));
         }
@@ -82,6 +98,11 @@ public static partial class ServiceEmitter
 
         var enums = mapper.Referenced.Where(r => byFull[r].Kind == "enum").OrderBy(mapper.NameOf, StringComparer.Ordinal).ToList();
         var dtos = mapper.Referenced.Where(r => byFull[r].Kind != "enum").OrderBy(mapper.NameOf, StringComparer.Ordinal).ToList();
+        result.Mapper = mapper;
+        foreach (var f in facades)
+            result.Facades[f.Name] = f.Methods.ToDictionary(kv => kv.Key, kv => kv.Value.Select(o => new CallSignature(o.OriginalCount, o.Keep)).ToList(), StringComparer.Ordinal);
+        foreach (var group in enums.Concat(dtos).GroupBy(full => byFull[full].Name).Where(g => g.Count() == 1))
+            result.TypeNameBySimple[group.Key] = mapper.NameOf(group.Single());
         result.Enums = enums.Count;
         result.DataTypes = dtos.Count;
         result.Methods = facades.Sum(f => f.Methods.Values.Sum(v => v.Count));
@@ -151,6 +172,9 @@ public static partial class ServiceEmitter
         }
 
         var ident = Naming.Pascal(contract.Name);
+        result.InstanceName = LowerLeadingWord(ident);
+        result.ServiceImport = $"../services/{contract.Name.ToLowerInvariant()}/service";
+        result.TypesImport = $"../services/{contract.Name.ToLowerInvariant()}/types";
         var service = new StringBuilder(header + "\n// Every call is async here even where the C# API was synchronous. A SERVER-ONLY list (secret-looking members) is in MIGRATION_REPORT.md.\n\n");
         // A data type can share its name with a method or facade (e.g. type CheckInList and method CheckInList): only type positions count.
         var typePositions = Regex.Replace(iface.ToString(), @"^\s+\w+(?=\(|: \{)", "", RegexOptions.Multiline);
