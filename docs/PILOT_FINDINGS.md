@@ -47,3 +47,19 @@ That is a different (and cleaner) migration problem than the Web Forms sample: d
    (need inferred row models, marker `// inferred — check against backend contract`).
 4. Extractor findings fixed on the way: overloaded handlers aborted 7 units; navigation hidden in helper methods (0 -> 61 targeted `ShowDialog`);
    file dialogs wrongly counted as form navigation.
+
+## 5. Results of the migration so far (ECMNavigator, 2026-10-12)
+`migrate --translate rules --compile-gate --contract <ECMLibrary contract>` on the 17 forms reachable from `frmNavigator` (depth all), output in a folder outside the repo:
+
+| Measure | Result |
+|---|---|
+| Forms generated | 17 of 36 units (the rest are not reachable from the startup form) |
+| Page methods translated | **375 complete (53%)**, 209 partial, 122 not translated (81 of those demoted by the compile gate), of 706 |
+| Project classes (`main`, `Preferences`, `ECMConfiguration`, data classes, 13 enums) | 33 types, 157 members: 56 complete, 58 partial, 43 stubs |
+| Generated app | `tsc` 0 errors, lint 0 errors, build OK; all 17 pages render without throwing (jsdom smoke) |
+| Controls without a library component | 7 (TreeView, tabs, radio group, date picker, ...) |
+
+How the number moved: 321 (first rule translator) -> 332 (ListView) -> 375 (project classes extracted and called as in C#). Main remaining blockers, from `MIGRATION_REPORT.md`:
+declarations that depend on an untranslated statement (cascade), members of types with no browser equivalent (`ImageList`, `TimeSpan`, WinForms types), `ref`/`out` arguments, `ConfigurationManager`,
+event subscriptions in code, `dgv.Rows` / `pnl.Controls`. Pages open with **mock data** (fixture rows from the contract, sample list rows); the opener does not pass real constructor arguments yet.
+Everything is reviewed by the owner before use: translated logic is deterministic but unverified.

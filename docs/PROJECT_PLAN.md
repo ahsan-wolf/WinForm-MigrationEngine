@@ -1,7 +1,7 @@
 # WinForms Modernization Engine — Project Plan & Analysis
 
-**Status:** v0.3 — P0, P1 done; P2/P3 React slice done (see §0) · **Date:** 2026-10-12 · **Owner:** TBD
-**Related docs:** `CLAUDE.md` (rules & architecture) · `SKILLS.md` (control mappings) · `WINFORMS_MIGRATION_PROMPT.md`
+**Status:** v0.4 — P0, P1 done; P2/P3 React slice and P4.2 rule-based translation done (see §0) · **Date:** 2026-10-12 · **Owner:** TBD
+**Related docs:** `CLAUDE.md` (rules & architecture) · `SKILLS.md` (control mappings) · `docs/USER_GUIDE.md` (how to run it) · `docs/PROJECT_DOCUMENTATION.md` (as-built architecture) · `docs/ENGINE_AUTHORING.md` (extension & conventions) · `docs/PILOT_FINDINGS.md` · `WINFORMS_MIGRATION_PROMPT.md`
 
 > Estimates are **planning-grade (±30%)**, in person-days (PD), and assume reuse of the existing WebFormsMigrator IR platform. They must be re-baselined after the Phase 1 spike and the first pilot application.
 
@@ -13,10 +13,11 @@
 |---|---|---|
 | **P0 Foundation** | ✅ done (M0 met) | `net10.0` solution; engine contracts, registry, `engines.json` allow-list, plugin loader with isolated load contexts and schema check; `migrator engines`. M0 verified with throwaway plugins (valid / wrong-schema / missing / unlisted) — no test projects, per rule. |
 | **P1 WinForms source engine** | 🟡 largely done | Prototype ported to real `IIrExtractor`s (tree → members → semantics → workflows → navigation); project analyzer; **six IR files + `project.ir.json`**; designer hardening (menus, tabs, split panels, grid columns, TableLayout cells/styles, items, DataBindings, tooltips, `.resx`); unhandled statements reported. `migrator ir` works end to end. |
-| **P2 UI library** | 🟡 React MVP | `ui-spec` 0.1.0 + `@wfm/ui-react` (21 components: form, menus, toolbar, status bar, split, panel, label/button/textbox/combobox/checkbox, progress, picture, grid, list view, context menu, dialog service, `WfUnsupported`), scoped to the pilot's startup form. Missing: TreeView, tabs, radio group, date picker, group box. `ui-angular` / `ui-html` not started. |
-| **P3 Target engines** | 🟡 React slice | `migrator migrate` generates an app from the IR folder + `ui-spec`: layout from Dock/Location (no pixels), `ShowDialog` -> dialog service, state for inputs, mock grid rows, `MIGRATION_REPORT.md`. Pilot: 17 forms generated; install, `tsc`, build and lint with zero errors. `migrate --contract` emits typed mock services from an assembly contract (secrets omitted). Angular and HTML+jQuery targets not started. |
-| **Tooling** | ✅ | `migrator contract` (public API of a managed assembly from metadata only, never executed); `tools/win-ir-viewer` (React page for reviewing IR). |
-| P4 LLM / P5 report polish / P6 pilots | ⏳ P4 next | Handler bodies are still commented C# (so most generated buttons do nothing). P4 (Ollama) is the next slice. The first pilot run (ECMNavigator) is in `docs/PILOT_FINDINGS.md`. |
+| **P2 UI library** | 🟡 React MVP | `ui-spec` 0.1.0 + `@wfm/ui-react` (22 components: form, menus, toolbar, status bar, split, panel, group box, label/button/textbox/combobox/checkbox, progress, picture, grid, list view, context menu, dialog service, `useWfModel`, `WfUnsupported`). Missing: TreeView, tabs, radio group, date picker. `ui-angular` / `ui-html` not started. |
+| **P3 Target engines** | 🟡 React slice | `migrator migrate` generates an app from the IR folder + `ui-spec`: layout from Dock/Location (no pixels), `ShowDialog` -> dialog service, state for inputs, mock grid rows, `MIGRATION_REPORT.md`. Pilot: 17 forms generated; install, `tsc`, build and lint with zero errors. `migrate --contract` emits typed mock services from an assembly contract (secrets omitted). Per-page state is one `useWfModel` model (`vm` controls, `f` fields). Constructor arguments become props with fixture defaults; the app's own static classes become `src/support/index.ts`; a dev launcher (`?page=<Name>`) opens any page. Angular and HTML+jQuery targets not started. |
+| **P4.2 Rule translation** | ✅ done | `migrate --translate rules --compile-gate`: deterministic Roslyn C# -> TS for every method of a page and for the project's own classes; `tsc` as the oracle (failing methods are demoted to commented C#); lint-clean by construction. Pilot: **375 / 706 methods complete (53%)**, 209 partial, 122 not translated; 33 project classes (157 members, 56 complete); 0 TS errors, 0 lint errors, all 17 pages render. ListView, GroupBox, `Button.DialogResult`, `ListViewItem`, overload/constructor merging included. |
+| **Tooling** | ✅ | `migrator contract` (public API of a managed assembly from metadata only, never executed); `tools/win-ir-viewer` (React page for reviewing IR; on branch `feature/win-ir-viewer`, not yet merged to `main`). |
+| **P4.3 LLM tier** / P5 report polish / P6 pilots | ⏳ P4.3 next | Ollama (phi4-mini default) on the residue the rules cannot finish: one method per call, validated and compile-gated, cached, marked `// LLM-translated — verify`. Measured: phi4-mini ~48 s per 30-line method, phi4 3x slower and invents APIs, so deterministic first. Pilot run: `docs/PILOT_FINDINGS.md`. |
 
 **P1 remaining (small):** externalize `SemanticKeywords` (1 PD); populate `Shared.Settings/Resources/Dependencies`; handlers in a third partial file; multi-level workflow steps; flag controls created at runtime (loops, `Controls.Add` in code). The real pilot run is done: 36/36 units extract (892 controls, 420 workflows, 0 unresolved handlers) after three extractor bugs it exposed were fixed (overloaded handlers, navigation in helper methods, file dialogs counted as navigation). M1-lite is met (startup form -> React shell that builds and renders); full M1 needs handler translation (P4).
 
@@ -320,10 +321,14 @@ New control → `ui-spec` → all three libraries → SKILLS row. New engine →
 ## 11. Next Steps
 Original first-two-weeks list, with status: D1 confirmed; D2 and D6 still open · P0 scaffold done · P1 spike done (gaps fixed: form-level events, `ClientSize` noise node, `MessageBox.Show` as navigation, step order) · `ui-spec` + `WfButton`/`WfTextBox`/`WfDataGrid` (P2) next · M1 after that.
 
+Done since: pilot run (D6) and the P1 gaps it exposed, `ui-spec` MVP + React library, React target (M1-lite), contracts, translation (P4.2) and the slices listed in §0.
+
 Next, in order:
-1. Pilot `Designer.cs` run (D6) → close P1 gaps found there.
-2. P2: `ui-spec` MVP control set + tokens, then the React library (contract proof).
-3. P3 shared generator core (spec-driven binder, Dock/Anchor→CSS deriver, naming, routes), then the React target → M1.
+1. **P4.3 LLM tier** on the residue (~120 methods the rules cannot translate): one method per call through the shared `LlmRegistry`, compile gate, cache in git-ignored `local-outputs/llm-cache/`.
+2. **Real data for pages:** the opener passes real constructor arguments to dialogs; the remaining `ref`/`out`, `string.Format` specifiers, event subscriptions in code, `dgv.Rows`/`pnl.Controls` members; dynamic fields (`WfDynamicFields`).
+3. Missing controls: TreeView, tabs, radio group, date picker.
+4. **Angular** and **HTML+jQuery** targets with `ui-angular` / `ui-html` (the IR and `ui-spec` are framework-neutral, so only generators and libraries are new).
+5. Separate demo project (never inside this repo) and the first full pilot sign-off with the owners of ECMNavigator.
 
 ---
 
