@@ -145,6 +145,11 @@ checked, value, readOnly), form fields are `f.<name>` (initial values from their
   the rows, so code reads them at once. Translated: `Items` / `SelectedItems` / `CheckedItems` / `SelectedIndices` / `Columns` (`.Count`, indexer, `foreach`, `Add`, `Insert`, `RemoveAt`, `Clear`, `SelectedItems.Clear()`),
   `new ListViewItem(...)` (text, `string[]`, text + image key), item `Text/Checked/Selected/Tag/Name`, `SubItems.Add/Clear/Count`, `SubItems[k].Text` (literal `k` for writes), own helpers returning `ListViewItem`.
   `Refresh/Invalidate/Update/Begin/EndUpdate/Focus` on any control are dropped with a comment. Not translated (stays TODO): `ListViewItemSorter`/`Sort`, `item.Index`, `Items.Remove(item)`, image lists, groups.
+- **Constructor arguments -> props:** a form's constructor (`.ctor` member) parameters become optional props of the page. Contract data types default to a fixture row (`fixtures.UCMProfile[0]`, lists to the fixture list; `// MOCK`),
+  and `field = argument;` statements seed the field model from the prop, so a page opens on its own and its Load handler has data. Other constructor statements are kept as `// TODO` notes. The opener passing real values is
+  not wired yet (constructor arguments at `new Form(...)` call sites are still a TODO in the caller).
+- **Sample rows:** a ListView whose rows/columns the translated code never writes gets 3 `// MOCK` sample rows (and sample columns when the designer has none) so it is visible.
+- **GroupBox** maps to `WfGroupBox` (fieldset + legend). The launcher shows a page's render error instead of a blank screen.
 - **Dev launcher:** the generated `main.tsx` opens the entry form by default; `?page=<Name>` (e.g. `?page=SearchResults`) renders one generated page on its own with mock data and `?page=` lists all pages. Needed for forms
   whose opener passes constructor arguments (not translated yet), which the entry form cannot reach.
 - **Button.DialogResult:** clicking a button whose designer sets `DialogResult` runs its Click handler then `onClose(result)`, as WinForms closes the dialog (not part of translation; applies in every mode).

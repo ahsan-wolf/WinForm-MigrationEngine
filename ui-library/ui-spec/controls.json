@@ -49,6 +49,12 @@
     { "name": "WfPanel", "winformsTypes": ["System.Windows.Forms.Panel", "System.Windows.Forms.FlowLayoutPanel"], "container": true,
       "props": [ { "name": "visible", "type": "boolean", "from": ["Visible"], "transform": "bool" } ],
       "events": [], "a11y": "Plain region; hidden panels are not rendered.", "example": "<WfPanel visible>…</WfPanel>" },
+    { "name": "WfGroupBox", "winformsTypes": ["System.Windows.Forms.GroupBox"], "container": true,
+      "props": [
+        { "name": "title", "type": "string", "from": ["Text"] },
+        { "name": "visible", "type": "boolean", "from": ["Visible"], "transform": "bool" },
+        { "name": "disabled", "type": "boolean", "from": ["Enabled"], "transform": "invert" } ],
+      "events": [], "a11y": "fieldset with a legend; disabled disables all descendants.", "example": "<WfGroupBox title='Options'>…</WfGroupBox>" },
     { "name": "WfSplit", "winformsTypes": ["System.Windows.Forms.SplitContainer"], "container": true,
       "slots": ["Panel1", "Panel2"],
       "props": [

@@ -30,6 +30,18 @@ export function WfPanel({ visible = true, scroll, id, className, children }: WfP
   return <div id={id} className={cls(`wf-panel${scroll ? ' wf-panel-scroll' : ''}`, className)}>{children}</div>;
 }
 
+export interface WfGroupBoxProps { title?: string; visible?: boolean; disabled?: boolean; id?: string; className?: string; children?: ReactNode }
+/** Titled group of controls (WinForms GroupBox): a fieldset with a legend; `disabled` disables everything inside. */
+export function WfGroupBox({ title, visible = true, disabled, id, className, children }: WfGroupBoxProps) {
+  if (!visible) return null;
+  return (
+    <fieldset id={id} className={cls('wf-groupbox', className)} disabled={disabled}>
+      {title && <legend>{title}</legend>}
+      {children}
+    </fieldset>
+  );
+}
+
 export interface WfSplitProps {
   orientation?: 'horizontal' | 'vertical'; splitterDistance?: number; id?: string; className?: string; children?: ReactNode;
 }

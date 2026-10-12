@@ -105,7 +105,7 @@ public static class AppWriter
             """, files);
 
         Put(appDir, "src/main.tsx", $$"""
-            import { StrictMode, Suspense, lazy, type ComponentType } from 'react';
+            import { Component, StrictMode, Suspense, lazy, type ComponentType, type ReactNode } from 'react';
             import { createRoot } from 'react-dom/client';
             import { WfDialogProvider } from '@wfm/ui-react';
             import '@wfm/ui-react/styles.css';
@@ -124,6 +124,13 @@ public static class AppWriter
             const requested = new URLSearchParams(window.location.search).get('page');
             const selected = requested === null ? undefined : pages.find((p) => p.name === requested || p.name === requested + 'Page');
 
+            // A page that throws while rendering shows its error instead of a blank screen.
+            class Boundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+              state = { error: null as Error | null };
+              static getDerivedStateFromError(error: Error) { return { error }; }
+              render() { return this.state.error ? <pre role="alert">{String(this.state.error.stack ?? this.state.error)}</pre> : this.props.children; }
+            }
+
             const goHome = () => { window.location.search = ''; };
 
             function Index() {
@@ -141,7 +148,7 @@ public static class AppWriter
             // The entry form is the app shell; every ShowDialog() target opens through the dialog service.
             createRoot(document.getElementById('root')!).render(
               <StrictMode>
-                <WfDialogProvider>{app}</WfDialogProvider>
+                <WfDialogProvider><Boundary>{app}</Boundary></WfDialogProvider>
               </StrictMode>,
             );
             """, files);
