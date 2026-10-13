@@ -26,7 +26,7 @@ export interface WfDateTimePickerProps extends Common {
 export function WfDateTimePicker({ value, kind = 'date', readOnly, onValueChange, disabled, id, className, tooltip }: WfDateTimePickerProps) {
   return (
     <input type={kind === 'datetime' ? 'datetime-local' : kind} id={id} title={tooltip} disabled={disabled} readOnly={readOnly}
-           className={cls('wf-textbox wf-datetime', className)} value={inputValue(value, kind)}
+           className={cls('wf-textbox wf-datetime', className)} {...(onValueChange ? { value: inputValue(value, kind) } : { defaultValue: inputValue(value, kind) })}
            onChange={e => onValueChange?.(e.target.value)} />
   );
 }
@@ -40,8 +40,8 @@ export interface WfRadioButtonProps extends Common {
 export function WfRadioButton({ text, checked, group, onCheckedChange, disabled, id, className, tooltip }: WfRadioButtonProps) {
   return (
     <label className={cls('wf-checkbox wf-radio', className)} title={tooltip}>
-      <input type="radio" id={id} name={group} disabled={disabled} checked={checked ?? false} accessKey={parseMnemonic(text).accessKey}
-             onChange={e => onCheckedChange?.(e.target.checked)} />
+      <input type="radio" id={id} name={group} disabled={disabled} {...(onCheckedChange ? { checked: checked ?? false } : { defaultChecked: checked ?? false })}
+             accessKey={parseMnemonic(text).accessKey} onChange={e => onCheckedChange?.(e.target.checked)} />
       <span><MnemonicText text={text} /></span>
     </label>
   );
@@ -55,7 +55,8 @@ export function WfNumericUpDown({ value, min, max, step, decimals = 0, readOnly,
   return (
     <input type="number" id={id} title={tooltip} disabled={disabled} readOnly={readOnly} min={min} max={max}
            step={step ?? (decimals > 0 ? 1 / 10 ** decimals : 1)} className={cls('wf-textbox wf-numeric', className)}
-           value={value ?? ''} onChange={e => { const n = e.target.valueAsNumber; if (!Number.isNaN(n)) onValueChange?.(n); }} />
+           {...(onValueChange ? { value: value ?? '' } : { defaultValue: value ?? '' })}
+           onChange={e => { const n = e.target.valueAsNumber; if (!Number.isNaN(n)) onValueChange?.(n); }} />
   );
 }
 
