@@ -60,3 +60,14 @@ textarea.wf-textbox { height: auto; padding: var(--wf-space-1); }
 .wf-listview th, .wf-listview td { padding: 3px var(--wf-space-2); border-bottom: 1px solid var(--wf-color-border); white-space: nowrap; }
 .wf-listview tbody tr:hover { background: var(--wf-color-hover); } .wf-listview .wf-row-selected, .wf-listview .wf-row-selected:hover { background: var(--wf-color-selected); }
 .wf-listview-check { width: 24px; text-align: center; }
+
+.wf-datetime, .wf-numeric { min-width: 9em; }
+.wf-link { color: var(--wf-color-link, var(--wf-color-accent)); text-decoration: none; cursor: pointer; }
+.wf-link:hover { text-decoration: underline; } .wf-link[aria-disabled="true"] { opacity: .5; pointer-events: none; }
+.wf-tabs { display: flex; flex-direction: column; min-width: 0; }
+.wf-tablist { display: flex; gap: 2px; border-bottom: 1px solid var(--wf-color-border); }
+.wf-tab { padding: 3px var(--wf-space-2); border: 1px solid var(--wf-color-border); border-bottom: 0; background: var(--wf-color-surface); color: inherit; font: inherit; cursor: pointer; border-radius: 3px 3px 0 0; }
+.wf-tab:hover:not(:disabled) { background: var(--wf-color-hover); } .wf-tab:disabled { opacity: .5; cursor: default; }
+.wf-tab-active { background: var(--wf-color-bg); font-weight: 600; position: relative; top: 1px; }
+.wf-tabpanel { padding: var(--wf-space-2); border: 1px solid var(--wf-color-border); border-top: 0; background: var(--wf-color-bg); min-height: 3em; }
+.wf-tabpanel[hidden] { display: none; }

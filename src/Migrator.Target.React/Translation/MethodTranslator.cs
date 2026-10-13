@@ -571,6 +571,11 @@ internal sealed partial class MethodTranslator
             if (_scope.Aliases.TryGetValue(controlId, out var aliasMap) && aliasMap.TryGetValue(name, out var aliased)) name = aliased;
             if (_scope.ListViews.Contains(controlId) && name is "Items" or "SelectedItems" or "CheckedItems" or "Columns" or "SelectedIndices")
                 return ListCollection(controlId, name);
+            if (name == "SelectedIndex" && _scope.TabControls.Contains(controlId))
+            {
+                _scope.Output.UsesViewModel = true;
+                return $"vm.{controlId}.selectedIndex";
+            }
             if (ModelProps.Contains(name))
             {
                 _scope.Output.UsesViewModel = true;

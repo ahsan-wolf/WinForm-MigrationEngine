@@ -77,3 +77,5 @@ A multi-project solution (17 projects; 15 forms + 144 user controls; ~2,200 cont
 | Several lint rules fire on faithfully translated code | 634 lint errors | rules off in the generated config, empty-branch comments, `const` merge |
 
 Result: 159 units generated, `tsc` 0 errors, lint 0, build OK; first application unchanged (375 / 706).
+
+Control wave A (date/time picker, radio button with groups, numeric up/down, tabs, link label as real components): the HR app's fallback-rendered controls dropped from 111 to 14 (tree views, list boxes, ...); `tsc`/lint/build clean, all 159 pages render.

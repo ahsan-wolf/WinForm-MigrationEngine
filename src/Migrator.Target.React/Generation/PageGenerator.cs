@@ -49,7 +49,8 @@ public sealed partial class PageGenerator
 
     private static readonly (string Control, string Event)[] StateEvents =
     {
-        ("WfTextBox", "valueChange"), ("WfComboBox", "selectionChange"), ("WfCheckBox", "checkedChange")
+        ("WfTextBox", "valueChange"), ("WfComboBox", "selectionChange"), ("WfCheckBox", "checkedChange"), ("WfRadioButton", "checkedChange"),
+        ("WfDateTimePicker", "valueChange"), ("WfNumericUpDown", "valueChange"), ("WfTabs", "selectionChange")
     };
 
     private static readonly JsonSerializerOptions JsonOut = new() { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
@@ -106,6 +107,9 @@ public sealed partial class PageGenerator
         public HashSet<string> StatefulIds { get; } = new();
         public HashSet<string> ListViewIds { get; } = new();
 
+        /// <summary>Control id -> id of its parent control (radio buttons of one container form a group).</summary>
+        public Dictionary<string, string> ParentOf { get; } = new(StringComparer.Ordinal);
+
         /// <summary>Control id -> WinForms property used in code -> TS initial value. Becomes `const vm = useWfModel({...})`.</summary>
         public SortedDictionary<string, SortedDictionary<string, string>> Model { get; } = new(StringComparer.Ordinal);
         public List<string> ModelComments { get; } = new();
@@ -141,6 +145,7 @@ public sealed partial class PageGenerator
         var c = new Ctx(unit, component);
         ApplyFallbacks(c, root);
         foreach (var n in Walk(root)) c.ById.TryAdd(n.Id, n);
+        FillParents(c, root);
         Prescan(c, root);
         if (_translation is not null)
             c.Translation = PageTranslator.Translate(unit, c.Names, _translation, WiredHandlers(c, root), demoted ?? new HashSet<string>());
@@ -418,7 +423,7 @@ public sealed partial class PageGenerator
         {
             "WfDataGrid" or "WfListView" => new List<string>(),
             "WfSplit" => RenderSplit(children, c),
-            "WfForm" or "WfPanel" or "WfGroupBox" => RenderArranged(children, c),
+            "WfForm" or "WfPanel" or "WfGroupBox" or "WfTabPage" => RenderArranged(children, c),
             _ => RenderSequential(children, c)
         };
     }
@@ -498,7 +503,7 @@ public sealed partial class PageGenerator
             if (spec is not null && IsStateful(spec.Name))
             {
                 c.StatefulIds.Add(node.Id);
-                AddToModel(c, node, spec.Name == "WfCheckBox" ? "Checked" : "Text");
+                AddToModel(c, node, StatefulProp(spec.Name));
             }
             if (node.Attributes.GetValueOrDefault("Visible") == "false") AddToModel(c, node, "Visible");
             if (spec?.Name == "WfListView") { c.ListViewIds.Add(node.Id); AddListViewModel(c, node); }
@@ -510,6 +515,12 @@ public sealed partial class PageGenerator
             var id = m.Groups[1].Value == "this" ? root.Id : m.Groups[1].Value;
             if (!c.ById.TryGetValue(id, out var node)) continue;
             var prop = node.Attributes.GetValueOrDefault("Fallback.Alias." + m.Groups[2].Value) ?? m.Groups[2].Value;
+            if (prop == "SelectedIndex")
+            {
+                // Only a tab control keeps its selected page in the model (a combo box's SelectedIndex is not supported yet).
+                if (_spec.Find(node.Effective())?.Name == "WfTabs") { c.StatefulIds.Add(node.Id); AddToModel(c, node, prop); }
+                continue;
+            }
             if (node != root || prop is "Text" or "Enabled" or "Visible") AddToModel(c, node, prop);
         }
     }
@@ -563,13 +574,15 @@ public sealed partial class PageGenerator
             "Text" => Str(raw ?? ""),
             "Enabled" or "Visible" => raw == "false" ? "false" : "true",
             "Checked" or "ReadOnly" => raw == "true" ? "true" : "false",
-            "Value" => int.TryParse(raw, out var n) ? n.ToString() : "0",
+            "Value" when node.Effective().EndsWith("DateTimePicker", StringComparison.Ordinal) => "new Date().toISOString()",
+            "Value" => double.TryParse(raw, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var n) ? n.ToString(System.Globalization.CultureInfo.InvariantCulture) : "0",
+            "SelectedIndex" => int.TryParse(raw, out var index) ? index.ToString() : "0",
             _ => "null"
         };
         c.ModelSet(node.Id, winFormsProp, initial);
     }
 
-    [GeneratedRegex(@"\b(\w+)\s*\.\s*(Text|Enabled|Visible|Checked|Value|ReadOnly)\b")]
+    [GeneratedRegex(@"\b(\w+)\s*\.\s*(Text|Enabled|Visible|Checked|Value|ReadOnly|SelectedIndex)\b")]
     private static partial Regex UsedPropertyRegex();
 
     // ------------------------------------------------------------------------------------------------ props
@@ -598,6 +611,8 @@ public sealed partial class PageGenerator
             if (Convert(prop, key, node.Attributes[key], c, isRoot) is { } attr) attrs.Add(attr);
         }
 
+        if (spec.Name == "WfDateTimePicker") AddDateKind(node, attrs);
+        if (spec.Name == "WfRadioButton") attrs.Add($"group={Str(c.ParentOf.GetValueOrDefault(node.Id) ?? "")}");
         if (_preview) PreviewDefaults(node, spec, attrs);
         if (spec.Name == "WfDataGrid") AddGrid(node, c, attrs);
         if (spec.Name == "WfListView") AddListView(node, c, attrs);
@@ -822,8 +837,11 @@ public sealed partial class PageGenerator
             if (isStateEvent && c.StatefulIds.Contains(node.Id))
             {
                 c.UsesModel = true;
-                var target = spec.Name == "WfCheckBox" ? $"vm.{node.Id}.checked" : $"vm.{node.Id}.text";
-                attrs.Add(handlerName == null ? $"{ev.React}={{(v) => {{ {target} = v; }}}}" : $"{ev.React}={{(v) => {{ {target} = v; {handlerName}(); }}}}");
+                var target = $"vm.{node.Id}.{ModelKey(StatefulProp(spec.Name))}";
+                // Radio buttons of one container are mutually exclusive: selecting one clears the others that are in the model.
+                var clears = spec.Name == "WfRadioButton" ? string.Concat(RadioSiblings(node, c).Select(s => $" vm.{s}.checked = false;")) : "";
+                var after = clears.Length > 0 ? $" if (v) {{{clears} }}" : "";
+                attrs.Add(handlerName == null ? $"{ev.React}={{(v) => {{ {target} = v;{after} }}}}" : $"{ev.React}={{(v) => {{ {target} = v;{after} {handlerName}(); }}}}");
             }
             else if (handlerName != null)
                 attrs.Add($"{ev.React}={{{handlerName}}}");
@@ -998,7 +1016,50 @@ public sealed partial class PageGenerator
 
     // ------------------------------------------------------------------------------------------------ utils
 
-    private static bool IsStateful(string specName) => specName is "WfTextBox" or "WfComboBox" or "WfCheckBox";
+    private static bool IsStateful(string specName) => specName is "WfTextBox" or "WfComboBox" or "WfCheckBox" or "WfRadioButton" or "WfDateTimePicker" or "WfNumericUpDown";
+
+    /// <summary>The WinForms property a stateful control keeps in the page model.</summary>
+    private static string StatefulProp(string specName) => specName switch
+    {
+        "WfCheckBox" or "WfRadioButton" => "Checked",
+        "WfDateTimePicker" or "WfNumericUpDown" => "Value",
+        "WfTabs" => "SelectedIndex",
+        _ => "Text"
+    };
+
+    private static void FillParents(Ctx c, ControlNodeIr root)
+    {
+        void Visit(ControlNodeIr parent)
+        {
+            foreach (var child in parent.Children)
+            {
+                c.ParentOf[child.Id] = parent.Id;
+                Visit(child);
+            }
+        }
+        Visit(root);
+    }
+
+    /// <summary>Other radio buttons in the same container that are part of the page model.</summary>
+    private List<string> RadioSiblings(ControlNodeIr node, Ctx c) =>
+        c.ParentOf.TryGetValue(node.Id, out var parent)
+            ? c.ParentOf.Where(kv => kv.Value == parent && kv.Key != node.Id && c.StatefulIds.Contains(kv.Key) && c.ById.TryGetValue(kv.Key, out var s) && _spec.Find(s.Effective())?.Name == "WfRadioButton")
+                .Select(kv => kv.Key).ToList()
+            : new List<string>();
+
+    /// <summary>DateTimePicker.Format / CustomFormat -> date, datetime or time (the default Long/Short format is a date).</summary>
+    private static void AddDateKind(ControlNodeIr node, List<string> attrs)
+    {
+        var format = LastToken(node.Attributes.GetValueOrDefault("Format") ?? "");
+        var kind = format == "Time" ? "time" : "date";
+        if (format == "Custom" && node.Attributes.GetValueOrDefault("CustomFormat") is { } custom)
+        {
+            var hasTime = custom.Contains('H') || custom.Contains('h') || custom.Contains("tt", StringComparison.Ordinal);
+            var hasDate = custom.Contains('d') || custom.Contains('M') || custom.Contains('y');
+            kind = hasTime && hasDate ? "datetime" : hasTime ? "time" : "date";
+        }
+        if (kind != "date") attrs.Add($"kind=\"{kind}\"");
+    }
 
     private static string ShortType(string tagName) => tagName[(tagName.LastIndexOf('.') + 1)..];
 

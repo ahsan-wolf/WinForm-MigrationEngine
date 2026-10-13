@@ -33,17 +33,17 @@ Event naming (canonical → React / Angular / HTML): `click → onClick / (wfCli
 | `Form` | `WfForm` | `title, acceptButtonId, cancelButtonId` | `load, closing` |
 | `Button` | `WfButton` | `text, variant, icon, type, dialogResult` | `click` |
 | `Label` | `WfLabel` | `text, for` | — |
-| `LinkLabel` | `WfLinkLabel` | `text, href \| route` | `click` |
+| `LinkLabel` | `WfLinkLabel` ✅ | `text, disabled` | `click` (`LinkClicked`/`Click`) |
 | `TextBox` | `WfTextBox` | `value, maxLength, readOnly, password, placeholder, casing` | `valueChange, enter, blur` |
 | `TextBox (Multiline)` | `WfTextArea` | `value, rows, wrap` | `valueChange` |
 | `MaskedTextBox` | `WfMaskedTextBox` | `value, mask` | `valueChange` |
 | `RichTextBox` | `WfRichTextBox` | `value (html), toolbar` | `valueChange` |
 | `CheckBox` | `WfCheckBox` | `checked, indeterminate, text` | `checkedChange` |
-| `RadioButton` (group) | `WfRadioGroup` | `value, options[{label,value}], orientation` | `valueChange` |
+| `RadioButton` ✅ | `WfRadioButton` | `text, checked, group` (= parent container id; radio buttons of one container are exclusive) | `checkedChange` |
 | `ComboBox` | `WfComboBox` | `items, displayMember, valueMember, value, editable` | `selectionChange` |
 | `ListBox` / `CheckedListBox` | `WfListBox` | `items, selectionMode, checkboxes, value(s)` | `selectionChange` |
-| `NumericUpDown` | `WfNumeric` | `value, min, max, step, decimals` | `valueChange` |
-| `DateTimePicker` | `WfDatePicker` | `value, mode(date\|time\|datetime), format, min, max` | `valueChange` |
+| `NumericUpDown` ✅ | `WfNumericUpDown` | `value, min, max, step, decimals, readOnly` | `valueChange` |
+| `DateTimePicker` ✅ | `WfDateTimePicker` | `value` (ISO text), `kind` (date \| datetime \| time, from `Format`/`CustomFormat`) | `valueChange` |
 | `MonthCalendar` | `WfCalendar` | `value, range` | `valueChange` |
 | `PictureBox` | `WfPictureBox` | `src, alt, fit(contain\|fill\|none\|cover)` | `click` |
 | `ProgressBar` | `WfProgress` | `value, max, indeterminate` | — |
@@ -54,7 +54,7 @@ Event naming (canonical → React / Angular / HTML): `click → onClick / (wfCli
 | ↳ columns | `WfGridColumn` types: `text, checkbox, combo, button, link, image` | `field, header, format, width, frozen, render` | — |
 | `TreeView` | `WfTreeView` | `nodes, checkboxes, lazy` | `select, expand, check` |
 | `ListView` | `WfListView` | `items, columns, checkBoxes, multiSelect, disabled` (icons/tiles/groups not yet) | `selectionChange, itemCheckedChange, itemActivate, click, doubleClick, keyUp, columnClick` |
-| `TabControl` / `TabPage` | `WfTabs` / `WfTabPage` | `activeTab, tabs[]` | `tabChange` |
+| `TabControl` / `TabPage` ✅ | `WfTabs` / `WfTabPage` | `selectedIndex` (controlled when code uses it) / `title` | `selectionChange` (`SelectedIndexChanged`) |
 | `SplitContainer` | `WfSplit` | `orientation, sizes` | `resize` |
 | `Panel` | `WfPanel` | `visible, scroll` | — |
 | `GroupBox` | `WfGroupBox` | `title` | — |

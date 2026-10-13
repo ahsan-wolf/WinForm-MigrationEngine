@@ -53,6 +53,7 @@ public static class PageTranslator
         {
             scope.Controls.Add(node.Id);
             if (node.Effective() == "System.Windows.Forms.ListView") scope.ListViews.Add(node.Id);
+            if (node.Effective() == "System.Windows.Forms.TabControl") scope.TabControls.Add(node.Id);
             foreach (var (key, value) in node.Attributes.Where(a => a.Key.StartsWith("Fallback.Alias.", StringComparison.Ordinal)))
             {
                 if (!scope.Aliases.TryGetValue(node.Id, out var map)) scope.Aliases[node.Id] = map = new Dictionary<string, string>(StringComparer.Ordinal);
