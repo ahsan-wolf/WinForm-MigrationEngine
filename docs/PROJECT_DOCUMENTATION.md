@@ -71,6 +71,7 @@ Known extractor limits: handlers in a third partial file, workflow steps deeper 
 - **State**: one `useWfModel` per page — `vm` for control properties (text, enabled, visible, checked, value, readOnly; ListView `items`/`columns`; grid `rows`), `f` for form fields. A deep proxy: reads are immediate, writes batch into one re-render, so imperative WinForms code translates one to one. Declared only when referenced (lint-clean).
 - **Navigation**: `ShowDialog` → `await dialog.show(close => <XPage onClose={close}/>)`; `Close/Hide` → `onClose?.(result)`; `Button.DialogResult` closes the dialog after the Click handler with that result.
 - **Constructor arguments → props** with fixture defaults for contract data types, and `field = arg;` seeding the field model, so a dialog opens on its own.
+- **Fallback controls**: a control without a library component renders as the closest available one (data file `fallbacks.json`: date picker -> text box, tree/list box -> list, tabs -> panels), marked and reported; **Windows-specific calls** are bypassed with a marker (data file `rules/windows-bypass.json`).
 - **Lists**: `WfListView` columns from `ColumnHeader` children; code-created lists get clearly marked sample rows.
 - **Dev launcher** in `main.tsx`: `?page=<Name>` / `?page=`; render errors shown, not blank.
 - **Contracts**: `src/services/<assembly>/{types,fixtures,service}.ts`; secret-looking members omitted/stripped (SERVER-ONLY list in the report).

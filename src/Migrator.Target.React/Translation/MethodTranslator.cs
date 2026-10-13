@@ -71,6 +71,7 @@ internal sealed partial class MethodTranslator
     private string? _pendingResult;
 
     public List<string> Reasons { get; } = new();
+    public List<string> Bypasses { get; } = new();
     public int Todos { get; private set; }
 
     public MethodTranslator(PageScope scope, MemberIr? method, bool constantContext = false)
@@ -172,6 +173,16 @@ internal sealed partial class MethodTranslator
     private List<string> Stmt(StatementSyntax s)
     {
         _after.Clear();
+
+        // Windows-specific API in a simple statement: bypassed (original kept), the rest of the method still translates.
+        if (_scope.Bypass is { } rules && s is ExpressionStatementSyntax or LocalDeclarationStatementSyntax or ReturnStatementSyntax or ThrowStatementSyntax
+            && rules.Match(s, IsKnownName) is { } api)
+        {
+            Bypasses.Add(api);
+            Poison(s);
+            return new List<string> { $"// BYPASSED — Windows-specific API ({api}) has no browser equivalent: {Collapse(s)}" };
+        }
+
         try
         {
             var lines = StmtCore(s);
@@ -556,6 +567,8 @@ internal sealed partial class MethodTranslator
         var controlId = ControlOf(left);
         if (controlId is not null)
         {
+            // A control rendered by a fallback component reads the replacement's member (DateTimePicker.Value -> text box state).
+            if (_scope.Aliases.TryGetValue(controlId, out var aliasMap) && aliasMap.TryGetValue(name, out var aliased)) name = aliased;
             if (_scope.ListViews.Contains(controlId) && name is "Items" or "SelectedItems" or "CheckedItems" or "Columns" or "SelectedIndices")
                 return ListCollection(controlId, name);
             if (ModelProps.Contains(name))

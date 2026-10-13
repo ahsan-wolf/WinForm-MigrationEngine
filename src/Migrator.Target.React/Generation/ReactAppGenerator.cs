@@ -68,7 +68,7 @@ public sealed class ReactAppGenerator
             supportRegistry.ColorAsync(vocabulary);
         }
         var env = translate
-            ? new TranslationEnv { Vocabulary = vocabulary, Components = components, Units = ir.Units, Generated = generated, Support = supportRegistry }
+            ? new TranslationEnv { Vocabulary = vocabulary, Components = components, Units = ir.Units, Generated = generated, Support = supportRegistry, Bypass = BypassRules.Load(_options.BypassRulesPath) }
             : null;
         SupportBuild? support = null;
         if (env is not null && supportRegistry is not null)
@@ -301,6 +301,16 @@ public sealed class ReactAppGenerator
                 foreach (var g in reasons) sb.AppendLine($"- {g.Count()}× {g.Key}");
             }
 
+            var bypassed = pages.SelectMany(p => p.Page.Bypassed).Concat(supportModule?.Methods.SelectMany(m => m.Bypasses) ?? Enumerable.Empty<string>()).ToList();
+            if (bypassed.Count > 0)
+            {
+                sb.AppendLine();
+                sb.AppendLine("### Windows-specific code bypassed");
+                sb.AppendLine();
+                sb.AppendLine($"{bypassed.Count} statement(s) use Windows-only APIs that a browser cannot call. Each was replaced by a `// BYPASSED` comment (the original is kept) and the rest of its method was translated. Review what each one did in the original:");
+                foreach (var g in bypassed.GroupBy(b => b).OrderByDescending(g => g.Count()).Take(20)) sb.AppendLine($"- {g.Count()}× {g.Key}");
+            }
+
             if (supportModule is not null)
             {
                 var sm = supportModule.Methods;
@@ -327,6 +337,7 @@ public sealed class ReactAppGenerator
         var order = new[]
         {
             ("generation-failed", "Generation failed (page skipped)"),
+            ("fallback-control", "Controls rendered by the closest available library component (marked `/* FALLBACK */`; review behaviour)"),
             ("unsupported-control", "Controls without a library component (`WfUnsupported` placeholder + TODO)"),
             ("nav-multi-target", "Handlers that can open several forms (only the first is wired)"),
             ("nav-out-of-scope", "Navigation to forms that were not generated"),

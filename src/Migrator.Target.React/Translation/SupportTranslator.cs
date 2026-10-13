@@ -34,6 +34,7 @@ internal static class SupportTranslator
                 Units = env.Units,
                 Generated = env.Generated,
                 Support = registry.Classes,
+                Bypass = env.Bypass,
                 Output = output
             };
             foreach (var f in cls.Fields.Values) scope.Fields.TryAdd(f.Name, f);
@@ -77,7 +78,11 @@ internal static class SupportTranslator
         {
             if (state.TryGetValue(cls.Name, out _)) return;
             state[cls.Name] = 1;
-            var initText = string.Join("\n", cls.Ir.Members.Where(m => m.Kind is MemberKind.Field or MemberKind.Property && m.IsStatic).Select(m => m.Type + " " + m.Body));
+            // Everything that can run while the module loads: static initializers, and (because a static initializer may construct an instance)
+            // instance field initializers and constructor bodies of every class. Method bodies run later and do not constrain the order.
+            var initText = string.Join("\n", cls.Ir.Members
+                .Where(m => m.Kind is MemberKind.Field or MemberKind.Property || m.Name == ".ctor")
+                .Select(m => m.Type + " " + m.Body));
             foreach (var other in registry.Classes.Values)
                 if (other.Name != cls.Name && Regex.IsMatch(initText, $@"\b{Regex.Escape(other.Name)}\b")) Visit(other);
             result.Add(cls);
@@ -152,7 +157,19 @@ internal static class SupportTranslator
             {
                 var constant = new MethodTranslator(scope, null, constantContext: true).TranslateConstant(m.Body!);
                 if (constant is "[]" or "{}" && !ts.Contains("unknown")) return $"{constant} as {ts}";
-                if (constant == "null") return ts == "unknown" ? "undefined as unknown" : $"null as unknown as {ts}";
+                if (constant == "null")
+                {
+                    if (ts == "unknown") return "undefined as unknown";
+                    // `null` means "not set yet" in the desktop app (no user logged in); a browser mock needs a usable object so member reads do not throw.
+                    if (scope.Support.TryGetValue(ts, out var supportType) && !supportType.IsEnum && !supportType.Ir.IsStatic)
+                    {
+                        mock = true;
+                        return PageTranslator.SupportDefault(supportType, ts);
+                    }
+                    var sample = PageTranslator.MockDefault(scope, m.Type, ts, scope.Output.FixturesImport.Length > 0);
+                    if (sample is not null && sample.StartsWith("fixtures.", StringComparison.Ordinal)) { mock = true; return sample; }
+                    return $"null as unknown as {ts}";
+                }
                 return constant;
             }
             catch (Untranslatable)
@@ -283,6 +300,7 @@ internal static class SupportTranslator
         body = translator.TranslateBody(out var top, out var fallbacks);
         translation.Todos = translator.Todos;
         translation.Reasons.AddRange(translator.Reasons);
+        translation.Bypasses.AddRange(translator.Bypasses);
 
         // `await` is only legal in an async method; constructors and accessors cannot be async, so they fall back.
         if (!allowAwait && body.Any(l => !l.TrimStart().StartsWith("//", StringComparison.Ordinal) && Regex.IsMatch(l, @"\bawait\b")))

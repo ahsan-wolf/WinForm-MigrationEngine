@@ -37,6 +37,9 @@ public sealed class MethodTranslation
 
     public List<string> Reasons { get; } = new();
     public int Todos { get; set; }
+
+    /// <summary>Windows-specific APIs whose statements were bypassed (one entry per statement).</summary>
+    public List<string> Bypasses { get; } = new();
 }
 
 /// <summary>Everything the page generator needs from translating one page.</summary>
@@ -100,6 +103,12 @@ public sealed class PageScope
     /// <summary>True when translating a support class: fields are `Class.x` / `this.x`, and UI (dialogs, closing) is not available.</summary>
     public bool IsModule { get; init; }
     public string OwnerName { get; init; } = "";
+
+    /// <summary>Windows-specific APIs to bypass (data file); null disables bypassing.</summary>
+    public BypassRules? Bypass { get; init; }
+
+    /// <summary>Control id -> WinForms member -> member of the replacement control (a control rendered by a fallback component: `Value` -> `Text`).</summary>
+    public Dictionary<string, Dictionary<string, string>> Aliases { get; } = new(StringComparer.Ordinal);
     public Dictionary<string, MemberIr> Fields { get; } = new(StringComparer.Ordinal);
     public Dictionary<string, List<MemberFunction>> Functions { get; } = new(StringComparer.Ordinal);
     public ContractVocabulary Vocabulary { get; init; } = ContractVocabulary.Empty;

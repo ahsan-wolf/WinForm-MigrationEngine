@@ -87,7 +87,9 @@ The console ends with counts: units extracted, pages generated, methods complete
 | `// inferred — check against backend contract` | A type guessed from columns or formats |
 | `// dropped (no browser equivalent: ...)` | Appearance-only or UI-loop code (Cursor, `DoEvents`, Refresh) that has no behaviour in a browser |
 | `// LLM-translated — verify` | Reserved for the LLM tier (not generated yet) |
-| `<WfUnsupported .../>` | A control with no library component |
+| `/* FALLBACK: DateTimePicker */` | A control with no library component of its own, rendered by the closest one (here a text box); behaviour may differ, see the report |
+| `// BYPASSED — Windows-specific API (...)` | A statement using a Windows-only API (registry, clipboard, `Process.Start`, directory services, ...) was left out; the original is kept next to it |
+| `<WfUnsupported .../>` | A control that could not even be given a fallback (rare) |
 
 ### 6.3 What the generated app looks like
 - `src/pages/<Form>Page.tsx` — one component per form. Controls are `Wf*` components; control properties live in `vm` (`vm.txtSearch.text`) and form fields in `f`, both from `useWfModel` (reads are immediate, writes re-render once, so translated WinForms code maps one to one).
@@ -129,8 +131,9 @@ What to click through: the menu and toolbar, each dialog from the entry form, li
 - Business logic is translated deterministically but **not verified**. Review async behaviour, mock data assumptions and every TODO.
 - Data is mock. The opener passing real arguments to dialogs, real services and authentication are not part of the generated app yet.
 - No pixel fidelity: layout is derived from Dock/Anchor/Location facts into flex/grid.
+- Windows-only APIs are bypassed, not translated (`rules/windows-bypass.json`; the report lists each).
 - Not translated today: `ref`/`out`, event subscriptions in code, `string.Format` format specifiers, `ConfigurationManager`/registry/file access, GDI+/P/Invoke/COM, UI calls inside non-form classes, LINQ query syntax, lambdas, `dgv.Rows` and `pnl.Controls` members, runtime-created controls.
-- Controls without a library component yet: TreeView, tabs, radio group, date picker (they render as `WfUnsupported`).
+- Controls without a library component yet (TreeView, tabs, radio group, date picker, list box, rich/masked text, ...) are rendered by the closest component (`ui-spec/fallbacks.json`): a date picker is a text box, a tree a flat list, tabs stacked panels. They work, but look and behave simply.
 - Only the React target exists; Angular and HTML+jQuery are planned. See `PROJECT_PLAN.md` for the roadmap.
 
 ## 11. Troubleshooting
