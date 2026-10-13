@@ -70,6 +70,17 @@ Use an output folder **outside the repository**. Never commit generated output d
 
 The console ends with counts: units extracted, pages generated, methods complete/partial/not translated, support classes, remaining TypeScript errors.
 
+### 5.1 Component viewer (`--preview`)
+`migrate --source <dir> --out <dir> --preview` writes a **separate app** `<out>/react-viewer/` next to the IR: every form and every user control of the project (including the ones normally inlined into other screens) as a **visual-only page**:
+controls, layout, designer text and fallback controls as designed, with placeholder data in grids, lists and combo boxes, and **no** handlers, dialogs, translated code, services, support classes or props. Entry form, navigation between forms, contracts and translation are ignored.
+
+```bash
+cd "<output folder>/react-viewer" && npm install && npm run dev
+```
+The viewer has a sidebar (forms and user controls, grouped by source folder, with counts), a filter box, and loads only the selected unit; the selection is in the URL (`#/<UnitName>`), so back/forward and links work. Arrow keys or Previous/Next step through the list;
+"design size" frames a unit at its designed width/height; a background switch helps with dark or light surfaces. A unit that could not be generated stays listed with its error. `VIEWER_REPORT.md` lists units, fallback controls and controls without a component.
+Use it to review what the engine understood of each screen before looking at behaviour (the functional app is in `react-app`).
+
 ## 6. Reading the results
 
 ### 6.1 The report (`MIGRATION_REPORT.md`)

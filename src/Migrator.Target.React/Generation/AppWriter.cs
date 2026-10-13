@@ -7,7 +7,8 @@ public static class AppWriter
 {
     private static readonly JsonSerializerOptions Pretty = new() { WriteIndented = true };
 
-    public static void Write(string appDir, string appName, string entryComponent, string uiLibraryDir, List<string> files)
+    /// <param name="entryComponent">The entry form's component; null for the viewer app, which writes its own entry point and needs no C# helpers.</param>
+    public static void Write(string appDir, string appName, string? entryComponent, string uiLibraryDir, List<string> files)
     {
         var uiRelative = Path.GetRelativePath(appDir, uiLibraryDir).Replace('\\', '/');
         var package = new Dictionary<string, object>
@@ -109,6 +110,8 @@ public static class AppWriter
             );
             """, files);
 
+        if (entryComponent is not null)
+        {
         Put(appDir, "src/main.tsx", $$"""
             import { Component, StrictMode, Suspense, lazy, type ComponentType, type ReactNode } from 'react';
             import { createRoot } from 'react-dom/client';
@@ -165,6 +168,7 @@ public static class AppWriter
               return format.replace(/\{(\d+)(?::[^}]*)?\}/g, (_match, index: string) => String(args[Number(index)] ?? ''));
             }
             """, files);
+        }
 
         // Layout helpers used by generated pages (flex rows/columns derived from Dock and Location; never pixels).
         Put(appDir, "src/app.css", """

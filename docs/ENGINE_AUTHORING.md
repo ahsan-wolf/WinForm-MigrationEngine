@@ -86,6 +86,13 @@ root control with `TriggerEvent = "Method:{name}"`. Not navigation: `MessageBox`
   `// BYPASSED — Windows-specific API (...)` with the original kept; declared names are poisoned so dependents fall back; the rest of the method translates. Statements inside conditions are not bypassed (they keep their TODO). Reported in a "Windows-specific code bypassed" section.
   A project copies the file, adds its own entries and points `bypassRulesPath` at it.
 
+## Component viewer (`migrate --preview`)
+`GenerationOptions.Preview` makes the React target write `<out>/react-viewer` instead of the functional app (`ReactAppGenerator.RunPreview`): all units, no entry form, no contracts/translation/support/legacy copies. `PageGenerator` runs with `preview: true`:
+`GeneratePreview` emits `export function XPage() { return (...) }` importing only `Wf*` from the UI library; `BuildEvents`, `Prescan`, the model, dialogs, ctor props, the `Visible` wrapper and `SeedListViewSamples` are skipped; grids and list views get constant columns/rows
+(designer columns, else `Column 1..3`; shared builders `GridColumns`/`GridSampleRows`/`ListColumnDefs` with the functional mode); combo boxes without items get two sample items; unnamed labels/buttons show `[controlId]`; `ApplyFallbacks` still applies.
+`ViewerShell` writes `src/manifest.ts` (`ViewerUnit`: id, component, file, kind form|control, title, group = source folder, source, controls, fallbacks[], unsupported[], designWidth/designHeight from the root layout, error?), `viewer.css` and the shell `main.tsx`
+(lazy per-unit pages through `import.meta.glob`, per-selection error boundary, hash routing, filter, prev/next, design-size and background toggles). The shell is generated output, not a project in this repository (CLAUDE.md §0.3). A target that adds a viewer implements the same `Preview` option.
+
 ## IR files (CLAUDE.md §4.1)
 `migrator ir` writes, per Form/UserControl, `<out>/ir/{Name}/{Name}.{facet}.ir.json` for `complete` (source of truth), `controls`,
 `control-properties`, `code-behind` and `layout`, plus `<out>/ir/project.ir.json`. Every facet is a pure function of the
