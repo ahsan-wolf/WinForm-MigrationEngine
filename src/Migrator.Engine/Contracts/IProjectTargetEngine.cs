@@ -9,6 +9,12 @@ public sealed class GenerationOptions
     /// <summary>How many navigation hops from the entry form to generate (0 = entry only, 1 = entry + forms it opens, ...). Null = everything reachable.</summary>
     public int? Depth { get; init; } = 1;
 
+    /// <summary>
+    /// Component viewer: a separate app (`<out>/<target>-viewer`) with a visual-only page for every form and user control (no handlers, data, translation or
+    /// services) and a shell that lists them and loads the selected one. Implies all units; entry form, depth, contracts and translation are ignored.
+    /// </summary>
+    public bool Preview { get; init; }
+
     /// <summary>Generate every form and user control of the project, not only those reachable from the entry form by Show/ShowDialog (needed for shells that open modules dynamically).</summary>
     public bool AllUnits { get; init; }
 

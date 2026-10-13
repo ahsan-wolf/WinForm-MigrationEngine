@@ -18,6 +18,7 @@ public sealed class ReactAppGenerator
     {
         var ir = IrFolder.Load(irFolder);
         var spec = SpecCatalog.Load(_options.UiSpecPath);
+        if (options.Preview) return RunPreview(ir, spec, outputDirectory);
 
         var entry = options.EntryForm ?? ir.Project.Source.StartupForm ?? ir.Project.Forms.FirstOrDefault()?.Name
                     ?? throw new InvalidOperationException("No entry form: the project has no forms and none was given.");
@@ -128,6 +129,84 @@ public sealed class ReactAppGenerator
 
         AppWriter.Put(outputDirectory, "MIGRATION_REPORT.md", Report(ir, entry, options, spec, pages, result, skippedOutOfScope, contracts, translate, gate, support?.Module), result.Files);
         return result;
+    }
+
+
+    /// <summary>
+    /// Component viewer: every form and user control becomes a visual-only page, listed in a manifest, plus the viewer shell. No entry form, navigation,
+    /// contracts, translation, support module or legacy copies.
+    /// </summary>
+    private GenerationResult RunPreview(IrFolder ir, SpecCatalog spec, string outputDirectory)
+    {
+        var result = new GenerationResult { OutputDirectory = outputDirectory };
+        var components = new Dictionary<string, string>(StringComparer.Ordinal);
+        var taken = new NameScope(Array.Empty<string>());
+        foreach (var name in ir.Units.Keys.OrderBy(n => n, StringComparer.Ordinal)) components[name] = taken.Unique(Naming.Component(name, ir.Units[name].IsUserControl));
+
+        var generator = new PageGenerator(spec, ir.Units, components, new HashSet<string>(ir.Units.Keys), translation: null, preview: true);
+        var viewerUnits = new List<ViewerUnit>();
+        foreach (var (name, unit) in ir.Units.OrderBy(u => u.Key, StringComparer.Ordinal))
+        {
+            var source = unit.Page.RelativePath ?? "";
+            var group = source.Contains('/') ? source[..source.LastIndexOf('/')] : "";
+            var rootLayout = unit.Page.RootControl is { } root ? unit.Layout.GetValueOrDefault(root.Id)?.Size : null;
+            try
+            {
+                var page = generator.Generate(unit);
+                AppWriter.Put(outputDirectory, $"src/pages/{page.ComponentName}.tsx", page.Source, result.Files);
+                result.GeneratedUnits.Add(name);
+                result.Issues.AddRange(page.Issues);
+                result.Issues.AddRange(page.NonVisual.Select(n => new GenerationIssue(name, "non-visual", n)));
+                viewerUnits.Add(new ViewerUnit(name, page.ComponentName, page.ComponentName, unit.IsUserControl ? "control" : "form", unit.Title, group, source, page.Controls,
+                    page.Issues.Where(i => i.Category == "fallback-control").Select(i => i.Message).ToList(),
+                    page.Issues.Where(i => i.Category == "unsupported-control").Select(i => i.Message).ToList(),
+                    rootLayout?.Width, rootLayout?.Height, null));
+            }
+            catch (Exception ex)
+            {
+                // Failure isolation: the unit stays in the list with its error, and the viewer shows it.
+                result.SkippedUnits.Add(name);
+                result.Issues.Add(new GenerationIssue(name, "generation-failed", ex.Message));
+                viewerUnits.Add(new ViewerUnit(name, components[name], components[name], unit.IsUserControl ? "control" : "form", unit.Title, group, source, 0,
+                    new List<string>(), new List<string>(), null, null, ex.Message));
+            }
+        }
+
+        ViewerShell.Write(outputDirectory, "viewer-" + Naming.Camel(Naming.StripPrefix(ir.Project.Source.Technology)).ToLowerInvariant(), Path.GetFullPath(_options.UiLibraryPath), viewerUnits, result.Files);
+        AppWriter.Put(outputDirectory, "VIEWER_REPORT.md", ViewerReport(viewerUnits, result), result.Files);
+        result.Stats["viewer.units"] = viewerUnits.Count;
+        return result;
+    }
+
+    private static string ViewerReport(List<ViewerUnit> units, GenerationResult result)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("# Viewer report");
+        sb.AppendLine();
+        sb.AppendLine($"- {units.Count(u => u.Error is null)} of {units.Count} units rendered ({units.Count(u => u.Kind == "form")} forms, {units.Count(u => u.Kind == "control")} user controls). Pages are visual-only: controls and layout as designed, placeholder data, no handlers or logic.");
+        var withFallbacks = units.Where(u => u.Fallbacks.Count > 0).ToList();
+        sb.AppendLine($"- {withFallbacks.Sum(u => u.Fallbacks.Count)} control(s) in {withFallbacks.Count} unit(s) are drawn by the closest library component (fallback).");
+        var withUnsupported = units.Where(u => u.Unsupported.Count > 0).ToList();
+        sb.AppendLine($"- {withUnsupported.Sum(u => u.Unsupported.Count)} control(s) in {withUnsupported.Count} unit(s) have no component at all (placeholder).");
+        if (units.Any(u => u.Error is not null))
+        {
+            sb.AppendLine();
+            sb.AppendLine("## Units that could not be generated");
+            foreach (var u in units.Where(u => u.Error is not null)) sb.AppendLine($"- **{u.Id}**: {u.Error}");
+        }
+        if (withFallbacks.Count > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine("## Fallback controls");
+            foreach (var u in withFallbacks) { sb.AppendLine($"- **{u.Id}**"); foreach (var f in u.Fallbacks) sb.AppendLine($"  - {f}"); }
+        }
+        if (withUnsupported.Count > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine("## Controls without a component");
+            foreach (var u in withUnsupported) { sb.AppendLine($"- **{u.Id}**"); foreach (var f in u.Unsupported) sb.AppendLine($"  - {f}"); }
+        }
+        return sb.ToString();
     }
 
     private static void WritePage(string outputDirectory, GeneratedPage page, GenerationResult result)

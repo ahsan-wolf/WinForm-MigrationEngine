@@ -59,9 +59,12 @@ public sealed partial class PageGenerator
     private readonly IReadOnlyDictionary<string, string> _components;
     private readonly ISet<string> _generated;
     private readonly TranslationEnv? _translation;
+    private readonly bool _preview;
 
-    public PageGenerator(SpecCatalog spec, IReadOnlyDictionary<string, UnitIr> units, IReadOnlyDictionary<string, string> components, ISet<string> generated, TranslationEnv? translation = null)
+    /// <param name="preview">Visual-only pages for the component viewer: controls and layout as designed with placeholder data; no handlers, model, dialogs, translation or imports other than the UI library.</param>
+    public PageGenerator(SpecCatalog spec, IReadOnlyDictionary<string, UnitIr> units, IReadOnlyDictionary<string, string> components, ISet<string> generated, TranslationEnv? translation = null, bool preview = false)
     {
+        _preview = preview;
         _translation = translation;
         _spec = spec;
         _units = units;
@@ -131,6 +134,8 @@ public sealed partial class PageGenerator
 
     public GeneratedPage Generate(UnitIr unit, ISet<string>? demoted = null)
     {
+        if (_preview) return GeneratePreview(unit);
+
         var root = unit.Page.RootControl ?? throw new InvalidDataException($"{unit.Name} has no control tree.");
         var component = _components[unit.Name];
         var c = new Ctx(unit, component);
@@ -298,7 +303,7 @@ public sealed partial class PageGenerator
         var attrs = new List<string>();
         if (node.Attributes.TryGetValue("Fallback.From", out var fallbackFrom)) attrs.Add($"/* FALLBACK: {ShortType(fallbackFrom)} */");
         BuildProps(node, spec, c, attrs, isRoot);
-        BuildEvents(node, spec, c, attrs, isRoot);
+        if (!_preview) BuildEvents(node, spec, c, attrs, isRoot);
         var children = RenderChildren(node, spec, c);
         var lines = Element(spec.Name, attrs, children);
 
@@ -318,7 +323,7 @@ public sealed partial class PageGenerator
         }
 
         // Visible: bound to the model when the designer hides the control or code toggles it.
-        if (!isRoot && c.ModelHas(node.Id, "Visible"))
+        if (!_preview && !isRoot && c.ModelHas(node.Id, "Visible"))
         {
             c.UsesModel = true;
             lines = new List<string> { $"{{vm.{node.Id}.visible && (" }.Concat(Indent(lines)).Append(")}").ToList();
@@ -541,11 +546,14 @@ public sealed partial class PageGenerator
     {
         c.LibTypes.Add("WfListColumn");
         c.LibTypes.Add("WfListItem");
-        var cols = node.Children.Where(ch => ch.Attributes.GetValueOrDefault("ParentSlot") == "Columns")
-            .Select(ch => $"{{ header: {Str(ch.Attributes.GetValueOrDefault("Text") ?? ch.Id)}{(int.TryParse(ch.Attributes.GetValueOrDefault("Width"), out var w) ? $", width: {w}" : "")} }}");
-        c.ModelSet(node.Id, "Columns", $"[{string.Join(", ", cols)}] as WfListColumn[]");
+        c.ModelSet(node.Id, "Columns", $"[{string.Join(", ", ListColumnDefs(node))}] as WfListColumn[]");
         c.ModelSet(node.Id, "Items", "[] as WfListItem[]");
     }
+
+    /// <summary>`{ header, width }` literals of a ListView's designer ColumnHeader children.</summary>
+    private static List<string> ListColumnDefs(ControlNodeIr node) =>
+        node.Children.Where(ch => ch.Attributes.GetValueOrDefault("ParentSlot") == "Columns")
+            .Select(ch => $"{{ header: {Str(ch.Attributes.GetValueOrDefault("Text") ?? ch.Id)}{(int.TryParse(ch.Attributes.GetValueOrDefault("Width"), out var w) ? $", width: {w}" : "")} }}").ToList();
 
     private static void AddToModel(Ctx c, ControlNodeIr node, string winFormsProp)
     {
@@ -590,12 +598,14 @@ public sealed partial class PageGenerator
             if (Convert(prop, key, node.Attributes[key], c, isRoot) is { } attr) attrs.Add(attr);
         }
 
+        if (_preview) PreviewDefaults(node, spec, attrs);
         if (spec.Name == "WfDataGrid") AddGrid(node, c, attrs);
         if (spec.Name == "WfListView") AddListView(node, c, attrs);
     }
 
-    private static void AddListView(ControlNodeIr node, Ctx c, List<string> attrs)
+    private void AddListView(ControlNodeIr node, Ctx c, List<string> attrs)
     {
+        if (_preview) { AddListViewPreview(node, c, attrs); return; }
         c.UsesModel = true;
         attrs.Add($"columns={{vm.{node.Id}.columns}}");
         attrs.Add($"items={{vm.{node.Id}.items}}");
@@ -645,15 +655,14 @@ public sealed partial class PageGenerator
         };
     }
 
-    private void AddGrid(ControlNodeIr node, Ctx c, List<string> attrs)
-    {
-        c.LibTypes.Add("WfGridColumn");
-        var baseName = Naming.StateName(node.Id);
-        var colsName = c.Names.Unique(baseName + "Columns");
+    private sealed record GridField(string Field, string Header, bool Checkbox, string? Format);
 
+    /// <summary>Column definitions of a grid from its designer column children; with <paramref name="placeholders"/> and no designer columns, three generic ones.</summary>
+    private static (List<string> Defs, List<GridField> Fields, int DesignerColumns) GridColumns(ControlNodeIr node, bool placeholders)
+    {
         var cols = node.Children.Where(ch => ch.Attributes.GetValueOrDefault("ParentSlot") == "Columns").ToList();
         var defs = new List<string>();
-        var fields = new List<(string Field, string Header, bool Checkbox, string? Format)>();
+        var fields = new List<GridField>();
         foreach (var col in cols)
         {
             var field = col.Attributes.GetValueOrDefault("DataPropertyName") is { Length: > 0 } dp ? dp : col.Attributes.GetValueOrDefault("Name") ?? col.Id;
@@ -661,10 +670,31 @@ public sealed partial class PageGenerator
             var format = col.Attributes.GetValueOrDefault("DefaultCellStyle.Format");
             var width = int.TryParse(col.Attributes.GetValueOrDefault("Width"), out var w) ? $", width: {w}" : "";
             defs.Add($"  {{ field: {Str(field)}, header: {Str(header)}{width}{(format is null ? "" : $", format: {Str(format)}")} }},");
-            fields.Add((field, header, col.TagName.EndsWith("CheckBoxColumn", StringComparison.Ordinal), format));
+            fields.Add(new GridField(field, header, col.TagName.EndsWith("CheckBoxColumn", StringComparison.Ordinal), format));
         }
 
-        if (cols.Count == 0)
+        if (cols.Count == 0 && placeholders)
+            for (var i = 1; i <= 3; i++)
+            {
+                defs.Add($"  {{ field: \"column{i}\", header: \"Column {i}\" }},");
+                fields.Add(new GridField($"column{i}", $"Column {i}", false, null));
+            }
+        return (defs, fields, cols.Count);
+    }
+
+    /// <summary>Three sample rows (fake values shaped by the column headers and formats).</summary>
+    private static List<Dictionary<string, object>> GridSampleRows(List<GridField> fields, int count) =>
+        Enumerable.Range(1, count).Select(i =>
+            fields.GroupBy(f => f.Field).ToDictionary(g => g.Key, g => (object)(g.First().Checkbox ? i % 2 == 1 : g.First().Format is "d" or "date" ? $"2026-01-{i:00}" : $"{g.First().Header} {i}"))).ToList();
+
+    private void AddGrid(ControlNodeIr node, Ctx c, List<string> attrs)
+    {
+        c.LibTypes.Add("WfGridColumn");
+        var baseName = Naming.StateName(node.Id);
+        var colsName = c.Names.Unique(baseName + "Columns");
+        var (defs, fields, designerColumns) = GridColumns(node, placeholders: _preview);
+
+        if (designerColumns == 0 && !_preview)
         {
             c.TopLevel.Add($"// TODO: columns of {node.Id} are created in code (not in the designer); define them here.");
             c.Issue("grid-no-columns", $"{node.Id} has no designer columns; rows are empty");
@@ -673,13 +703,82 @@ public sealed partial class PageGenerator
         c.TopLevel.AddRange(defs);
         c.TopLevel.Add("];");
 
-        var rows = Enumerable.Range(1, cols.Count == 0 ? 0 : 3).Select(i =>
-            fields.GroupBy(f => f.Field).ToDictionary(g => g.Key, g => (object)(g.First().Checkbox ? i % 2 == 1 : g.First().Format is "d" or "date" ? $"2026-01-{i:00}" : $"{g.First().Header} {i}"))).ToList();
+        var rows = GridSampleRows(fields, fields.Count == 0 ? 0 : 3);
+        if (_preview)
+        {
+            var rowsName = c.Names.Unique(baseName + "Rows");
+            c.TopLevel.Add($"const {rowsName}: Record<string, unknown>[] = {JsonSerializer.Serialize(rows, JsonOut)};");
+            attrs.Add($"rows={{{rowsName}}}");
+            attrs.Add($"columns={{{colsName}}}");
+            return;
+        }
+
         c.ModelComments.Add($"// MOCK — {node.Id} rows are fake sample data; replace with real implementation (inferred — check against backend contract)");
         c.ModelSet(node.Id, "Rows", $"{JsonSerializer.Serialize(rows, JsonOut)} as Record<string, unknown>[]");
         c.UsesModel = true;
         attrs.Add($"rows={{vm.{node.Id}.rows}}");
         attrs.Add($"columns={{{colsName}}}");
+    }
+
+    // ---------------------------------------------------------------------------------------------- preview (visual-only pages)
+
+    /// <summary>
+    /// A form or user control as a standalone, visual-only page: controls, layout, fallbacks and designer text as designed, placeholder data in
+    /// grids/lists/combo boxes, and nothing that runs: no handlers, model, dialogs, translated code, support or service imports, props.
+    /// </summary>
+    private GeneratedPage GeneratePreview(UnitIr unit)
+    {
+        var root = unit.Page.RootControl ?? throw new InvalidDataException($"{unit.Name} has no control tree.");
+        var component = _components[unit.Name];
+        var c = new Ctx(unit, component);
+        ApplyFallbacks(c, root);
+        foreach (var n in Walk(root)) c.ById.TryAdd(n.Id, n);
+        var jsx = RenderElement(root, c, isRoot: true) ?? throw new InvalidDataException($"{unit.Name}: root control produced no output.");
+
+        var sb = new StringBuilder();
+        sb.AppendLine($"// Visual-only preview of {unit.Name} ({unit.Page.RelativePath ?? "n/a"}): controls and layout as designed, placeholder data, no handlers, no logic.");
+        var lib = new List<string>(c.Lib);
+        lib.AddRange(c.LibTypes.Select(t => "type " + t));
+        sb.AppendLine($"import {{ {string.Join(", ", lib)} }} from '@wfm/ui-react';");
+        sb.AppendLine();
+        foreach (var t in c.TopLevel) sb.AppendLine(t);
+        if (c.TopLevel.Count > 0) sb.AppendLine();
+        sb.AppendLine($"export function {component}() {{");
+        sb.AppendLine("  return (");
+        foreach (var line in jsx) sb.AppendLine("    " + line);
+        sb.AppendLine("  );");
+        sb.AppendLine("}");
+
+        var page = new GeneratedPage { ComponentName = component, Source = sb.ToString(), LegacySource = "", Controls = Walk(root).Count(), NonVisual = c.NonVisual };
+        page.Issues.AddRange(c.Issues);
+        return page;
+    }
+
+    /// <summary>Placeholders so a control is never an empty or blank box in the viewer: sample combo items, a visible name for unnamed labels and buttons.</summary>
+    private static void PreviewDefaults(ControlNodeIr node, SpecControl spec, List<string> attrs)
+    {
+        if (spec.Name == "WfComboBox" && !node.Attributes.ContainsKey("Items")) attrs.Add("items={[\"Item 1\", \"Item 2\"]}");
+        if (spec.Name is "WfButton" or "WfLabel" && string.IsNullOrWhiteSpace(node.Attributes.GetValueOrDefault("Text"))) attrs.Add(Attr("text", $"[{node.Id}]"));
+    }
+
+    /// <summary>A list view with its designer columns (or three generic ones) and three sample rows, as constants.</summary>
+    private void AddListViewPreview(ControlNodeIr node, Ctx c, List<string> attrs)
+    {
+        c.LibTypes.Add("WfListColumn");
+        c.LibTypes.Add("WfListItem");
+        c.Lib.Add("wfListItemFromArray");
+        var baseName = Naming.StateName(node.Id);
+        var colsName = c.Names.Unique(baseName + "Columns");
+        var itemsName = c.Names.Unique(baseName + "Items");
+        var defs = ListColumnDefs(node);
+        var count = defs.Count > 0 ? defs.Count : 3;
+        if (defs.Count == 0) defs = Enumerable.Range(1, count).Select(i => $"{{ header: 'Column {i}' }}").ToList();
+        var rows = Enumerable.Range(1, 3).Select(r => "wfListItemFromArray([" + string.Join(", ", Enumerable.Range(1, count).Select(i => $"'Sample {r}.{i}'")) + "])");
+        c.TopLevel.Add($"const {colsName}: WfListColumn[] = [{string.Join(", ", defs)}];");
+        c.TopLevel.Add($"const {itemsName}: WfListItem[] = [{string.Join(", ", rows)}];");
+        attrs.Add($"columns={{{colsName}}}");
+        attrs.Add($"items={{{itemsName}}}");
+        if (node.Attributes.GetValueOrDefault("MultiSelect") == "false") attrs.Add("multiSelect={false}");
     }
 
     // ---------------------------------------------------------------------------------------------- events
