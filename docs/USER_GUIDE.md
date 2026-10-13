@@ -61,6 +61,7 @@ Use an output folder **outside the repository**. Never commit generated output d
 |---|---|
 | `--target react-app` | Target engine (only React exists today; Angular and HTML+jQuery are planned) |
 | `--entry <form>` | Entry form (default: the startup form from `Program.cs`) |
+| `--units all` | Generate every form and user control, not only the ones reachable from the entry form (use for shells that open screens from menu data) |
 | `--depth <n\|all>` | How many `Show/ShowDialog` hops from the entry form to generate (default 1; `all` = everything reachable) |
 | `--translate none\|rules\|llm` | `none`: handlers stay commented C#. `rules`: deterministic C# -> TypeScript. `llm` currently behaves like `rules` (LLM tier planned) |
 | `--compile-gate` | Run `npm install` if needed, then `tsc`; methods that do not compile are demoted back to commented C# and the page is regenerated (up to 5 rounds). Without the flag the gate runs only if dependencies already exist; `--no-compile-gate` skips it |

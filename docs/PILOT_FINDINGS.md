@@ -63,3 +63,17 @@ How the number moved: 321 (first rule translator) -> 332 (ListView) -> 375 (proj
 declarations that depend on an untranslated statement (cascade), members of types with no browser equivalent (`ImageList`, `TimeSpan`, WinForms types), `ref`/`out` arguments, `ConfigurationManager`,
 event subscriptions in code, `dgv.Rows` / `pnl.Controls`. Pages open with **mock data** (fixture rows from the contract, sample list rows); the opener does not pass real constructor arguments yet.
 Everything is reviewed by the owner before use: translated logic is deterministic but unverified.
+
+## 6. Second application (an HR suite, 2026-10-13): what it exposed
+A multi-project solution (17 projects; 15 forms + 144 user controls; ~2,200 controls; custom control libraries; code-only base classes for every screen; a shell that opens modules by reflection). It was the first test of project independence.
+
+| Finding | Effect | Fix |
+|---|---|---|
+| Controls come from custom libraries (`Vendor.Controls.TextBox : System.Windows.Forms.TextBox`, project `XComboBox`) | 3% of controls recognised | Base-type chain resolution (`ResolvedType`): ~99% resolve to standard types, ~93% supported by the spec (rest: DateTimePicker 79, TreeView, RadioButton, TabControl, ListBox, ...) |
+| Every screen derives from code-only base classes | Base members (mode flags, find/export hooks) unresolved: 15% of methods complete | Inherited members merged: 43% complete (1,759 / 4,123 methods) |
+| Business layer (252 classes) extracted as "support" | 23,600-line module | Pruned to reachable classes (145 classes) |
+| Shell opens screens via `Activator.CreateInstance(type)` | Only the main form was reachable | `--units all` (a module registry with `typeof`/`Activator` translation is the next step) |
+| Designer leaves grid columns declared but unattached; duplicate column keys; verbatim `@param` names | placeholders / crash / invalid TypeScript | inert-column rule, de-duplication, `ValueText` identifiers |
+| Several lint rules fire on faithfully translated code | 634 lint errors | rules off in the generated config, empty-branch comments, `const` merge |
+
+Result: 159 units generated, `tsc` 0 errors, lint 0, build OK; first application unchanged (375 / 706).

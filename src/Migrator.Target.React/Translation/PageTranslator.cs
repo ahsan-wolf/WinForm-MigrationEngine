@@ -1,3 +1,4 @@
+using Migrator.Engine.Projections;
 using System.Text.RegularExpressions;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -49,7 +50,7 @@ public static class PageTranslator
         foreach (var node in Walk(root).Skip(1))
         {
             scope.Controls.Add(node.Id);
-            if (node.TagName == "System.Windows.Forms.ListView") scope.ListViews.Add(node.Id);
+            if (node.Effective() == "System.Windows.Forms.ListView") scope.ListViews.Add(node.Id);
         }
 
         foreach (var m in unit.Page.Members.Where(m => m.Kind is MemberKind.Field or MemberKind.Property))
@@ -122,10 +123,10 @@ public static class PageTranslator
         var statements = tree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>().First().Body?.Statements ?? default;
         foreach (var s in statements)
         {
-            if (s is ExpressionStatementSyntax { Expression: InvocationExpressionSyntax { Expression: IdentifierNameSyntax { Identifier.Text: "InitializeComponent" } } }) continue;
+            if (s is ExpressionStatementSyntax { Expression: InvocationExpressionSyntax { Expression: IdentifierNameSyntax { Identifier.ValueText: "InitializeComponent" } } }) continue;
             if (s is ExpressionStatementSyntax { Expression: AssignmentExpressionSyntax { RawKind: (int)SyntaxKind.SimpleAssignmentExpression } a }
                 && FieldName(a.Left) is { } fieldName && scope.Fields.TryGetValue(fieldName, out var field)
-                && a.Right is IdentifierNameSyntax arg && output.CtorProps.FirstOrDefault(cp => cp.Key == arg.Identifier.Text) is { Default: not null } prop
+                && a.Right is IdentifierNameSyntax arg && output.CtorProps.FirstOrDefault(cp => cp.Key == arg.Identifier.ValueText) is { Default: not null } prop
                 && prop.Type != "unknown" && scope.Vocabulary.MapType(field.Type, new HashSet<string>()) == prop.Type)
             {
                 output.FieldInitials[fieldName] = prop.Local;
@@ -137,8 +138,8 @@ public static class PageTranslator
 
     private static string? FieldName(ExpressionSyntax e) => e switch
     {
-        IdentifierNameSyntax id => id.Identifier.Text,
-        MemberAccessExpressionSyntax { Expression: ThisExpressionSyntax } m => m.Name.Identifier.Text,
+        IdentifierNameSyntax id => id.Identifier.ValueText,
+        MemberAccessExpressionSyntax { Expression: ThisExpressionSyntax } m => m.Name.Identifier.ValueText,
         _ => null
     };
 
@@ -166,30 +167,30 @@ public static class PageTranslator
             var root = tree.GetRoot();
             var formLocals = root.DescendantNodes().OfType<VariableDeclaratorSyntax>()
                 .Where(v => v.Initializer?.Value is ObjectCreationExpressionSyntax oc && scope.Units.ContainsKey(Simple(oc.Type)))
-                .Select(v => v.Identifier.Text).ToHashSet(StringComparer.Ordinal);
+                .Select(v => v.Identifier.ValueText).ToHashSet(StringComparer.Ordinal);
 
             if (!calls.TryGetValue(m.Name, out var called)) calls[m.Name] = called = new HashSet<string>(StringComparer.Ordinal);
             foreach (var inv in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
             {
                 switch (inv.Expression)
                 {
-                    case IdentifierNameSyntax id when scope.Functions.ContainsKey(id.Identifier.Text):
-                        called.Add(id.Identifier.Text);
+                    case IdentifierNameSyntax id when scope.Functions.ContainsKey(id.Identifier.ValueText):
+                        called.Add(id.Identifier.ValueText);
                         break;
-                    case MemberAccessExpressionSyntax { Expression: ThisExpressionSyntax } t when scope.Functions.ContainsKey(t.Name.Identifier.Text):
-                        called.Add(t.Name.Identifier.Text);
+                    case MemberAccessExpressionSyntax { Expression: ThisExpressionSyntax } t when scope.Functions.ContainsKey(t.Name.Identifier.ValueText):
+                        called.Add(t.Name.Identifier.ValueText);
                         break;
                     case MemberAccessExpressionSyntax { Expression: IdentifierNameSyntax sid } sma
-                        when scope.Support.TryGetValue(sid.Identifier.Text, out var supportClass) && !scope.Fields.ContainsKey(sid.Identifier.Text)
-                             && supportClass.Functions.TryGetValue(sma.Name.Identifier.Text, out var supportFns):
+                        when scope.Support.TryGetValue(sid.Identifier.ValueText, out var supportClass) && !scope.Fields.ContainsKey(sid.Identifier.ValueText)
+                             && supportClass.Functions.TryGetValue(sma.Name.Identifier.ValueText, out var supportFns):
                         if (supportFns.Any(fn => fn.IsAsync)) direct.Add(m.Name);
                         break;
                     case MemberAccessExpressionSyntax ma:
                         var recv = ma.Expression.ToString();
-                        var method = ma.Name.Identifier.Text;
+                        var method = ma.Name.Identifier.ValueText;
                         if (recv is "MessageBox" or "System.Windows.Forms.MessageBox" && method == "Show") direct.Add(m.Name);
                         else if (method is "ShowDialog" or "Show" && (ma.Expression is ObjectCreationExpressionSyntax oc2 && scope.Units.ContainsKey(Simple(oc2.Type))
-                                 || ma.Expression is IdentifierNameSyntax fid && formLocals.Contains(fid.Identifier.Text))) direct.Add(m.Name);
+                                 || ma.Expression is IdentifierNameSyntax fid && formLocals.Contains(fid.Identifier.ValueText))) direct.Add(m.Name);
                         else if (FacadeName(ma.Expression, scope.Vocabulary) is { } facade && scope.Vocabulary.IsFacade(facade) && !scope.Fields.ContainsKey(facade) && !scope.Controls.Contains(facade))
                         {
                             if (Enumerable.Range(0, 16).Any(n => scope.Vocabulary.FindCall(facade, method, n) is not null)) direct.Add(m.Name);
@@ -212,16 +213,16 @@ public static class PageTranslator
 
     internal static string? FacadeName(ExpressionSyntax e, ContractVocabulary vocabulary) => e switch
     {
-        IdentifierNameSyntax id => id.Identifier.Text,
-        MemberAccessExpressionSyntax { Expression: IdentifierNameSyntax ns } m when vocabulary.IsNamespaceRoot(ns.Identifier.Text) => m.Name.Identifier.Text,
+        IdentifierNameSyntax id => id.Identifier.ValueText,
+        MemberAccessExpressionSyntax { Expression: IdentifierNameSyntax ns } m when vocabulary.IsNamespaceRoot(ns.Identifier.ValueText) => m.Name.Identifier.ValueText,
         _ => null
     };
 
     private static string Simple(TypeSyntax t) => t switch
     {
-        QualifiedNameSyntax q => q.Right.Identifier.Text,
-        GenericNameSyntax g => g.Identifier.Text,
-        IdentifierNameSyntax i => i.Identifier.Text,
+        QualifiedNameSyntax q => q.Right.Identifier.ValueText,
+        GenericNameSyntax g => g.Identifier.ValueText,
+        IdentifierNameSyntax i => i.Identifier.ValueText,
         _ => t.ToString()
     };
 
@@ -404,6 +405,17 @@ public static class PageTranslator
             var inner = StripStrings(string.Join("\n", result.Skip(i + 1).Take(close - i - 1).Where(l => !l.TrimStart().StartsWith("//", StringComparison.Ordinal))));
             if (!Regex.IsMatch(inner, $@"(?<![\w.]){Regex.Escape(loop.Groups[2].Value)}\b"))
                 result[i] = Regex.Replace(result[i], @"for \(const (\w+) of ", "for (const _$1 of ");
+        }
+
+        // `let x: T;` immediately followed by `x = v;` and never written again is a const declaration.
+        for (var i = 0; i + 1 < result.Count; i++)
+        {
+            var decl = Regex.Match(result[i], @"^(\s*)let (\w+)(: [^=]+)?;$");
+            if (!decl.Success || result[i].TrimStart().StartsWith("//", StringComparison.Ordinal)) continue;
+            var assign = Regex.Match(result[i + 1], $@"^{Regex.Escape(decl.Groups[1].Value)}{Regex.Escape(decl.Groups[2].Value)} = (.*);$");
+            if (!assign.Success || CountWrites(Code(), decl.Groups[2].Value) != 1) continue;
+            result[i] = $"{decl.Groups[1].Value}const {decl.Groups[2].Value}{decl.Groups[3].Value} = {assign.Groups[1].Value};";
+            result.RemoveAt(i + 1);
         }
 
         for (var i = 0; i < result.Count; i++)

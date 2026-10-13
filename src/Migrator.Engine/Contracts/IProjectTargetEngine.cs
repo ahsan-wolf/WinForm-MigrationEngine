@@ -9,6 +9,9 @@ public sealed class GenerationOptions
     /// <summary>How many navigation hops from the entry form to generate (0 = entry only, 1 = entry + forms it opens, ...). Null = everything reachable.</summary>
     public int? Depth { get; init; } = 1;
 
+    /// <summary>Generate every form and user control of the project, not only those reachable from the entry form by Show/ShowDialog (needed for shells that open modules dynamically).</summary>
+    public bool AllUnits { get; init; }
+
     /// <summary>contract.json files (from `migrator contract`) of binary-only dependencies the app calls; the target emits typed mock services from them.</summary>
     public IReadOnlyList<string> ContractFiles { get; init; } = Array.Empty<string>();
 

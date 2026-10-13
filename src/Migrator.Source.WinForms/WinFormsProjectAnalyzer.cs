@@ -28,11 +28,16 @@ public sealed partial class WinFormsProjectAnalyzer : IProjectAnalyzer
         // class name -> declared base type, from EVERY .cs file, so chains through helper bases without a designer
         // (BaseForm, BaseUserControl) still resolve.
         var baseOf = new Dictionary<string, string>();
+        var filesOf = new Dictionary<string, List<string>>();
         foreach (var file in EnumerateFiles(rootPath, "*.cs"))
             foreach (var cls in CSharpSyntaxTree.ParseText(File.ReadAllText(file)).GetCompilationUnitRoot()
                          .DescendantNodes().OfType<ClassDeclarationSyntax>())
+            {
                 if (cls.BaseList?.Types.FirstOrDefault()?.Type.ToString() is { } baseType)
-                    baseOf.TryAdd(cls.Identifier.Text, baseType);
+                    baseOf.TryAdd(cls.Identifier.ValueText, baseType);
+                if (!filesOf.TryGetValue(cls.Identifier.ValueText, out var list)) filesOf[cls.Identifier.ValueText] = list = new List<string>();
+                if (!list.Contains(file)) list.Add(file);
+            }
 
         var named = new List<(string Name, string Designer, string CodeBehind)>();
         foreach (var (designer, codeBehind) in pairs)
@@ -44,13 +49,15 @@ public sealed partial class WinFormsProjectAnalyzer : IProjectAnalyzer
 
         var forms = new List<SourceUnit>();
         var userControls = new List<SourceUnit>();
+        var resolver = new WinFormsTypeResolver(baseOf);
         foreach (var (name, designer, codeBehind) in named.OrderBy(n => n.Name, StringComparer.Ordinal))
         {
-            var kind = IsUserControl(name, baseOf) ? SourceUnitKind.UserControl : SourceUnitKind.Form;
+            // A reusable control: a user control, or a custom control derived from any other standard control (`X : ComboBox` with a designer).
+            var kind = IsUserControl(name, baseOf) || resolver.IsControlLike(name) ? SourceUnitKind.UserControl : SourceUnitKind.Form;
             (kind == SourceUnitKind.UserControl ? userControls : forms).Add(new SourceUnit(name, kind, designer, codeBehind));
         }
 
-        return new ProjectAnalysis(rootPath, FindFrameworkVersion(rootPath), FindStartupForm(rootPath), forms, userControls);
+        return new ProjectAnalysis(rootPath, FindFrameworkVersion(rootPath), FindStartupForm(rootPath), forms, userControls, baseOf, filesOf.ToDictionary(kv => kv.Key, kv => (IReadOnlyList<string>)kv.Value));
     }
 
     private static bool IsUserControl(string className, Dictionary<string, string> baseOf)

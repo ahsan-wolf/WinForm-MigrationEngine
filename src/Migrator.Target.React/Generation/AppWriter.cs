@@ -93,9 +93,14 @@ public static class AppWriter
                 plugins: { 'react-hooks': reactHooks },
                 rules: {
                   ...reactHooks.configs.recommended.rules,
-                  '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' }],
+                  '@typescript-eslint/no-unused-vars': ['error', { args: 'none', argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' }],
                   // Stylistic rules that translated C# trips on without any bug: `!!x` kept from `!string.IsNullOrEmpty(x)`, and rethrown errors.
                   'no-extra-boolean-cast': 'off',
+                  // Faithfully translated C# has initial values that are overwritten, declarations assigned elsewhere (out parameters), rethrows and constant loops.
+                  'no-useless-assignment': 'off',
+                  'no-unassigned-vars': 'off',
+                  'no-useless-catch': 'off',
+                  'no-constant-condition': 'off',
                   'preserve-caught-error': 'off',
                   // useWfModel returns a deliberately mutable model (WinForms-style imperative code: txt.Text = x). Do not enable the React Compiler here.
                   'react-hooks/immutability': 'off',

@@ -24,12 +24,17 @@ public sealed class ReactAppGenerator
         if (!ir.Units.ContainsKey(entry)) throw new InvalidOperationException($"Entry form '{entry}' is not in project.ir.json.");
 
         var scope = Reachable(ir, entry, options.Depth);
+        if (options.AllUnits)
+            foreach (var name in ir.Units.Keys.OrderBy(n => n, StringComparer.Ordinal)) scope.TryAdd(name, 99);
         var components = new Dictionary<string, string>(StringComparer.Ordinal);
         var taken = new NameScope(Array.Empty<string>());
         foreach (var name in scope.Keys) components[name] = taken.Unique(Naming.Component(name, ir.Units[name].IsUserControl));
 
         var result = new GenerationResult { OutputDirectory = outputDirectory };
         var scopeUnits = scope.Keys.Select(n => ir.Units[n]).ToList();
+
+        // Only the project classes the generated pages reach (directly or through each other) become part of the app.
+        var supportFile = ir.Support is { Classes.Count: > 0 } ? SupportPruner.Reachable(ir.Support, scopeUnits) : null;
 
         // External contracts first: the translator needs their vocabulary (facade methods, type names) before any page is generated.
         var contracts = new List<ContractEmitResult>();
@@ -38,7 +43,7 @@ public sealed class ReactAppGenerator
             try
             {
                 var emitted = ServiceEmitter.Emit(file, scopeUnits, options.ContractScope.Equals("all", StringComparison.OrdinalIgnoreCase), outputDirectory, result.Files,
-                    ir.Support?.Classes.SelectMany(c => c.Members));
+                    supportFile?.Classes.SelectMany(c => c.Members));
                 contracts.Add(emitted);
                 result.Issues.AddRange(emitted.OmittedMembers.Concat(emitted.OmittedMethods).Select(m => new GenerationIssue(emitted.Assembly, "contract-secret-omitted", m)));
                 result.Issues.AddRange(emitted.CredentialParametersStripped.Distinct().Select(m => new GenerationIssue(emitted.Assembly, "contract-credentials-stripped", $"{m}: credentials parameter removed; the server supplies it")));
@@ -56,7 +61,7 @@ public sealed class ReactAppGenerator
         // The project's own non-UI classes become src/support/index.ts; their names are valid types in every translated page.
         var vocabulary = new ContractVocabulary(contracts.FirstOrDefault());
         SupportRegistry? supportRegistry = null;
-        if (translate && ir.Support is { Classes.Count: > 0 } supportFile)
+        if (translate && supportFile is { Classes.Count: > 0 })
         {
             supportRegistry = SupportRegistry.Build(supportFile);
             foreach (var name in supportRegistry.Classes.Keys) vocabulary.SupportTypes.Add(name);

@@ -27,7 +27,7 @@ public sealed class WinFormsSourceEngine : IProjectAwareSourceEngine, IIrProject
         var userControls = analysis.UserControls.GroupBy(u => u.Name).Select(g => g.First()).ToDictionary(
             u => u.Name,
             u => new WinFormsSourceText(File.ReadAllText(u.DesignerPath), File.ReadAllText(u.CodeBehindPath), ResxReader.ReadSibling(u.CodeBehindPath)));
-        return Pipeline(userControls);
+        return Pipeline(userControls, new WinFormsTypeResolver(analysis.TypeBases), analysis.TypeFiles);
     }
 
     /// <summary>The project's own non-UI classes (helpers, data classes, enums), written as support.ir.json.</summary>
@@ -41,10 +41,10 @@ public sealed class WinFormsSourceEngine : IProjectAwareSourceEngine, IIrProject
         WinFormsDesignerParser.Parse(context.MarkupContent).Unhandled;
 
     // Order matters: tree -> members -> semantics -> workflows -> navigation (later facets read the earlier ones from PageIr).
-    private static IEnumerable<IIrExtractor> Pipeline(IReadOnlyDictionary<string, WinFormsSourceText>? userControls) => new IIrExtractor[]
+    private static IEnumerable<IIrExtractor> Pipeline(IReadOnlyDictionary<string, WinFormsSourceText>? userControls, WinFormsTypeResolver? resolver = null, IReadOnlyDictionary<string, IReadOnlyList<string>>? typeFiles = null) => new IIrExtractor[]
     {
-        new WinFormsControlTreeExtractor(userControls),
-        new WinFormsMemberExtractor(),
+        new WinFormsControlTreeExtractor(userControls, resolver: resolver),
+        new WinFormsMemberExtractor(typeFiles),
         new WinFormsSemanticsExtractor(),
         new WinFormsWorkflowExtractor(),
         new WinFormsNavigationExtractor()

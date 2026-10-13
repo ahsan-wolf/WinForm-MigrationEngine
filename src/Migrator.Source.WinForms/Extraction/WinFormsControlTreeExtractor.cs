@@ -1,3 +1,4 @@
+using Migrator.Engine.Projections;
 using WebFormsMigrator.IR.Contracts;
 using WebFormsMigrator.IR.Models;
 
@@ -11,14 +12,16 @@ public sealed class WinFormsControlTreeExtractor : IIrExtractor
 {
     private readonly IReadOnlyDictionary<string, WinFormsSourceText> _userControls;
     private readonly int _maxRecursionDepth;
+    private readonly WinFormsTypeResolver? _resolver;
 
     /// <param name="userControls">
     /// Simple class name -> source of every UserControl in the project. A field whose type matches is inlined as real
     /// child nodes instead of an opaque leaf.
     /// </param>
     /// <param name="maxRecursionDepth">Guards against UserControls that (incorrectly) reference each other cyclically.</param>
-    public WinFormsControlTreeExtractor(IReadOnlyDictionary<string, WinFormsSourceText>? userControls = null, int maxRecursionDepth = 4)
+    public WinFormsControlTreeExtractor(IReadOnlyDictionary<string, WinFormsSourceText>? userControls = null, int maxRecursionDepth = 4, WinFormsTypeResolver? resolver = null)
     {
+        _resolver = resolver;
         _userControls = userControls ?? new Dictionary<string, WinFormsSourceText>();
         _maxRecursionDepth = maxRecursionDepth;
     }
@@ -31,6 +34,13 @@ public sealed class WinFormsControlTreeExtractor : IIrExtractor
         target.Name = designer.ClassName;
         target.MasterPageName = null; // no WinForms equivalent of a Web Forms master page
         target.RootControl = BuildRoot(designer, context.CodeBehindContent ?? "", ResxReader.ReadSibling(context.FilePath), _maxRecursionDepth);
+    }
+
+    /// <summary>Records the standard framework type behind a custom control (attribute <c>ResolvedType</c>); standard types need nothing.</summary>
+    private void Resolve(ControlNodeIr node)
+    {
+        if (_resolver is null || node.TagName.StartsWith("System.Windows.Forms.", StringComparison.Ordinal)) return;
+        if (_resolver.Resolve(node.TagName) is { } resolved) node.Attributes[ControlTypes.ResolvedTypeKey] = resolved;
     }
 
     private ControlNodeIr BuildRoot(DesignerParseResult designer, string codeBehind, string? resourcesXml, int remainingDepth)
@@ -48,6 +58,7 @@ public sealed class WinFormsControlTreeExtractor : IIrExtractor
         };
         foreach (var (eventName, handler) in designer.RootEventHandlers)
             root.Attributes[$"On{eventName}"] = handler;
+        Resolve(root);
 
         var resources = ResxReader.Parse(resourcesXml);
         if (designer.ResourceKeys.TryGetValue("", out var rootKey)) MergeResources(root.Attributes, resources, rootKey);
@@ -67,6 +78,7 @@ public sealed class WinFormsControlTreeExtractor : IIrExtractor
             if (designer.ResourceKeys.TryGetValue(id, out var key)) MergeResources(attributes, resources, key);
 
             var node = new ControlNodeIr { Id = id, TagName = tagName, Attributes = attributes };
+            Resolve(node);
 
             if (remainingDepth > 0)
             {

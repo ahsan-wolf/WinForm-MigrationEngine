@@ -36,7 +36,7 @@ public static class LayoutDeriver
         var free = new List<(ControlNodeIr node, int index, ControlLayout? l)>();
         foreach (var item in ordered)
         {
-            var dock = item.l?.Dock ?? DefaultDock(item.node.TagName);
+            var dock = item.l?.Dock ?? DefaultDock(item.node.Effective());
             switch (dock)
             {
                 case "Top": arrangement.Top.Add(item.node); break;
