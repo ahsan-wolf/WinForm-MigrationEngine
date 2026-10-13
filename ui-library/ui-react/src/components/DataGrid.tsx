@@ -51,8 +51,8 @@ export function WfDataGrid({ rows, columns, selectionMode = 'single', sortable =
       <table role="grid" aria-multiselectable={selectionMode === 'multi'}>
         <thead>
           <tr>
-            {columns.map(c => (
-              <th key={c.field} style={c.width ? { width: c.width } : undefined} scope="col"
+            {columns.map((c, ci) => (
+              <th key={`${ci}:${c.field}`} style={c.width ? { width: c.width } : undefined} scope="col"
                   aria-sort={sort?.field === c.field ? (sort.dir === 1 ? 'ascending' : 'descending') : undefined}
                   onClick={sortable ? () => setSort(s => ({ field: c.field, dir: s?.field === c.field && s.dir === 1 ? -1 : 1 })) : undefined}>
                 {c.header}{sort?.field === c.field ? (sort.dir === 1 ? ' ▲' : ' ▼') : ''}
@@ -64,8 +64,8 @@ export function WfDataGrid({ rows, columns, selectionMode = 'single', sortable =
           {order.map(i => (
             <tr key={i} aria-selected={selected.has(i)} className={selected.has(i) ? 'wf-row-selected' : undefined}
                 onClick={e => pick(i, e.ctrlKey || e.metaKey)}>
-              {columns.map(c => (
-                <td key={c.field} onClick={() => onCellClick?.({ row: rows[i], field: c.field, rowIndex: i })}>{formatCell(rows[i][c.field], c.format)}</td>
+              {columns.map((c, ci) => (
+                <td key={`${ci}:${c.field}`} onClick={() => onCellClick?.({ row: rows[i], field: c.field, rowIndex: i })}>{formatCell(rows[i][c.field], c.format)}</td>
               ))}
             </tr>
           ))}
