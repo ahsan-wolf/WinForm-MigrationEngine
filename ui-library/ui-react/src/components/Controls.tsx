@@ -24,8 +24,10 @@ export interface WfTextBoxProps extends Common {
   onValueChange?: (value: string) => void; onEnter?: () => void;
 }
 export function WfTextBox({ value, placeholder, readOnly, password, multiline, maxLength, onValueChange, onEnter, disabled, id, className, tooltip }: WfTextBoxProps) {
+  // Controlled when someone listens for changes; otherwise `value` is only the starting text and the user can still type (a preview or an unwired field).
   const common = {
-    id, title: tooltip, placeholder, readOnly, disabled, maxLength, value: value ?? '',
+    id, title: tooltip, placeholder, readOnly, disabled, maxLength,
+    ...(onValueChange ? { value: value ?? '' } : { defaultValue: value ?? '' }),
     className: cls('wf-textbox', className),
     onChange: (e: { target: { value: string } }) => onValueChange?.(e.target.value),
   };
@@ -36,7 +38,7 @@ export function WfTextBox({ value, placeholder, readOnly, password, multiline, m
 export interface WfComboBoxProps extends Common { items?: string[]; value?: string; onSelectionChange?: (value: string) => void }
 export function WfComboBox({ items = [], value, onSelectionChange, disabled, id, className, tooltip }: WfComboBoxProps) {
   return (
-    <select id={id} title={tooltip} disabled={disabled} value={value ?? ''} className={cls('wf-combobox', className)}
+    <select id={id} title={tooltip} disabled={disabled} {...(onSelectionChange ? { value: value ?? '' } : { defaultValue: value ?? '' })} className={cls('wf-combobox', className)}
             onChange={e => onSelectionChange?.(e.target.value)}>
       {value !== undefined && value !== '' && !items.includes(value) && <option value={value}>{value}</option>}
       {items.map(item => <option key={item} value={item}>{item}</option>)}
@@ -48,8 +50,8 @@ export interface WfCheckBoxProps extends Common { text?: string; checked?: boole
 export function WfCheckBox({ text, checked, onCheckedChange, disabled, id, className, tooltip }: WfCheckBoxProps) {
   return (
     <label className={cls('wf-checkbox', className)} title={tooltip}>
-      <input type="checkbox" id={id} disabled={disabled} checked={checked ?? false} accessKey={parseMnemonic(text).accessKey}
-             onChange={e => onCheckedChange?.(e.target.checked)} />
+      <input type="checkbox" id={id} disabled={disabled} {...(onCheckedChange ? { checked: checked ?? false } : { defaultChecked: checked ?? false })}
+             accessKey={parseMnemonic(text).accessKey} onChange={e => onCheckedChange?.(e.target.checked)} />
       <span><MnemonicText text={text} /></span>
     </label>
   );
