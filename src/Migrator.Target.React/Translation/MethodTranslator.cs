@@ -122,31 +122,31 @@ internal sealed partial class MethodTranslator
         foreach (var v in root.DescendantNodes().OfType<VariableDeclaratorSyntax>())
         {
             if (v.Initializer?.Value is ObjectCreationExpressionSyntax oc && _scope.Units.ContainsKey(SimpleTypeName(oc.Type)))
-                _formLocals[v.Identifier.Text] = SimpleTypeName(oc.Type);
+                _formLocals[v.Identifier.ValueText] = SimpleTypeName(oc.Type);
             else
             {
-                _locals.Add(v.Identifier.Text);
-                if (v.Parent is VariableDeclarationSyntax vd && IsOpaqueType(vd.Type)) _opaqueLocals.Add(v.Identifier.Text);
-                if (v.Parent is VariableDeclarationSyntax { Type: IdentifierNameSyntax { Identifier.Text: "ListViewItem" } }) _itemLocals.Add(v.Identifier.Text);
+                _locals.Add(v.Identifier.ValueText);
+                if (v.Parent is VariableDeclarationSyntax vd && IsOpaqueType(vd.Type)) _opaqueLocals.Add(v.Identifier.ValueText);
+                if (v.Parent is VariableDeclarationSyntax { Type: IdentifierNameSyntax { Identifier.ValueText: "ListViewItem" } }) _itemLocals.Add(v.Identifier.ValueText);
             }
         }
         foreach (var a in root.DescendantNodes().OfType<AssignmentExpressionSyntax>())
-            if (a.Left is IdentifierNameSyntax target) _reassigned.Add(target.Identifier.Text);
+            if (a.Left is IdentifierNameSyntax target) _reassigned.Add(target.Identifier.ValueText);
         foreach (var u in root.DescendantNodes().OfType<PrefixUnaryExpressionSyntax>().Where(u => u.IsKind(SyntaxKind.PreIncrementExpression) || u.IsKind(SyntaxKind.PreDecrementExpression)))
-            if (u.Operand is IdentifierNameSyntax t1) _reassigned.Add(t1.Identifier.Text);
+            if (u.Operand is IdentifierNameSyntax t1) _reassigned.Add(t1.Identifier.ValueText);
         foreach (var u in root.DescendantNodes().OfType<PostfixUnaryExpressionSyntax>())
-            if (u.Operand is IdentifierNameSyntax t2) _reassigned.Add(t2.Identifier.Text);
+            if (u.Operand is IdentifierNameSyntax t2) _reassigned.Add(t2.Identifier.ValueText);
         foreach (var arg in root.DescendantNodes().OfType<ArgumentSyntax>().Where(x => !x.RefKindKeyword.IsKind(SyntaxKind.None)))
-            if (arg.Expression is IdentifierNameSyntax t3) _reassigned.Add(t3.Identifier.Text);
+            if (arg.Expression is IdentifierNameSyntax t3) _reassigned.Add(t3.Identifier.ValueText);
 
         foreach (var f in root.DescendantNodes().OfType<ForEachStatementSyntax>())
         {
-            _locals.Add(f.Identifier.Text);
-            if (IsOpaqueType(f.Type)) _opaqueLocals.Add(f.Identifier.Text);
-            if (f.Type is IdentifierNameSyntax { Identifier.Text: "ListViewItem" }) _itemLocals.Add(f.Identifier.Text);
+            _locals.Add(f.Identifier.ValueText);
+            if (IsOpaqueType(f.Type)) _opaqueLocals.Add(f.Identifier.ValueText);
+            if (f.Type is IdentifierNameSyntax { Identifier.ValueText: "ListViewItem" }) _itemLocals.Add(f.Identifier.ValueText);
         }
         foreach (var c in root.DescendantNodes().OfType<CatchDeclarationSyntax>())
-            if (c.Identifier.Text is { Length: > 0 } name) { _locals.Add(name); _catchVars.Add(name); }
+            if (c.Identifier.ValueText is { Length: > 0 } name) { _locals.Add(name); _catchVars.Add(name); }
     }
 
     private bool IsOpaqueType(TypeSyntax type) =>
@@ -157,8 +157,8 @@ internal sealed partial class MethodTranslator
     {
         var name = e switch
         {
-            IdentifierNameSyntax id => id.Identifier.Text,
-            MemberAccessExpressionSyntax { Expression: ThisExpressionSyntax } m => m.Name.Identifier.Text,
+            IdentifierNameSyntax id => id.Identifier.ValueText,
+            MemberAccessExpressionSyntax { Expression: ThisExpressionSyntax } m => m.Name.Identifier.ValueText,
             _ => null
         };
         if (name is null) return null;
@@ -201,7 +201,7 @@ internal sealed partial class MethodTranslator
             _ => null
         };
         if (declaration is null) return;
-        foreach (var v in declaration.Variables) _poisoned.Add(v.Identifier.Text);
+        foreach (var v in declaration.Variables) _poisoned.Add(v.Identifier.ValueText);
     }
 
     private List<string> Fallback(StatementSyntax s, Untranslatable u)
@@ -262,8 +262,8 @@ internal sealed partial class MethodTranslator
 
             case ForEachStatementSyntax fe:
                 if (fe.Type.IsVar && (ListCollectionOf(fe.Expression) is { Kind: "Items" or "SelectedItems" or "CheckedItems" }
-                                      || fe.Expression is IdentifierNameSyntax fc && _itemCollections.Contains(fc.Identifier.Text))) _itemLocals.Add(fe.Identifier.Text);
-                return Wrap($"for (const {fe.Identifier.Text} of {Ex(fe.Expression)}) {{", Body(fe.Statement), "}");
+                                      || fe.Expression is IdentifierNameSyntax fc && _itemCollections.Contains(fc.Identifier.ValueText))) _itemLocals.Add(fe.Identifier.ValueText);
+                return Wrap($"for (const {fe.Identifier.ValueText} of {Ex(fe.Expression)}) {{", Body(fe.Statement), "}");
 
             case SwitchStatementSyntax sw:
                 return Switch(sw);
@@ -299,14 +299,14 @@ internal sealed partial class MethodTranslator
             if (e.Statement is IfStatementSyntax chained)
             {
                 lines[^1] = $"}} else if ({Ex(chained.Condition)}) {{";
-                lines.AddRange(Ind(Body(chained.Statement)));
+                lines.AddRange(Ind(OrEmpty(Body(chained.Statement))));
                 lines.Add("}");
                 e = chained.Else;
             }
             else
             {
                 lines[^1] = "} else {";
-                lines.AddRange(Ind(Body(e.Statement)));
+                lines.AddRange(Ind(OrEmpty(Body(e.Statement))));
                 lines.Add("}");
                 e = null;
             }
@@ -314,12 +314,15 @@ internal sealed partial class MethodTranslator
         return lines;
     }
 
+    /// <summary>An empty branch would trip `no-empty`; say so in a comment instead.</summary>
+    private static List<string> OrEmpty(List<string> body) => body.Count == 0 ? new List<string> { "// (empty in the original)" } : body;
+
     private List<string> For(ForStatementSyntax f)
     {
         string init;
         if (f.Declaration is { } decl)
         {
-            var vars = decl.Variables.Select(v => $"{v.Identifier.Text}{(v.Initializer is null ? "" : " = " + Ex(v.Initializer.Value))}");
+            var vars = decl.Variables.Select(v => $"{v.Identifier.ValueText}{(v.Initializer is null ? "" : " = " + Ex(v.Initializer.Value))}");
             init = "let " + string.Join(", ", vars);
         }
         else init = string.Join(", ", f.Initializers.Select(x => Ex(x)));
@@ -363,7 +366,7 @@ internal sealed partial class MethodTranslator
         {
             var first = tr.Catches[0];
             if (first.Filter is not null) throw new Untranslatable("exception filter (catch ... when)");
-            var name = first.Declaration?.Identifier.Text is { Length: > 0 } n ? n : "_ex";
+            var name = first.Declaration?.Identifier.ValueText is { Length: > 0 } n ? n : "_ex";
             lines[^1] = $"}} catch ({name}) {{";
             if (tr.Catches.Count > 1)
             {
@@ -413,7 +416,7 @@ internal sealed partial class MethodTranslator
         var lines = new List<string>();
         foreach (var v in decl.Variables)
         {
-            var name = v.Identifier.Text;
+            var name = v.Identifier.ValueText;
             if (_formLocals.ContainsKey(name))
             {
                 lines.Add($"// {name}: a {_formLocals[name]} dialog; it is opened where ShowDialog() is called");
@@ -465,7 +468,7 @@ internal sealed partial class MethodTranslator
         switch (e)
         {
             case LiteralExpressionSyntax lit: return Literal(lit);
-            case IdentifierNameSyntax id: return Identifier(id.Identifier.Text);
+            case IdentifierNameSyntax id: return Identifier(id.Identifier.ValueText);
             case ParenthesizedExpressionSyntax p: return "(" + Ex(p.Expression) + ")";
             case MemberAccessExpressionSyntax ma: return MemberAccess(ma);
             case InvocationExpressionSyntax inv: return Invoke(inv, top);
@@ -528,7 +531,7 @@ internal sealed partial class MethodTranslator
 
     private string MemberAccess(MemberAccessExpressionSyntax ma)
     {
-        var name = ma.Name.Identifier.Text;
+        var name = ma.Name.Identifier.ValueText;
         var left = ma.Expression;
 
         // this.X -> X
@@ -587,12 +590,12 @@ internal sealed partial class MethodTranslator
         }
 
         // catch variable members.
-        if (left is IdentifierNameSyntax cv && _catchVars.Contains(cv.Identifier.Text))
+        if (left is IdentifierNameSyntax cv && _catchVars.Contains(cv.Identifier.ValueText))
         {
             return name switch
             {
-                "Message" => $"({cv.Identifier.Text} instanceof Error ? {cv.Identifier.Text}.message : String({cv.Identifier.Text}))",
-                "StackTrace" => $"({cv.Identifier.Text} as Error).stack",
+                "Message" => $"({cv.Identifier.ValueText} instanceof Error ? {cv.Identifier.ValueText}.message : String({cv.Identifier.ValueText}))",
+                "StackTrace" => $"({cv.Identifier.ValueText} as Error).stack",
                 _ => throw new Untranslatable($"exception member {name}")
             };
         }
@@ -614,7 +617,7 @@ internal sealed partial class MethodTranslator
             if (VisualProps.Contains(name) || name is "ForeColor" or "BackColor" or "UseItemStyleForSubItems") throw new Dropped($"item.{name} is appearance-only");
             throw new Untranslatable($"ListViewItem member {name}");
         }
-        if (left is MemberAccessExpressionSyntax { Name.Identifier.Text: "SubItems", Expression: var subOwner } && name == "Count" && IsListItem(subOwner))
+        if (left is MemberAccessExpressionSyntax { Name.Identifier.ValueText: "SubItems", Expression: var subOwner } && name == "Count" && IsListItem(subOwner))
             return $"({Ex(subOwner)}.subItems.length + 1)";
 
         var receiver = Ex(left);
@@ -634,11 +637,11 @@ internal sealed partial class MethodTranslator
         switch (e)
         {
             case IdentifierNameSyntax id:
-                var n = id.Identifier.Text;
+                var n = id.Identifier.ValueText;
                 if (_locals.Contains(n) || _poisoned.Contains(n) || _scope.Fields.ContainsKey(n) || _scope.Controls.Contains(n) || _formLocals.ContainsKey(n)) return null;
                 return _scope.Support.GetValueOrDefault(n);
             case MemberAccessExpressionSyntax { Expression: IdentifierNameSyntax } m when SupportTypeOf(((MemberAccessExpressionSyntax)e).Expression) is { } outer
-                && _scope.Support.TryGetValue(m.Name.Identifier.Text, out var nested) && nested.Ir.Container == outer.Name:
+                && _scope.Support.TryGetValue(m.Name.Identifier.ValueText, out var nested) && nested.Ir.Container == outer.Name:
                 return nested;
             default:
                 return null;
@@ -671,7 +674,7 @@ internal sealed partial class MethodTranslator
         if (oc.Initializer is not { } init) return creation;
 
         var fields = init.Expressions.Select(x => x is AssignmentExpressionSyntax { Left: IdentifierNameSyntax n } a
-            ? $"{n.Identifier.Text}: {Ex(a.Right)}" : throw new Untranslatable("collection initializer on a project class"));
+            ? $"{n.Identifier.ValueText}: {Ex(a.Right)}" : throw new Untranslatable("collection initializer on a project class"));
         return $"Object.assign({creation}, {{ {string.Join(", ", fields)} }})";
     }
 
@@ -693,19 +696,19 @@ internal sealed partial class MethodTranslator
 
     /// <summary>`lv.Items`, `lv.SelectedItems`, `lv.Columns`, ... on a ListView control of this page.</summary>
     private (string Id, string Kind)? ListCollectionOf(ExpressionSyntax e) =>
-        e is MemberAccessExpressionSyntax { Name.Identifier.Text: "Items" or "SelectedItems" or "CheckedItems" or "Columns" or "SelectedIndices" } m
+        e is MemberAccessExpressionSyntax { Name.Identifier.ValueText: "Items" or "SelectedItems" or "CheckedItems" or "Columns" or "SelectedIndices" } m
         && ControlOf(m.Expression) is { } id && _scope.ListViews.Contains(id)
-            ? (id, m.Name.Identifier.Text) : null;
+            ? (id, m.Name.Identifier.ValueText) : null;
 
     /// <summary>True when the expression is a ListViewItem: a typed local, or an element of Items/SelectedItems/CheckedItems.</summary>
     private bool IsListItem(ExpressionSyntax e) => e switch
     {
-        IdentifierNameSyntax id => _itemLocals.Contains(id.Identifier.Text) && !_poisoned.Contains(id.Identifier.Text),
+        IdentifierNameSyntax id => _itemLocals.Contains(id.Identifier.ValueText) && !_poisoned.Contains(id.Identifier.ValueText),
         ParenthesizedExpressionSyntax p => IsListItem(p.Expression),
         ElementAccessExpressionSyntax el => ListCollectionOf(el.Expression) is { Kind: "Items" or "SelectedItems" or "CheckedItems" }
-                                            || el.Expression is IdentifierNameSyntax coll && _itemCollections.Contains(coll.Identifier.Text),
+                                            || el.Expression is IdentifierNameSyntax coll && _itemCollections.Contains(coll.Identifier.ValueText),
         InvocationExpressionSyntax { Expression: IdentifierNameSyntax or MemberAccessExpressionSyntax { Expression: ThisExpressionSyntax } } call =>
-            _scope.Functions.TryGetValue(call.Expression is IdentifierNameSyntax fn ? fn.Identifier.Text : ((MemberAccessExpressionSyntax)call.Expression).Name.Identifier.Text, out var fs)
+            _scope.Functions.TryGetValue(call.Expression is IdentifierNameSyntax fn ? fn.Identifier.ValueText : ((MemberAccessExpressionSyntax)call.Expression).Name.Identifier.ValueText, out var fs)
             && fs.Any(x => x.Member.Type == "ListViewItem"),
         _ => false
     };
@@ -714,8 +717,8 @@ internal sealed partial class MethodTranslator
     private bool SubItemText(MemberAccessExpressionSyntax ma, out ExpressionSyntax item, out ExpressionSyntax index)
     {
         item = index = null!;
-        if (ma.Name.Identifier.Text != "Text"
-            || ma.Expression is not ElementAccessExpressionSyntax { Expression: MemberAccessExpressionSyntax { Name.Identifier.Text: "SubItems" } subs, ArgumentList.Arguments.Count: 1 } el
+        if (ma.Name.Identifier.ValueText != "Text"
+            || ma.Expression is not ElementAccessExpressionSyntax { Expression: MemberAccessExpressionSyntax { Name.Identifier.ValueText: "SubItems" } subs, ArgumentList.Arguments.Count: 1 } el
             || !IsListItem(subs.Expression)) return false;
         item = subs.Expression;
         index = el.ArgumentList.Arguments[0].Expression;
@@ -726,7 +729,7 @@ internal sealed partial class MethodTranslator
     private string? ListMethod(ExpressionSyntax receiver, string method, InvocationExpressionSyntax inv)
     {
         var argList = inv.ArgumentList.Arguments;
-        if (receiver is MemberAccessExpressionSyntax { Name.Identifier.Text: "SubItems", Expression: var owner } && IsListItem(owner))
+        if (receiver is MemberAccessExpressionSyntax { Name.Identifier.ValueText: "SubItems", Expression: var owner } && IsListItem(owner))
         {
             var sub = $"{Ex(owner)}.subItems";
             return (method, argList.Count) switch
@@ -758,7 +761,7 @@ internal sealed partial class MethodTranslator
 
     /// <summary>An argument of Items.Add / Insert: an item (new ListViewItem, a local) or plain text that becomes a new item.</summary>
     private string ListItemArgument(ExpressionSyntax arg) =>
-        IsListItem(arg) || arg is ObjectCreationExpressionSyntax { Type: IdentifierNameSyntax { Identifier.Text: "ListViewItem" } }
+        IsListItem(arg) || arg is ObjectCreationExpressionSyntax { Type: IdentifierNameSyntax { Identifier.ValueText: "ListViewItem" } }
             ? Ex(arg)
             : $"wfListItem({Ex(arg)})";
 
@@ -768,7 +771,7 @@ internal sealed partial class MethodTranslator
         if (args.Count == 0) return "wfListItem()";
         var first = args[0].Expression;
         var isArray = first is ArrayCreationExpressionSyntax or ImplicitArrayCreationExpressionSyntax
-                      || first is IdentifierNameSyntax id && _method?.Parameters.FirstOrDefault(p => p.Name == id.Identifier.Text)?.Type == "string[]";
+                      || first is IdentifierNameSyntax id && _method?.Parameters.FirstOrDefault(p => p.Name == id.Identifier.ValueText)?.Type == "string[]";
         if (args.Count == 1) return isArray ? $"wfListItemFromArray({Ex(first)})" : $"wfListItem({Ex(first)})";
         if (args.Count == 2 && !isArray && args[1].Expression is LiteralExpressionSyntax { Token.Value: string }) return $"wfListItem({Ex(first)}, [], {Ex(args[1].Expression)})";
         throw new Untranslatable("ListViewItem constructor overload");
@@ -779,8 +782,8 @@ internal sealed partial class MethodTranslator
     {
         var name = e switch
         {
-            IdentifierNameSyntax id => id.Identifier.Text,
-            MemberAccessExpressionSyntax { Expression: ThisExpressionSyntax } m => m.Name.Identifier.Text,
+            IdentifierNameSyntax id => id.Identifier.ValueText,
+            MemberAccessExpressionSyntax { Expression: ThisExpressionSyntax } m => m.Name.Identifier.ValueText,
             _ => null
         };
         if (name is null || _locals.Contains(name) || _scope.Fields.ContainsKey(name)) return null;
@@ -794,20 +797,20 @@ internal sealed partial class MethodTranslator
         {
             case PredefinedTypeSyntax p: return p.Keyword.Text;
             case IdentifierNameSyntax id:
-                var n = id.Identifier.Text;
+                var n = id.Identifier.ValueText;
                 if (_locals.Contains(n) || _scope.Fields.ContainsKey(n) || _scope.Controls.Contains(n) || _formLocals.ContainsKey(n)) return null;
                 return char.IsUpper(n[0]) || n is "string" or "int" ? n : null;
-            case MemberAccessExpressionSyntax { Expression: IdentifierNameSyntax ns } m when m.Name.Identifier.Text.Length > 0 && char.IsUpper(m.Name.Identifier.Text[0]) && _scope.Vocabulary.IsNamespaceRoot(ns.Identifier.Text):
-                return m.Name.Identifier.Text;
+            case MemberAccessExpressionSyntax { Expression: IdentifierNameSyntax ns } m when m.Name.Identifier.ValueText.Length > 0 && char.IsUpper(m.Name.Identifier.ValueText[0]) && _scope.Vocabulary.IsNamespaceRoot(ns.Identifier.ValueText):
+                return m.Name.Identifier.ValueText;
             default: return null;
         }
     }
 
     private static string SimpleTypeName(TypeSyntax t) => t switch
     {
-        QualifiedNameSyntax q => q.Right.Identifier.Text,
-        GenericNameSyntax g => g.Identifier.Text,
-        IdentifierNameSyntax i => i.Identifier.Text,
+        QualifiedNameSyntax q => q.Right.Identifier.ValueText,
+        GenericNameSyntax g => g.Identifier.ValueText,
+        IdentifierNameSyntax i => i.Identifier.ValueText,
         _ => t.ToString()
     };
 
@@ -854,8 +857,8 @@ internal sealed partial class MethodTranslator
         var recv = Ex(ca.Expression);
         return ca.WhenNotNull switch
         {
-            MemberBindingExpressionSyntax mb => $"{recv}?.{mb.Name.Identifier.Text}",
-            InvocationExpressionSyntax { Expression: MemberBindingExpressionSyntax mb2 } inv when InstanceSuffix(mb2.Name.Identifier.Text, inv.ArgumentList.Arguments.Select(a => Ex(a.Expression)).ToList()) is { } suffix
+            MemberBindingExpressionSyntax mb => $"{recv}?.{mb.Name.Identifier.ValueText}",
+            InvocationExpressionSyntax { Expression: MemberBindingExpressionSyntax mb2 } inv when InstanceSuffix(mb2.Name.Identifier.ValueText, inv.ArgumentList.Arguments.Select(a => Ex(a.Expression)).ToList()) is { } suffix
                 => $"{recv}?{suffix}",
             _ => throw new Untranslatable("conditional access (?.)")
         };
@@ -901,11 +904,11 @@ internal sealed partial class MethodTranslator
 
         // MessageBox.Show(..., YesNo) == DialogResult.Yes  ->  (await dialog.confirm(...))
         var isConfirmValue = (IsMessageBoxShow(value, out var mb) && HasButtons(mb))
-                             || (value is IdentifierNameSyntax id && _confirmLocals.Contains(id.Identifier.Text));
+                             || (value is IdentifierNameSyntax id && _confirmLocals.Contains(id.Identifier.ValueText));
         if (isConfirmValue)
         {
             var positive = constant is "Yes" or "OK";
-            var text = value is IdentifierNameSyntax idv && _confirmLocals.Contains(idv.Identifier.Text) ? idv.Identifier.Text : Ex(value);
+            var text = value is IdentifierNameSyntax idv && _confirmLocals.Contains(idv.Identifier.ValueText) ? idv.Identifier.ValueText : Ex(value);
             var asBool = positive != negate ? text : $"!{text}";
             result = asBool;
             return true;
@@ -917,9 +920,9 @@ internal sealed partial class MethodTranslator
     private static bool IsDialogResultMember(ExpressionSyntax e, out string name)
     {
         name = "";
-        if (e is MemberAccessExpressionSyntax { Expression: IdentifierNameSyntax { Identifier.Text: "DialogResult" } } m)
+        if (e is MemberAccessExpressionSyntax { Expression: IdentifierNameSyntax { Identifier.ValueText: "DialogResult" } } m)
         {
-            name = m.Name.Identifier.Text;
+            name = m.Name.Identifier.ValueText;
             return true;
         }
         return false;
@@ -930,19 +933,19 @@ internal sealed partial class MethodTranslator
         var op = a.OperatorToken.Text;
 
         // Event subscription in code: x.Click += handler
-        if (a.IsKind(SyntaxKind.AddAssignmentExpression) && a.Left is MemberAccessExpressionSyntax { Name.Identifier.Text: var evt }
+        if (a.IsKind(SyntaxKind.AddAssignmentExpression) && a.Left is MemberAccessExpressionSyntax { Name.Identifier.ValueText: var evt }
             && evt is "Click" or "TextChanged" or "SelectedIndexChanged" or "CheckedChanged" or "DoubleClick" or "KeyDown" or "KeyPress" or "Tick")
             throw new Untranslatable($"event subscription in code ({evt} += ...)");
 
         // this.DialogResult = DialogResult.OK / DialogResult = ...: remembered for the next Close()
-        if (a.Left is IdentifierNameSyntax { Identifier.Text: "DialogResult" } || a.Left is MemberAccessExpressionSyntax { Name.Identifier.Text: "DialogResult", Expression: ThisExpressionSyntax })
+        if (a.Left is IdentifierNameSyntax { Identifier.ValueText: "DialogResult" } || a.Left is MemberAccessExpressionSyntax { Name.Identifier.ValueText: "DialogResult", Expression: ThisExpressionSyntax })
         {
-            _pendingResult = a.Right is MemberAccessExpressionSyntax rm ? rm.Name.Identifier.Text : null;
+            _pendingResult = a.Right is MemberAccessExpressionSyntax rm ? rm.Name.Identifier.ValueText : null;
             throw new Dropped("DialogResult is passed to onClose(result)");
         }
-        if (a.Left is MemberAccessExpressionSyntax { Name.Identifier.Text: "Current", Expression: IdentifierNameSyntax { Identifier.Text: "Cursor" } })
+        if (a.Left is MemberAccessExpressionSyntax { Name.Identifier.ValueText: "Current", Expression: IdentifierNameSyntax { Identifier.ValueText: "Cursor" } })
             throw new Dropped("cursor");
-        if (a.Left is IdentifierNameSyntax { Identifier.Text: "Cursor" } || a.Left is MemberAccessExpressionSyntax { Name.Identifier.Text: "Cursor", Expression: ThisExpressionSyntax })
+        if (a.Left is IdentifierNameSyntax { Identifier.ValueText: "Cursor" } || a.Left is MemberAccessExpressionSyntax { Name.Identifier.ValueText: "Cursor", Expression: ThisExpressionSyntax })
             throw new Dropped("cursor");
 
         if (a.Left is MemberAccessExpressionSyntax lm && SubItemText(lm, out _, out var subIdx) && subIdx is not LiteralExpressionSyntax)
@@ -978,7 +981,7 @@ internal sealed partial class MethodTranslator
             // A contract data type: an object literal asserted to the generated interface (properties not listed stay undefined).
             _scope.Output.TypeImports.Add(dto);
             var fields = (oc.Initializer?.Expressions ?? default).Select(x => x is AssignmentExpressionSyntax { Left: IdentifierNameSyntax n } a
-                ? $"{n.Identifier.Text}: {Ex(a.Right)}" : throw new Untranslatable("collection initializer on a data type"));
+                ? $"{n.Identifier.ValueText}: {Ex(a.Right)}" : throw new Untranslatable("collection initializer on a data type"));
             var list = string.Join(", ", fields);
             return list.Length == 0 ? $"{{}} as {dto}" : $"{{ {list} }} as {dto}";
         }
@@ -998,7 +1001,7 @@ internal sealed partial class MethodTranslator
     private static bool IsMessageBoxShow(ExpressionSyntax e, out InvocationExpressionSyntax inv)
     {
         inv = null!;
-        if (e is InvocationExpressionSyntax { Expression: MemberAccessExpressionSyntax { Name.Identifier.Text: "Show", Expression: var recv } } i
+        if (e is InvocationExpressionSyntax { Expression: MemberAccessExpressionSyntax { Name.Identifier.ValueText: "Show", Expression: var recv } } i
             && recv.ToString() is "MessageBox" or "System.Windows.Forms.MessageBox")
         {
             inv = i;
@@ -1036,12 +1039,12 @@ internal sealed partial class MethodTranslator
         // Bare call: own method.
         if (inv.Expression is IdentifierNameSyntax bare)
         {
-            if (bare.Identifier.Text is "Close" or "Hide" && !_scope.Functions.ContainsKey(bare.Identifier.Text)) return CloseCall();
-            return CallOwn(bare.Identifier.Text, inv, top);
+            if (bare.Identifier.ValueText is "Close" or "Hide" && !_scope.Functions.ContainsKey(bare.Identifier.ValueText)) return CloseCall();
+            return CallOwn(bare.Identifier.ValueText, inv, top);
         }
 
         if (inv.Expression is not MemberAccessExpressionSyntax ma) throw new Untranslatable("call through an expression");
-        var method = ma.Name.Identifier.Text;
+        var method = ma.Name.Identifier.ValueText;
         var receiver = ma.Expression;
 
         if (receiver is ThisExpressionSyntax)
@@ -1060,7 +1063,7 @@ internal sealed partial class MethodTranslator
             var formType = receiver switch
             {
                 ObjectCreationExpressionSyntax oc when _scope.Units.ContainsKey(SimpleTypeName(oc.Type)) => SimpleTypeName(oc.Type),
-                IdentifierNameSyntax id when _formLocals.TryGetValue(id.Identifier.Text, out var t) => t,
+                IdentifierNameSyntax id when _formLocals.TryGetValue(id.Identifier.ValueText, out var t) => t,
                 _ => null
             };
             if (formType is not null) return ShowForm(formType, receiver is ObjectCreationExpressionSyntax { ArgumentList.Arguments.Count: > 0 }, top);
@@ -1077,10 +1080,10 @@ internal sealed partial class MethodTranslator
         // control.Method(...) is not translated (Select, Sort, ...)
         if (ControlOf(receiver) is { } cid) throw new Untranslatable($"call to control member {cid}.{method}(...) (not supported by the library or the model yet)");
         if (receiver is MemberAccessExpressionSyntax { Expression: var inner } && ControlOf(inner) is { } cid2)
-            throw new Untranslatable($"call to {cid2}.{((MemberAccessExpressionSyntax)receiver).Name.Identifier.Text}.{method}(...) (collection UI such as ListView/grid is not translated yet)");
+            throw new Untranslatable($"call to {cid2}.{((MemberAccessExpressionSyntax)receiver).Name.Identifier.ValueText}.{method}(...) (collection UI such as ListView/grid is not translated yet)");
 
         // main.WriteErrorLog(MethodBase.GetCurrentMethod(), ex): a call on an app-level helper we cannot see; error logging maps to the console.
-        if (IsLoggingMethod(method) && receiver is IdentifierNameSyntax unresolved && !IsKnownName(unresolved.Identifier.Text))
+        if (IsLoggingMethod(method) && receiver is IdentifierNameSyntax unresolved && !IsKnownName(unresolved.Identifier.ValueText))
             return $"console.error({string.Join(", ", Args(inv))})";
 
         if (OpaqueName(receiver) is { } opaqueRecv) throw new Untranslatable($"call on '{opaqueRecv}', whose type has no browser equivalent");

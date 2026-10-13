@@ -77,7 +77,7 @@ internal static class SupportTranslator
         {
             if (state.TryGetValue(cls.Name, out _)) return;
             state[cls.Name] = 1;
-            var initText = string.Join("\n", cls.Ir.Members.Where(m => m.Kind is MemberKind.Field or MemberKind.Property && m.IsStatic && m.Body != null).Select(m => m.Body));
+            var initText = string.Join("\n", cls.Ir.Members.Where(m => m.Kind is MemberKind.Field or MemberKind.Property && m.IsStatic).Select(m => m.Type + " " + m.Body));
             foreach (var other in registry.Classes.Values)
                 if (other.Name != cls.Name && Regex.IsMatch(initText, $@"\b{Regex.Escape(other.Name)}\b")) Visit(other);
             result.Add(cls);

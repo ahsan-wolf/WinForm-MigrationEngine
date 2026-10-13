@@ -1,3 +1,4 @@
+using Migrator.Engine.Projections;
 using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
@@ -150,7 +151,7 @@ public sealed partial class PageGenerator
             var fieldText = string.Join("\n", tr.FieldInitials.Values);
             var text = string.Join("\n", jsx.Concat(handlerCode).Where(l => !l.TrimStart().StartsWith("//", StringComparison.Ordinal)));
             c.UsesDialog = Regex.IsMatch(text, @"\bdialog\.");
-            c.UsesOnClose = Regex.IsMatch(text, @"\bonClose\b");
+            c.UsesOnClose = Regex.IsMatch(text, @"(?<![\w.])onClose\s*(\?\.|\()");
             c.UsesModel = Regex.IsMatch(text, @"\bvm\.");
             usesFields = Regex.IsMatch(text, @"\bf\.");
             foreach (var comp in tr.PageImports.Where(p => Regex.IsMatch(text, $@"<{p}\b"))) c.PageImports[comp] = comp;
@@ -181,7 +182,7 @@ public sealed partial class PageGenerator
         if (_translation?.Support is { } supportRegistry)
         {
             var codeText = PageTranslator.StripStrings(string.Join("\n", handlerCode.Concat(jsx).Where(l => !l.TrimStart().StartsWith("//", StringComparison.Ordinal))
-                .Concat(c.Translation!.FieldInitials.Values).Concat(c.Translation.CtorProps.Select(p => p.Type + " " + p.Default))));
+                .Concat(usesFields ? c.Translation!.FieldInitials.Values : Enumerable.Empty<string>()).Concat(c.Translation!.CtorProps.Select(p => p.Type + " " + p.Default))));
             var used = supportRegistry.Classes.Keys.Where(n => Regex.IsMatch(codeText, $@"(?<![\w.]){Regex.Escape(n)}\b")).OrderBy(n => n, StringComparer.Ordinal).ToList();
             if (used.Count > 0) sb.AppendLine($"import {{ {string.Join(", ", used)} }} from '../support';");
         }
@@ -271,14 +272,22 @@ public sealed partial class PageGenerator
 
     private List<string>? RenderElement(ControlNodeIr node, Ctx c, bool isRoot = false)
     {
-        var type = ShortType(node.TagName);
+        var type = ShortType(node.Effective());
         if (!isRoot && NonVisualTypes.Contains(type))
         {
             c.NonVisual.Add($"{node.Id} ({type})");
             return null;
         }
 
-        var spec = isRoot ? RootSpec(node) : _spec.Find(node.TagName);
+        // A grid column the designer declares but never attaches to a grid (the grid binds its columns at runtime): inert leftover, not a missing control.
+        if (!isRoot && type.StartsWith("DataGridView", StringComparison.Ordinal) && type.EndsWith("Column", StringComparison.Ordinal)
+            && node.Attributes.GetValueOrDefault("ParentSlot") != "Columns")
+        {
+            c.NonVisual.Add($"{node.Id} ({type}, not attached to a grid)");
+            return null;
+        }
+
+        var spec = isRoot ? RootSpec(node) : _spec.Find(node.Effective());
         if (spec is null) return RenderFallback(node, c, type);
 
         c.Lib.Add(spec.Name);
@@ -290,7 +299,7 @@ public sealed partial class PageGenerator
 
         // ContextMenuStrip="this.contextMenuStrip1" -> wrap the control.
         if (!isRoot && node.Attributes.TryGetValue("ContextMenuStrip", out var cm)
-            && c.ById.TryGetValue(LastToken(cm), out var menuNode) && ShortType(menuNode.TagName) == "ContextMenuStrip")
+            && c.ById.TryGetValue(LastToken(cm), out var menuNode) && ShortType(menuNode.Effective()) == "ContextMenuStrip")
         {
             c.Lib.Add("WfContextMenu");
             var menuLines = RenderSequential(menuNode.Children, c);
@@ -314,9 +323,9 @@ public sealed partial class PageGenerator
 
     private SpecControl? RootSpec(ControlNodeIr root)
     {
-        var spec = _spec.Find(root.TagName);
+        var spec = _spec.Find(root.Effective());
         if (spec != null) return spec;
-        var name = root.TagName.EndsWith("UserControl", StringComparison.Ordinal) ? "WfPanel" : "WfForm"; // custom base classes behave as Form
+        var name = root.Effective().EndsWith("UserControl", StringComparison.Ordinal) ? "WfPanel" : "WfForm"; // custom base classes behave as Form
         return _spec.Controls.FirstOrDefault(s => s.Name == name);
     }
 
@@ -434,7 +443,7 @@ public sealed partial class PageGenerator
         foreach (var node in c.ById.Values)
         {
             if (node == root) continue;
-            var spec = _spec.Find(node.TagName);
+            var spec = _spec.Find(node.Effective());
             if (spec is not null && IsStateful(spec.Name))
             {
                 c.StatefulIds.Add(node.Id);
@@ -618,7 +627,7 @@ public sealed partial class PageGenerator
         c.TopLevel.Add("];");
 
         var rows = Enumerable.Range(1, cols.Count == 0 ? 0 : 3).Select(i =>
-            fields.ToDictionary(f => f.Field, f => (object)(f.Checkbox ? i % 2 == 1 : f.Format is "d" or "date" ? $"2026-01-{i:00}" : $"{f.Header} {i}"))).ToList();
+            fields.GroupBy(f => f.Field).ToDictionary(g => g.Key, g => (object)(g.First().Checkbox ? i % 2 == 1 : g.First().Format is "d" or "date" ? $"2026-01-{i:00}" : $"{g.First().Header} {i}"))).ToList();
         c.ModelComments.Add($"// MOCK — {node.Id} rows are fake sample data; replace with real implementation (inferred — check against backend contract)");
         c.ModelSet(node.Id, "Rows", $"{JsonSerializer.Serialize(rows, JsonOut)} as Record<string, unknown>[]");
         c.UsesModel = true;

@@ -77,18 +77,18 @@ public sealed class SupportRegistry
                     {
                         switch (inv.Expression)
                         {
-                            case IdentifierNameSyntax id when cls.Functions.ContainsKey(id.Identifier.Text):
-                                called.Add((cls.Name, id.Identifier.Text));
+                            case IdentifierNameSyntax id when cls.Functions.ContainsKey(id.Identifier.ValueText):
+                                called.Add((cls.Name, id.Identifier.ValueText));
                                 break;
-                            case MemberAccessExpressionSyntax { Expression: ThisExpressionSyntax } t when cls.Functions.ContainsKey(t.Name.Identifier.Text):
-                                called.Add((cls.Name, t.Name.Identifier.Text));
+                            case MemberAccessExpressionSyntax { Expression: ThisExpressionSyntax } t when cls.Functions.ContainsKey(t.Name.Identifier.ValueText):
+                                called.Add((cls.Name, t.Name.Identifier.ValueText));
                                 break;
                             case MemberAccessExpressionSyntax { Expression: IdentifierNameSyntax target } ma
-                                when Classes.TryGetValue(target.Identifier.Text, out var other) && other.Functions.ContainsKey(ma.Name.Identifier.Text):
-                                called.Add((other.Name, ma.Name.Identifier.Text));
+                                when Classes.TryGetValue(target.Identifier.ValueText, out var other) && other.Functions.ContainsKey(ma.Name.Identifier.ValueText):
+                                called.Add((other.Name, ma.Name.Identifier.ValueText));
                                 break;
                             case MemberAccessExpressionSyntax ma:
-                                var method = ma.Name.Identifier.Text;
+                                var method = ma.Name.Identifier.ValueText;
                                 if (PageTranslator.FacadeName(ma.Expression, vocabulary) is { } facade && vocabulary.IsFacade(facade) && !cls.Fields.ContainsKey(facade)
                                     && Enumerable.Range(0, 16).Any(n => vocabulary.FindCall(facade, method, n) is not null))
                                     direct.Add(key);
@@ -123,4 +123,39 @@ public sealed class SupportModule
 
     public int Classes { get; set; }
     public List<string> Notes { get; } = new();
+}
+
+/// <summary>
+/// Keeps only the support classes the generated pages use, directly or through each other. A project's business layer (data access,
+/// domain, services) is not front-end code: emitting all of it would bloat the app and fail to translate. Structural, name-agnostic.
+/// </summary>
+public static class SupportPruner
+{
+    public static SupportFileIr Reachable(SupportFileIr all, IEnumerable<Migrator.Target.React.Generation.UnitIr> units)
+    {
+        var byName = all.Classes.GroupBy(c => c.Name).ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
+        var reached = new HashSet<string>(StringComparer.Ordinal);
+        var queue = new Queue<SupportClassIr>();
+
+        void Mention(string text)
+        {
+            foreach (System.Text.RegularExpressions.Match w in System.Text.RegularExpressions.Regex.Matches(text, @"\b[A-Za-z_]\w*\b"))
+                if (byName.TryGetValue(w.Value, out var cls) && reached.Add(cls.Name)) queue.Enqueue(cls);
+        }
+
+        foreach (var unit in units)
+            foreach (var m in unit.Page.Members)
+                Mention(string.Join(' ', new[] { m.Type }.Concat(m.Parameters.Select(p => p.Type)).Append(m.Body ?? "")));
+
+        while (queue.Count > 0)
+        {
+            var cls = queue.Dequeue();
+            if (cls.BaseType is { } baseType) Mention(baseType);
+            foreach (var m in cls.Members)
+                Mention(string.Join(' ', new[] { m.Type }.Concat(m.Parameters.Select(p => p.Type)).Append(m.Body ?? "")));
+            foreach (var v in cls.EnumValues) if (v.Value is not null) Mention(v.Value);
+        }
+
+        return new SupportFileIr { SchemaVersion = all.SchemaVersion, Classes = all.Classes.Where(c => reached.Contains(c.Name)).ToList() };
+    }
 }

@@ -21,7 +21,7 @@ static int Run(string[] args)
               contract --assembly <dll> --out <dir>
                                                   Read a managed assembly's public API from metadata only (never loaded or run) -> <out>/<name>/contract.json
                                                   and data-access.json (SQL table/procedure names; connection-string-like literals are only counted)
-              migrate --source <dir> --out <dir> [--target react-app] [--entry <form>] [--depth <n|all>] [--contract <contract.json>]... [--contract-scope used|all] [--translate none|rules|llm] [--compile-gate] [--config <engines.json>]
+              migrate --source <dir> --out <dir> [--target react-app] [--entry <form>] [--depth <n|all>] [--units all] [--contract <contract.json>]... [--contract-scope used|all] [--translate none|rules|llm] [--compile-gate] [--config <engines.json>]
                                                   ir step, then generate an app into <out>/<target> (default depth 1: entry form + forms it opens)
             """);
         return args.Length == 0 ? 1 : 0;
@@ -167,6 +167,7 @@ static int Migrate(string[] args)
         {
             EntryForm = OptionValue(args, "--entry"),
             Depth = depth,
+            AllUnits = OptionValue(args, "--units")?.Equals("all", StringComparison.OrdinalIgnoreCase) == true,
             ContractFiles = OptionValues(args, "--contract"),
             ContractScope = OptionValue(args, "--contract-scope") ?? "used",
             Translate = OptionValue(args, "--translate") ?? "none",
