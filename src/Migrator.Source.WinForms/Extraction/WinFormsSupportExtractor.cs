@@ -18,6 +18,7 @@ internal static class WinFormsSupportExtractor
     public static SupportFileIr Extract(ProjectAnalysis analysis)
     {
         var unitNames = analysis.Forms.Concat(analysis.UserControls).Select(u => u.Name).ToHashSet(StringComparer.Ordinal);
+        var resolver = new WinFormsTypeResolver(analysis.TypeBases);
         var file = new SupportFileIr();
 
         foreach (var path in Directory.EnumerateFiles(analysis.RootPath, "*.cs", SearchOption.AllDirectories).OrderBy(p => p, StringComparer.Ordinal))
@@ -29,8 +30,9 @@ internal static class WinFormsSupportExtractor
             var root = CSharpSyntaxTree.ParseText(File.ReadAllText(path)).GetCompilationUnitRoot();
             foreach (var type in root.DescendantNodes().OfType<BaseTypeDeclarationSyntax>())
             {
-                if (unitNames.Contains(type.Identifier.Text) || IsUiType(type)) continue;
-                var container = (type.Parent as BaseTypeDeclarationSyntax)?.Identifier.Text;
+                // Controls and components (including custom ones derived from them) are UI, not support code.
+                if (unitNames.Contains(type.Identifier.ValueText) || IsUiType(type) || type is not EnumDeclarationSyntax && resolver.Resolve(type.Identifier.ValueText) is not null) continue;
+                var container = (type.Parent as BaseTypeDeclarationSyntax)?.Identifier.ValueText;
                 file.Classes.Add(Build(type, relative, container));
             }
         }
@@ -54,7 +56,7 @@ internal static class WinFormsSupportExtractor
     {
         var ir = new SupportClassIr
         {
-            Name = type.Identifier.Text,
+            Name = type.Identifier.ValueText,
             Kind = type is EnumDeclarationSyntax ? "enum" : type is StructDeclarationSyntax ? "struct" : "class",
             IsStatic = type.Modifiers.Any(m => m.IsKind(SyntaxKind.StaticKeyword)),
             Container = container,
@@ -64,7 +66,7 @@ internal static class WinFormsSupportExtractor
 
         if (type is EnumDeclarationSyntax enumDecl)
         {
-            ir.EnumValues = enumDecl.Members.Select(m => new SupportEnumValueIr { Name = m.Identifier.Text, Value = m.EqualsValue?.Value.ToString() }).ToList();
+            ir.EnumValues = enumDecl.Members.Select(m => new SupportEnumValueIr { Name = m.Identifier.ValueText, Value = m.EqualsValue?.Value.ToString() }).ToList();
             return ir;
         }
 
@@ -75,7 +77,7 @@ internal static class WinFormsSupportExtractor
                 case FieldDeclarationSyntax field:
                     foreach (var v in field.Declaration.Variables)
                     {
-                        var m = Simple(MemberKind.Field, v.Identifier.Text, field.Declaration.Type.ToString(), field.Modifiers);
+                        var m = Simple(MemberKind.Field, v.Identifier.ValueText, field.Declaration.Type.ToString(), field.Modifiers);
                         m.Body = v.Initializer?.Value.ToString();
                         AddModifiers(m, field.Modifiers);
                         ir.Members.Add(m);
@@ -87,7 +89,7 @@ internal static class WinFormsSupportExtractor
                     break;
 
                 case MethodDeclarationSyntax method:
-                    var mm = Simple(MemberKind.Method, method.Identifier.Text, method.ReturnType.ToString(), method.Modifiers);
+                    var mm = Simple(MemberKind.Method, method.Identifier.ValueText, method.ReturnType.ToString(), method.Modifiers);
                     mm.Parameters = Parameters(method.ParameterList);
                     mm.Body = method.Body?.ToString() ?? (method.ExpressionBody is { } eb ? "{ return " + eb.Expression + "; }" : null);
                     AddModifiers(mm, method.Modifiers);
@@ -114,7 +116,7 @@ internal static class WinFormsSupportExtractor
 
     private static MemberIr Property(PropertyDeclarationSyntax prop)
     {
-        var m = Simple(MemberKind.Property, prop.Identifier.Text, prop.Type.ToString(), prop.Modifiers);
+        var m = Simple(MemberKind.Property, prop.Identifier.ValueText, prop.Type.ToString(), prop.Modifiers);
         AddModifiers(m, prop.Modifiers);
         if (prop.ExpressionBody is { } expr)
         {
@@ -139,7 +141,7 @@ internal static class WinFormsSupportExtractor
 
     private static List<ParameterIr> Parameters(ParameterListSyntax list) => list.Parameters.Select(p => new ParameterIr
     {
-        Name = p.Identifier.Text,
+        Name = p.Identifier.ValueText,
         Type = (p.Modifiers.Any(m => m.IsKind(SyntaxKind.RefKeyword) || m.IsKind(SyntaxKind.OutKeyword)) ? p.Modifiers.First().Text + " " : "") + (p.Type?.ToString() ?? "object"),
         DefaultValue = p.Default?.Value.ToString()
     }).ToList();

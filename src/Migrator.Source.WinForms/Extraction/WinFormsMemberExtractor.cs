@@ -15,6 +15,12 @@ public sealed class WinFormsMemberExtractor : IIrExtractor
 
     public string Facet => "members";
 
+    private readonly IReadOnlyDictionary<string, IReadOnlyList<string>> _typeFiles;
+
+    /// <param name="typeFiles">Simple class name -> source files declaring it (all projects). Lets members of project base classes be merged into derived units.</param>
+    public WinFormsMemberExtractor(IReadOnlyDictionary<string, IReadOnlyList<string>>? typeFiles = null) =>
+        _typeFiles = typeFiles ?? new Dictionary<string, IReadOnlyList<string>>();
+
     public void Extract(IrExtractionContext context, PageIr target)
     {
         var designer = WinFormsDesignerParser.Parse(context.MarkupContent);
@@ -23,38 +29,87 @@ public sealed class WinFormsMemberExtractor : IIrExtractor
         var classDecl = CodeBehind.FindClass(context.CodeBehindContent ?? "", designer.ClassName);
         if (classDecl == null) return;
 
+        AddMembers(classDecl, target, controlFields, inheritedFrom: null);
+        AddInheritedMembers(classDecl, designer.ClassName, target, controlFields);
+    }
+
+    /// <summary>
+    /// Code inheritance: a screen derived from a project base class uses the base fields, properties and methods as its own.
+    /// They are copied into the derived unit (marked <c>inherited:Base</c>) unless the derived class already declares the member, closest base first.
+    /// Constructors, designer boilerplate and the designer partial of the base (its controls) are not merged.
+    /// </summary>
+    private void AddInheritedMembers(ClassDeclarationSyntax derived, string className, PageIr target, HashSet<string> controlFields)
+    {
+        var seen = new HashSet<string>(StringComparer.Ordinal) { className };
+        var current = derived.BaseList?.Types.FirstOrDefault()?.Type.ToString();
+        while (current is not null)
+        {
+            var simple = current[(current.LastIndexOf('.') + 1)..];
+            var generic = simple.IndexOf('<');
+            if (generic >= 0) simple = simple[..generic];
+            if (!seen.Add(simple) || !_typeFiles.TryGetValue(simple, out var files)) return;
+
+            string? nextBase = null;
+            foreach (var file in files.Where(f => !f.EndsWith(".Designer.cs", StringComparison.OrdinalIgnoreCase)))
+            {
+                foreach (var cls in Microsoft.CodeAnalysis.CSharp.CSharpExtensions.GetCompilationUnitRoot(Microsoft.CodeAnalysis.CSharp.CSharpSyntaxTree.ParseText(File.ReadAllText(file)))
+                             .DescendantNodes().OfType<ClassDeclarationSyntax>().Where(c => c.Identifier.ValueText == simple))
+                {
+                    AddMembers(cls, target, controlFields, inheritedFrom: simple);
+                    nextBase ??= cls.BaseList?.Types.FirstOrDefault()?.Type.ToString();
+                }
+            }
+            current = nextBase;
+        }
+    }
+
+    private static bool Declared(PageIr target, MemberIr m) =>
+        target.Members.Any(x => x.Kind == m.Kind && x.Name == m.Name && x.Parameters.Count == m.Parameters.Count);
+
+    private static void AddMembers(ClassDeclarationSyntax classDecl, PageIr target, HashSet<string> controlFields, string? inheritedFrom)
+    {
+        void Add(MemberIr m)
+        {
+            if (inheritedFrom is not null)
+            {
+                if (Declared(target, m)) return; // the derived class (or a closer base) wins
+                m.Attributes.Add("inherited:" + inheritedFrom);
+            }
+            target.Members.Add(m);
+        }
+
         foreach (var member in classDecl.Members)
         {
             switch (member)
             {
                 case PropertyDeclarationSyntax prop:
-                    var property = Simple(MemberKind.Property, prop.Identifier.Text, prop.Type.ToString(), prop.Modifiers);
+                    var property = Simple(MemberKind.Property, prop.Identifier.ValueText, prop.Type.ToString(), prop.Modifiers);
                     property.Body = prop.Initializer?.Value.ToString(); // auto-property initializer; for fields/properties Body is the initial value expression
-                    target.Members.Add(property);
+                    Add(property);
                     break;
 
                 case FieldDeclarationSyntax field:
                     foreach (var v in field.Declaration.Variables)
                     {
-                        var name = v.Identifier.Text;
+                        var name = v.Identifier.ValueText;
                         if (controlFields.Contains(name) || name == "components") continue;
                         var fieldMember = Simple(MemberKind.Field, name, field.Declaration.Type.ToString(), field.Modifiers);
                         fieldMember.Body = v.Initializer?.Value.ToString(); // initial value expression (constants such as c_NoFilter = "..." matter to translated code)
-                        target.Members.Add(fieldMember);
+                        Add(fieldMember);
                     }
                     break;
 
                 case EventFieldDeclarationSyntax evt:
                     foreach (var v in evt.Declaration.Variables)
-                        target.Members.Add(Simple(MemberKind.Event, v.Identifier.Text, evt.Declaration.Type.ToString(), evt.Modifiers));
+                        Add(Simple(MemberKind.Event, v.Identifier.ValueText, evt.Declaration.Type.ToString(), evt.Modifiers));
                     break;
 
-                case ConstructorDeclarationSyntax ctor when !ctor.Modifiers.Any(m => m.Text == "static"):
-                    // Recorded as a method named ".ctor": its parameters become the page's inputs (props) in generators.
+                case ConstructorDeclarationSyntax ctor when inheritedFrom is null && !ctor.Modifiers.Any(m => m.Text == "static"):
+                    // Recorded as a method named ".ctor": its parameters become the page inputs (props) in generators.
                     var ctorIr = Simple(MemberKind.Method, ".ctor", "void", ctor.Modifiers);
                     ctorIr.Parameters = ctor.ParameterList.Parameters.Select(p => new ParameterIr
                     {
-                        Name = p.Identifier.Text,
+                        Name = p.Identifier.ValueText,
                         Type = p.Type?.ToString() ?? "object",
                         DefaultValue = p.Default?.Value.ToString()
                     }).ToList();
@@ -62,17 +117,17 @@ public sealed class WinFormsMemberExtractor : IIrExtractor
                     target.Members.Add(ctorIr);
                     break;
 
-                case MethodDeclarationSyntax method when !DesignerBoilerplateMethods.Contains(method.Identifier.Text):
-                    var ir = Simple(MemberKind.Method, method.Identifier.Text, method.ReturnType.ToString(), method.Modifiers);
+                case MethodDeclarationSyntax method when !DesignerBoilerplateMethods.Contains(method.Identifier.ValueText):
+                    var ir = Simple(MemberKind.Method, method.Identifier.ValueText, method.ReturnType.ToString(), method.Modifiers);
                     ir.Parameters = method.ParameterList.Parameters.Select(p => new ParameterIr
                     {
-                        Name = p.Identifier.Text,
+                        Name = p.Identifier.ValueText,
                         Type = p.Type?.ToString() ?? "object",
                         DefaultValue = p.Default?.Value.ToString()
                     }).ToList();
                     ir.Body = method.Body?.ToString() ?? method.ExpressionBody?.ToString();
                     ir.Attributes = method.AttributeLists.SelectMany(l => l.Attributes).Select(a => a.Name.ToString()).ToList();
-                    target.Members.Add(ir);
+                    Add(ir);
                     break;
             }
         }
