@@ -106,6 +106,7 @@ public sealed partial class PageGenerator
         public Dictionary<string, Handler> Handlers { get; } = new();
         public HashSet<string> StatefulIds { get; } = new();
         public HashSet<string> ListViewIds { get; } = new();
+        public HashSet<string> ComboIds { get; } = new();
 
         /// <summary>Control id -> id of its parent control (radio buttons of one container form a group).</summary>
         public Dictionary<string, string> ParentOf { get; } = new(StringComparer.Ordinal);
@@ -238,7 +239,7 @@ public sealed partial class PageGenerator
             foreach (var comment in c.ModelComments) sb.AppendLine("  " + comment);
             sb.AppendLine("  const vm = useWfModel({");
             foreach (var (id, props) in c.Model)
-                sb.AppendLine($"    {Prop(id)}: {{ {string.Join(", ", props.Select(kv => $"{kv.Key}: {kv.Value}"))} }},");
+                sb.AppendLine($"    {Prop(id)}: {{ {string.Join(", ", props.Select(kv => kv.Value.StartsWith("@raw:", StringComparison.Ordinal) ? kv.Value[5..] : $"{kv.Key}: {kv.Value}"))} }},");
             sb.AppendLine("  });");
         }
         if (usesFields)
@@ -510,6 +511,9 @@ public sealed partial class PageGenerator
         }
 
         var code = string.Join("\n", c.Unit.Page.Members.Where(m => m.Kind == MemberKind.Method && m.Body != null).Select(m => m.Body));
+        foreach (Match m in ComboUsageRegex().Matches(code))
+            if (c.ById.TryGetValue(m.Groups[1].Value, out var comboNode) && comboNode != root && _spec.Find(comboNode.Effective())?.Name == "WfComboBox" && c.ComboIds.Add(comboNode.Id))
+                AddComboModel(c, comboNode);
         foreach (Match m in UsedPropertyRegex().Matches(code))
         {
             var id = m.Groups[1].Value == "this" ? root.Id : m.Groups[1].Value;
@@ -551,6 +555,27 @@ public sealed partial class PageGenerator
             c.ModelComments.Add($"// MOCK — {id} rows are sample data: the original fills it in code that is not translated; replace with real implementation");
         }
     }
+
+    /// <summary>
+    /// A combo box whose items or selection code touches keeps `items` and `selectedIndex` in the model; `text` / `selected` are accessors over them, so writing
+    /// either one (or the index) keeps the others consistent and the control shows the same state. Clear is a model method.
+    /// </summary>
+    private static void AddComboModel(Ctx c, ControlNodeIr node)
+    {
+        var items = TryJsonStringArray(node.Attributes.GetValueOrDefault("Items") ?? "", out var json) ? json : "[]";
+        var text = Str(node.Attributes.GetValueOrDefault("Text") ?? "");
+        c.Model.TryGetValue(node.Id, out var existing);
+        existing?.Remove("text");
+        c.ModelSet(node.Id, "Items", $"{items} as string[]");
+        c.ModelSet(node.Id, "SelectedIndex", "-1");
+        c.ModelSet(node.Id, "_text", text);
+        c.ModelSet(node.Id, "text", "@raw:get text(): string { return this.selectedIndex >= 0 ? this.items[this.selectedIndex] : this._text; }, set text(v: string) { this._text = v; this.selectedIndex = this.items.indexOf(v); }");
+        c.ModelSet(node.Id, "selected", "@raw:get selected(): string | null { return this.selectedIndex >= 0 ? this.items[this.selectedIndex] : null; }, set selected(v: string | null) { this.text = v ?? ''; }");
+        c.ModelSet(node.Id, "clear", "@raw:clear(): void { this.items.splice(0); this.selectedIndex = -1; this._text = ''; }");
+    }
+
+    [GeneratedRegex(@"\b(\w+)\s*\.\s*(Items|SelectedIndex|SelectedItem|SelectedValue)\b")]
+    private static partial Regex ComboUsageRegex();
 
     /// <summary>Columns (from the designer's ColumnHeader children) and items live in the model so code can Columns.Add / Items.Add / SelectedItems.</summary>
     private static void AddListViewModel(Ctx c, ControlNodeIr node)

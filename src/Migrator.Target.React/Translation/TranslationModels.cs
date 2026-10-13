@@ -97,6 +97,9 @@ public sealed class PageScope
     /// <summary>Controls of type ListView: their Items/SelectedItems/Columns live in the model (`vm.&lt;id&gt;.items`).</summary>
     public HashSet<string> ListViews { get; } = new(StringComparer.Ordinal);
 
+    /// <summary>Controls of type ComboBox: `Items` / `SelectedIndex` / `SelectedItem` live in the page model (`vm.<id>.items`, `.selectedIndex`, `.selected`).</summary>
+    public HashSet<string> Combos { get; } = new(StringComparer.Ordinal);
+
     /// <summary>Controls of type TabControl: `SelectedIndex` is `vm.<id>.selectedIndex`.</summary>
     public HashSet<string> TabControls { get; } = new(StringComparer.Ordinal);
 
@@ -109,6 +112,9 @@ public sealed class PageScope
 
     /// <summary>Windows-specific APIs to bypass (data file); null disables bypassing.</summary>
     public BypassRules? Bypass { get; init; }
+
+    /// <summary>Markers of server-side code: such methods of project classes become typed stubs.</summary>
+    public ServerBoundRules ServerBound { get; init; } = ServerBoundRules.Empty;
 
     /// <summary>Control id -> WinForms member -> member of the replacement control (a control rendered by a fallback component: `Value` -> `Text`).</summary>
     public Dictionary<string, Dictionary<string, string>> Aliases { get; } = new(StringComparer.Ordinal);

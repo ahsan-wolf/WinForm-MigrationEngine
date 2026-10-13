@@ -571,6 +571,7 @@ internal sealed partial class MethodTranslator
             if (_scope.Aliases.TryGetValue(controlId, out var aliasMap) && aliasMap.TryGetValue(name, out var aliased)) name = aliased;
             if (_scope.ListViews.Contains(controlId) && name is "Items" or "SelectedItems" or "CheckedItems" or "Columns" or "SelectedIndices")
                 return ListCollection(controlId, name);
+            if (_scope.Combos.Contains(controlId) && ComboMember(controlId, name) is { } comboMember) return comboMember;
             if (name == "SelectedIndex" && _scope.TabControls.Contains(controlId))
             {
                 _scope.Output.UsesViewModel = true;
@@ -687,7 +688,7 @@ internal sealed partial class MethodTranslator
         var chosen = ctors.OrderByDescending(c => c.Parameters.Count).FirstOrDefault();
         var min = ctors.Count == 0 ? 0 : ctors.Min(c => c.Parameters.Count(p => p.DefaultValue == null));
         var max = chosen?.Parameters.Count ?? 0;
-        if (args.Count < min || args.Count > max) throw new Untranslatable($"constructor of {type.Name} with {args.Count} argument(s) is not available");
+        if (!type.Ir.External && (args.Count < min || args.Count > max)) throw new Untranslatable($"constructor of {type.Name} with {args.Count} argument(s) is not available");
         var creation = $"new {type.Name}({string.Join(", ", Args(oc.ArgumentList ?? SyntaxFactory.ArgumentList()))})";
         if (oc.Initializer is not { } init) return creation;
 
@@ -744,8 +745,40 @@ internal sealed partial class MethodTranslator
     }
 
     /// <summary>Calls on lv.Items / lv.SelectedItems / lv.Columns / item.SubItems, translated onto the model arrays.</summary>
+    /// <summary>ComboBox members kept in the page model: `Items`, `SelectedIndex`, `SelectedItem` / `SelectedValue` (the selected text, null when none).</summary>
+    private string? ComboMember(string id, string name)
+    {
+        string? key = name switch { "Items" => "items", "SelectedIndex" => "selectedIndex", "SelectedItem" or "SelectedValue" => "selected", _ => null };
+        if (key is null) return null;
+        _scope.Output.UsesViewModel = true;
+        return $"vm.{id}.{key}";
+    }
+
+    /// <summary>Calls on `combo.Items`: Add, AddRange, Insert, RemoveAt, Remove, Clear, Contains, IndexOf over the model's string items.</summary>
+    private string? ComboItemsMethod(ExpressionSyntax receiver, string method, InvocationExpressionSyntax inv)
+    {
+        if (receiver is not MemberAccessExpressionSyntax { Name.Identifier.ValueText: "Items", Expression: var owner } || ControlOf(owner) is not { } id || !_scope.Combos.Contains(id)) return null;
+        _scope.Output.UsesViewModel = true;
+        var items = $"vm.{id}.items";
+        var args = inv.ArgumentList.Arguments;
+        string Arg(int i) => Ex(args[i].Expression);
+        return (method, args.Count) switch
+        {
+            ("Add", 1) => $"{items}.push(String({Arg(0)}))",
+            ("AddRange", 1) => $"{items}.push(...({Arg(0)}).map(String))",
+            ("Insert", 2) => $"{items}.splice({Arg(0)}, 0, String({Arg(1)}))",
+            ("RemoveAt", 1) => $"{items}.splice({Arg(0)}, 1)",
+            ("Remove", 1) => $"{items}.splice({items}.indexOf(String({Arg(0)})) >>> 0, 1)",
+            ("Clear", 0) => $"vm.{id}.clear()",
+            ("Contains", 1) => $"{items}.includes(String({Arg(0)}))",
+            ("IndexOf", 1) => $"{items}.indexOf(String({Arg(0)}))",
+            _ => throw new Untranslatable($"call to {id}.Items.{method}(...) is not translated")
+        };
+    }
+
     private string? ListMethod(ExpressionSyntax receiver, string method, InvocationExpressionSyntax inv)
     {
+        if (ComboItemsMethod(receiver, method, inv) is { } comboCall) return comboCall;
         var argList = inv.ArgumentList.Arguments;
         if (receiver is MemberAccessExpressionSyntax { Name.Identifier.ValueText: "SubItems", Expression: var owner } && IsListItem(owner))
         {
