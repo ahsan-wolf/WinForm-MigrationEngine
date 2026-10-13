@@ -94,6 +94,23 @@ root control with `TriggerEvent = "Method:{name}"`. Not navigation: `MessageBox`
 `ViewerShell` writes `src/manifest.ts` (`ViewerUnit`: id, component, file, kind form|control, title, group = source folder, source, controls, fallbacks[], unsupported[], designWidth/designHeight from the root layout, error?), `viewer.css` and the shell `main.tsx`
 (lazy per-unit pages through `import.meta.glob`, per-selection error boundary, hash routing, filter, prev/next, design-size and background toggles). The shell is generated output, not a project in this repository (CLAUDE.md §0.3). A target that adds a viewer implements the same `Preview` option.
 
+## Referenced projects, library classes and server-side code (any project)
+- **Referenced projects outside the source folder.** The analyzer follows `ProjectReference`s that point outside `--source` (generated entity layers, shared libraries), transitively (cap 40; a project whose folder contains the source folder is skipped).
+  Their classes join the analysis (`ProjectAnalysis.AdditionalRoots`, listed in `project.ir.json` `Source.AdditionalRoots` and printed by the CLI); their forms are not units. `--no-external-projects` turns it off.
+- **Library classes are shape only.** Support classes from those folders carry `SupportClassIr.External = true`: they are emitted with typed fields/properties, method stubs that accept any arguments and an any-argument constructor (their bodies are never translated),
+  reachability follows their signatures only, and members the base chain already declares are not redeclared. This keeps a large generated entity layer small (tens of thousands of lines instead of hundreds of thousands) and still gives pages typed entities.
+- **Support class details.** Partial classes (generated + hand-written halves) are merged into one; interfaces are not support classes; TypeScript inheritance is real (`class A extends B`, bases defined first, `super(...)` placeholders, hidden base members keep the base's declaration);
+  instance fields never default to `new T()` (object graphs can be cyclic), static fields may.
+- **Server-side code** (`rules/server-bound.json`, option `serverBoundRulesPath`): a method whose body uses a data-access / file-system / configuration marker becomes a typed stub; a class where at least `classThreshold` of its methods do is not generated nor followed. The report lists both under
+  "Server-side code left out (backend work)": it is what a REST layer must provide.
+- **External assemblies.** `IDependencySourceEngine` lists referenced binary assemblies (classic `<Reference>` with a HintPath) in `project.ir.json` `Shared.ExternalAssemblies { Name, Path, Exists, ReferencedBy }`, the candidates for `migrator contract` (metadata only).
+- **ComboBox** members: when code touches `Items`, `SelectedIndex`, `SelectedItem` or `SelectedValue` the combo keeps `items` / `selectedIndex` in the page model, with accessors `text` and `selected` over them and a `clear()` method (all kept consistent on any write); `Items.Add/AddRange/Insert/RemoveAt/Remove/Clear/Contains/IndexOf` translate.
+
+## Compile gate: statement-level demotion
+`tsc` errors are demoted at the finest safe grain: one failing *simple statement* (a line ending in `;` that does not continue a previous line) is commented out on its own with `// TODO: not translated — this statement fails the TypeScript check: <original line>`, the method becomes Partial,
+and locals that lost their last reader are renamed `_x`; only a failing header, block or continuation line demotes the whole method (also after 30 statements in one method). A statement is addressed as `Method#n`, n = its index among the body's code lines of the first emission
+(`LineDemotion`), mapped against the emission each tsc round refers to, so addresses stay valid over up to 10 rounds. Effect on the second pilot: about 450 methods moved from "not translated" to "partial".
+
 ## IR files (CLAUDE.md §4.1)
 `migrator ir` writes, per Form/UserControl, `<out>/ir/{Name}/{Name}.{facet}.ir.json` for `complete` (source of truth), `controls`,
 `control-properties`, `code-behind` and `layout`, plus `<out>/ir/project.ir.json`. Every facet is a pure function of the

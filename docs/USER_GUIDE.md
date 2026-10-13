@@ -61,6 +61,7 @@ Use an output folder **outside the repository**. Never commit generated output d
 |---|---|
 | `--target react-app` | Target engine (only React exists today; Angular and HTML+jQuery are planned) |
 | `--entry <form>` | Entry form (default: the startup form from `Program.cs`) |
+| `--no-external-projects` | Do not follow `ProjectReference`s that point outside the source folder (by default their classes are included as typed API shapes) |
 | `--units all` | Generate every form and user control, not only the ones reachable from the entry form (use for shells that open screens from menu data) |
 | `--depth <n\|all>` | How many `Show/ShowDialog` hops from the entry form to generate (default 1; `all` = everything reachable) |
 | `--translate none\|rules\|llm` | `none`: handlers stay commented C#. `rules`: deterministic C# -> TypeScript. `llm` currently behaves like `rules` (LLM tier planned) |
@@ -153,6 +154,7 @@ What to click through: the menu and toolbar, each dialog from the entry form, li
 - Data is mock. The opener passing real arguments to dialogs, real services and authentication are not part of the generated app yet.
 - No pixel fidelity: layout is derived from Dock/Anchor/Location facts into flex/grid.
 - Windows-only APIs are bypassed, not translated (`rules/windows-bypass.json`; the report lists each).
+- Classes from referenced projects outside the source folder are included as API shapes only (typed fields, stubbed methods); data access, file system and configuration code is left out and listed in the report as backend work.
 - Not translated today: `ref`/`out`, event subscriptions in code, `string.Format` format specifiers, `ConfigurationManager`/registry/file access, GDI+/P/Invoke/COM, UI calls inside non-form classes, LINQ query syntax, lambdas, `dgv.Rows` and `pnl.Controls` members, runtime-created controls.
 - Controls without a library component yet (TreeView, list box, rich/masked text, month calendar, ...) are rendered by the closest component (`ui-spec/fallbacks.json`): a date picker is a text box, a tree a flat list, tabs stacked panels. They work, but look and behave simply.
 - Only the React target exists; Angular and HTML+jQuery are planned. See `PROJECT_PLAN.md` for the roadmap.
