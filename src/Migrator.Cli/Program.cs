@@ -3,6 +3,7 @@ using Migrator.Engine.Assemblies;
 using Migrator.Engine.Contracts;
 using Migrator.Engine.Hosting;
 using Migrator.Engine.Pipeline;
+using Migrator.Source.Backend;
 
 return Run(args);
 
@@ -21,6 +22,8 @@ static int Run(string[] args)
               contract --assembly <dll> --out <dir>
                                                   Read a managed assembly's public API from metadata only (never loaded or run) -> <out>/<name>/contract.json
                                                   and data-access.json (SQL table/procedure names; connection-string-like literals are only counted)
+              backend --source <dir>... [--wsdl <dir>...] --out <dir> [--rules <backend-patterns.json>]
+                                                  Read-only survey of .NET Framework class libraries / ASMX services and WSDLs -> BACKEND_ANALYSIS.md + backend-analysis.json (use a git-ignored --out)
               migrate --source <dir> --out <dir> [--target react-app] [--entry <form>] [--depth <n|all>] [--units all] [--preview|--appshell] [--contract <contract.json>]... [--contract-scope used|all] [--translate none|rules|llm] [--compile-gate] [--config <engines.json>]
                                                   ir step, then generate an app into <out>/<target> (default depth 1: entry form + forms it opens)
             """);
@@ -33,6 +36,7 @@ static int Run(string[] args)
         "ir" => ExtractIr(args[1..]),
         "migrate" => Migrate(args[1..]),
         "contract" => Contract(args[1..]),
+        "backend" => Backend(args[1..]),
         _ => Fail($"Unknown command '{args[0]}'. Try 'migrator --help'.")
     };
 }
@@ -139,6 +143,34 @@ static int Contract(string[] args)
     Console.WriteLine($"  data access: {hints.SqlLiteralCount} SQL literal(s), {hints.Tables.Count} table name(s), {hints.StoredProcedures.Count} procedure(s); {hints.ConnectionStringLikeCount} connection-string-like literal(s) discarded");
     Console.WriteLine($"  written: {dir}");
     return 0;
+}
+
+static int Backend(string[] args)
+{
+    var outDir = OptionValue(args, "--out");
+    var sources = OptionValues(args, "--source");
+    if (sources.Count == 0 || outDir is null) return Fail("backend needs at least one --source <dir> and --out <dir> (use a git-ignored folder such as local-outputs/).");
+
+    var rulesPath = OptionValue(args, "--rules") ?? FindUpwards(Path.Combine("rules", "backend-patterns.json"));
+    var analysis = new BackendAnalyzer(BackendAnalyzer.LoadRules(rulesPath)).Analyze(sources, OptionValues(args, "--wsdl"));
+    BackendReport.Write(analysis, outDir);
+
+    Console.WriteLine($"Sources: {analysis.Sources.Count}, classes {analysis.Sources.Sum(s => s.Classes)}; services {analysis.Services.Count} ({analysis.Services.Sum(s => s.Operations.Count)} operations); SOAP proxies {analysis.Proxies.Count}; WSDL {analysis.Wsdls.Count}");
+    Console.WriteLine($"Facades {analysis.Facades.Count}; static mutable state {analysis.StaticState.Count}; findings: " + string.Join(", ", analysis.Findings.GroupBy(f => f.Category).Select(g => $"{g.Key} {g.Count()}")));
+    foreach (var w in analysis.Warnings) Console.WriteLine("  warning: " + w);
+    Console.WriteLine($"  written: {Path.GetFullPath(outDir)}");
+    return 0;
+}
+
+static string? FindUpwards(string relative)
+{
+    foreach (var start in new[] { Directory.GetCurrentDirectory(), AppContext.BaseDirectory })
+        for (var dir = new DirectoryInfo(start); dir is not null; dir = dir.Parent)
+        {
+            var candidate = Path.Combine(dir.FullName, relative);
+            if (File.Exists(candidate)) return candidate;
+        }
+    return null;
 }
 
 static int Migrate(string[] args)

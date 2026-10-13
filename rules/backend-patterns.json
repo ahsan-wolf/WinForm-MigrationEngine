@@ -1,0 +1,13 @@
+{
+  "_comment": "Data for `migrator backend`: what counts as Windows-specific, host-bound or configuration access. Extend without a rebuild (--rules <file>). Matching is by whole dotted names / type names found in the code.",
+  "windowsNamespaces": ["System.Windows.Forms", "System.Drawing", "Microsoft.Win32", "System.DirectoryServices", "System.Management", "System.Printing", "System.Security.Principal"],
+  "windowsNames": ["WindowsIdentity", "WindowsPrincipal", "Registry", "RegistryKey", "EventLog", "Clipboard", "SendKeys", "MessageBox", "Application.StartupPath", "Application.ExecutablePath", "Application.UserAppDataPath", "Environment.UserName", "Environment.UserDomainName", "Environment.MachineName", "Process.Start", "Marshal", "DirectoryEntry", "DirectorySearcher", "PrincipalContext", "UserPrincipal", "Bitmap", "Graphics", "Image.FromFile", "ProtectedData", "X509Store"],
+  "windowsAttributes": ["DllImport", "ComImport", "ComVisible"],
+  "configAccess": ["ConfigurationManager.AppSettings", "ConfigurationManager.ConnectionStrings", "ConfigurationSettings.AppSettings", "WebConfigurationManager", "Settings.Default", "Properties.Settings"],
+  "hostContext": ["HttpContext", "Session", "Server.MapPath", "HttpRuntime", "Context.Request", "Context.Response", "Application["],
+  "dataAccessTypes": ["SqlConnection", "OracleConnection", "OleDbConnection", "OdbcConnection", "SqlCommand", "OracleCommand", "SqlDataAdapter", "DataSet", "DataTable"],
+  "proxyBaseTypes": ["SoapHttpClientProtocol", "HttpWebClientProtocol", "ClientBase", "SoapHttpClientProtocol"],
+  "serviceBaseTypes": ["WebService"],
+  "serviceAttributes": ["WebService", "ServiceContract"],
+  "methodAttributes": ["WebMethod", "OperationContract"]
+}

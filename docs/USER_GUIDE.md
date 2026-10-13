@@ -54,6 +54,7 @@ Use an output folder **outside the repository**. Never commit generated output d
 | `ir --source <dir> --out <dir> [--engine <id>]` | Extract the IR only |
 | `migrate --source <dir> --out <dir> [options]` | IR step, then generate the app into `<out>/react-app` |
 | `contract --assembly <dll> --out <dir>` | Read a managed DLL's public API from metadata only (never loaded or run) |
+| `backend --source <dir>... [--wsdl <dir>...] --out <dir> [--rules <file>]` | Read-only survey of .NET Framework class libraries / ASMX services and WSDLs (services and operations, SOAP proxies, facade thickness, Windows-specific calls, static mutable state, config key names, data access). Writes `BACKEND_ANALYSIS.md` + `backend-analysis.json`; use a git-ignored `--out`. Rules: `rules/backend-patterns.json` |
 
 `migrate` options:
 

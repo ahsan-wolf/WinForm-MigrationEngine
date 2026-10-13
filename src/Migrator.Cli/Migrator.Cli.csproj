@@ -11,6 +11,7 @@
     <!-- Composition root: built-in engines are referenced here only so they land in the app directory.
          Migrator.Engine itself never references an engine. -->
     <ProjectReference Include="..\Migrator.Source.WinForms\Migrator.Source.WinForms.csproj" />
+    <ProjectReference Include="..\Migrator.Source.Backend\Migrator.Source.Backend.csproj" />
     <ProjectReference Include="..\Migrator.Target.React\Migrator.Target.React.csproj" />
   </ItemGroup>
 
