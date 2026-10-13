@@ -67,6 +67,16 @@ root control with `TriggerEvent = "Method:{name}"`. Not navigation: `MessageBox`
 `ColorDialog`, `FontDialog`, `PrintDialog`, `PageSetupDialog`, `PrintPreviewDialog`; and `Close`/`Hide` only count on the form itself
 (`conn.Close()` / `reader.Close()` are far too common to guess). Effect on the pilot: `frmNavigator` -> 16 forms (was 0).
 
+## Custom controls and inheritance (any project)
+- **Custom controls** (a class derived from a standard control, in the project or in a class library it references) keep their declared type in `TagName`; the source engine follows the base-type chain through every class of the project
+  (`ProjectAnalysis.TypeBases`) and records the standard type in the control attribute `ResolvedType` (`System.Windows.Forms.TextBox`). Generators map by `ControlTypes.Effective(node)` (resolved type, else `TagName`), so a project-specific
+  `FancyTextBox` or a vendor grid with source behaves like its base. Types whose chain ends outside the project (a vendor control without source, a report viewer) stay unresolved and become `WfUnsupported` until a mapping exists.
+- **Reusable controls with a designer**: a class that resolves to any standard control other than a Form (for example a combo box with its own designer) is a user-control unit, not a form.
+- **Code inheritance**: members (fields, properties, methods, events) of project base classes are merged into each derived unit, marked `inherited:<Base>` in `MemberIr.Attributes`; the derived class and closer bases win; constructors, designer
+  boilerplate and the base designer partial are not merged. Known limits: controls declared in a base class designer (visual inheritance) are not merged; every derived unit carries its own copy of the base members (translated once per unit).
+- `migrate --units all` generates every form and user control (needed when a shell opens modules dynamically, e.g. `Activator.CreateInstance(type)` from menu data, which static navigation extraction cannot see).
+- Support classes are pruned to those the generated pages reach (directly or through each other); classes deriving from controls/components are UI and are never support classes.
+
 ## IR files (CLAUDE.md §4.1)
 `migrator ir` writes, per Form/UserControl, `<out>/ir/{Name}/{Name}.{facet}.ir.json` for `complete` (source of truth), `controls`,
 `control-properties`, `code-behind` and `layout`, plus `<out>/ir/project.ir.json`. Every facet is a pure function of the
