@@ -35,6 +35,7 @@ internal static class SupportTranslator
                 Generated = env.Generated,
                 Support = registry.Classes,
                 Bypass = env.Bypass,
+                ServerBound = env.ServerBound,
                 Output = output
             };
             foreach (var f in cls.Fields.Values) scope.Fields.TryAdd(f.Name, f);
@@ -78,6 +79,7 @@ internal static class SupportTranslator
         {
             if (state.TryGetValue(cls.Name, out _)) return;
             state[cls.Name] = 1;
+            if (BaseOf(cls, registry.Classes) is { } baseClass) Visit(baseClass); // `class A extends B` evaluates B when A is defined
             // Everything that can run while the module loads: static initializers, and (because a static initializer may construct an instance)
             // instance field initializers and constructor bodies of every class. Method bodies run later and do not constrain the order.
             var initText = string.Join("\n", cls.Ir.Members
@@ -94,6 +96,18 @@ internal static class SupportTranslator
     }
 
     private static string Member(string name) => name;
+
+    /// <summary>The support class a class derives from (generated as `extends`), or null when its base is not a project class or would be a cycle.</summary>
+    private static SupportClassInfo? BaseOf(SupportClassInfo cls, IReadOnlyDictionary<string, SupportClassInfo> classes)
+    {
+        if (cls.IsEnum || cls.Ir.IsStatic || cls.Ir.BaseType is not { } text) return null;
+        var simple = text.Contains('<') ? text[..text.IndexOf('<')] : text;
+        simple = simple[(simple.LastIndexOf('.') + 1)..];
+        if (!classes.TryGetValue(simple, out var baseClass) || baseClass.IsEnum || baseClass.Ir.IsStatic || baseClass.Name == cls.Name) return null;
+        for (var up = baseClass; up is not null; up = BaseOf(up, classes))   // a cycle in the declared bases is not extendable
+            if (up.Name == cls.Name) return null;
+        return baseClass;
+    }
 
     private static void EmitEnum(SupportClassInfo cls, PageScope scope, List<string> lines)
     {
@@ -115,13 +129,21 @@ internal static class SupportTranslator
     private static void EmitClass(SupportClassInfo cls, PageScope scope, List<string> lines, List<(string Key, int Start, int End)> ranges,
         SupportModule module, ISet<string> demoted)
     {
-        if (cls.Ir.BaseType is { } baseType && baseType != "object")
+        if (cls.Ir.External) { EmitShape(cls, scope, lines, module); return; }
+
+        var baseClass = BaseOf(cls, scope.Support);
+        if (baseClass is null && cls.Ir.BaseType is { } baseType && baseType != "object")
             lines.Add($"// {cls.Name} derives from {baseType}: the base type is not generated.");
         foreach (var u in cls.Ir.Unsupported) lines.Add($"// TODO: not extracted — {u}");
-        lines.Add($"export class {cls.Name} {{");
+        lines.Add($"export class {cls.Name}{(baseClass is null ? "" : $" extends {baseClass.Name}")} {{");
+
+        // A field or property the base chain already declares stays the base's (C# member hiding cannot be expressed: a different type is a TypeScript error).
+        var inheritedData = new HashSet<string>(StringComparer.Ordinal);
+        for (var up = baseClass; up is not null; up = BaseOf(up, scope.Support)) inheritedData.UnionWith(up.Fields.Keys);
 
         foreach (var m in cls.Ir.Members.Where(m => m.Kind is MemberKind.Field or MemberKind.Property))
         {
+            if (inheritedData.Contains(m.Name)) { lines.Add($"  // {m.Name}: redeclares a member of the base class; the base's declaration is kept"); continue; }
             if (m.Attributes.Contains("mod:accessors")) EmitAccessors(cls, m, scope, lines, ranges, module, demoted);
             else EmitField(cls, m, scope, lines);
         }
@@ -130,10 +152,56 @@ internal static class SupportTranslator
 
         foreach (var (name, overloads) in cls.Functions)
             foreach (var fn in overloads)
-                EmitMethod(cls, fn, scope, lines, ranges, module, demoted);
+                EmitMethod(cls, fn, scope, lines, ranges, module, demoted, scope.ServerBound);
 
         lines.Add("}");
         lines.Add("");
+    }
+
+    /// <summary>
+    /// A class of a referenced library project: its API shape only. Fields and properties are typed fields, methods are typed stubs that accept any arguments,
+    /// the constructor accepts any arguments. Nothing of its code is translated (it is a library, and it may be a large generated layer).
+    /// </summary>
+    private static void EmitShape(SupportClassInfo cls, PageScope scope, List<string> lines, SupportModule module)
+    {
+        var baseClass = BaseOf(cls, scope.Support);
+        lines.Add($"// {cls.Name}: library class ({cls.Ir.RelativePath}) — API shape only, not translated.");
+        lines.Add($"export class {cls.Name}{(baseClass is null ? "" : $" extends {baseClass.Name}")} {{");
+
+        // Members the base chain already declares are inherited as they are: redeclaring one with a slightly different type is a TypeScript error.
+        var inherited = new HashSet<string>(StringComparer.Ordinal);
+        for (var up = BaseOf(cls, scope.Support); up is not null; up = BaseOf(up, scope.Support))
+        {
+            inherited.UnionWith(up.Fields.Keys);
+            inherited.UnionWith(up.Functions.Values.SelectMany(f => f).Select(f => f.TsName));
+        }
+
+        foreach (var m in cls.Ir.Members.Where(m => m.Kind is MemberKind.Field or MemberKind.Property && !inherited.Contains(m.Name)))
+        {
+            var ts = scope.Vocabulary.MapType(m.Type, scope.Output.TypeImports);
+            lines.Add($"  {(m.IsStatic ? "static " : "")}{Member(m.Name)}: {ts} = {ShapeDefault(scope, m, ts)};");
+        }
+
+        if (baseClass is not null || cls.Constructors.Any(c => c.Parameters.Count > 0))
+            lines.Add($"  constructor(..._args: unknown[]) {{{(baseClass is null ? "" : " super();")} }}");
+
+        foreach (var (_, overloads) in cls.Functions)
+            foreach (var fn in overloads.Where(f => !inherited.Contains(f.TsName)))
+            {
+                var ret = scope.Vocabulary.MapType(fn.Member.Type, scope.Output.TypeImports);
+                var returns = PageTranslator.DefaultReturn(scope, fn.Member);
+                lines.Add($"  {(fn.Member.IsStatic ? "static " : "")}{Member(fn.TsName)}(..._args: unknown[]){(fn.Member.Type == "void" ? "" : $": {ret}")} {{ {returns} }}");
+            }
+
+        lines.Add("}");
+        lines.Add("");
+    }
+
+    /// <summary>Default of a shape field: primitives and empty collections, never an object (entity graphs are cyclic, so `new T()` fields would recurse).</summary>
+    private static string ShapeDefault(PageScope scope, MemberIr m, string ts)
+    {
+        var d = PageTranslator.FieldInitial(scope, new MemberIr { Type = m.Type, Name = m.Name });
+        return d.StartsWith("new ", StringComparison.Ordinal) || d.StartsWith("Object.create(", StringComparison.Ordinal) ? $"null as unknown as {ts}" : d;
     }
 
     // --------------------------------------------------------------------------------------------------- fields
@@ -180,7 +248,9 @@ internal static class SupportTranslator
 
         var fixture = PageTranslator.MockDefault(scope, m.Type, ts, scope.Output.FixturesImport.Length > 0);
         if (fixture is not null && fixture.StartsWith("fixtures.", StringComparison.Ordinal)) { mock = true; return fixture; }
-        return PageTranslator.FieldInitial(scope, new MemberIr { Type = m.Type, Name = m.Name });
+        var fallback = PageTranslator.FieldInitial(scope, new MemberIr { Type = m.Type, Name = m.Name });
+        // A static field may be a ready-made instance (`new T()`), but an instance field must not (object graphs can be cyclic: construction would never end).
+        return !m.IsStatic && (fallback.StartsWith("new ", StringComparison.Ordinal) || fallback.StartsWith("Object.create(", StringComparison.Ordinal)) ? $"null as unknown as {ts}" : fallback;
     }
 
     // ----------------------------------------------------------------------------------------------- accessors
@@ -243,6 +313,12 @@ internal static class SupportTranslator
         var parameters = PageTranslator.Params(scope, shaped, new MemberFunction { Member = shaped, TsName = "constructor" }, bodyText);
         var start = lines.Count;
         lines.Add($"  constructor({parameters}) {{");
+        if (BaseOf(cls, scope.Support) is { } ctorBase)
+        {
+            // A derived constructor starts with super(...): the base constructor's required parameters get placeholders (the original base(...) call is not extracted).
+            var required = ctorBase.Constructors.Select(c => c.Parameters.Count(x => x.DefaultValue == null)).DefaultIfEmpty(0).Min();
+            lines.Add($"    super({string.Join(", ", Enumerable.Repeat("null!", required))});");
+        }
         if (stub) AddStub(lines, shaped, scope, indent: "    ", defaultReturn: false);
         else lines.AddRange(body.Select(l => l.Length == 0 ? l : "    " + l));
         lines.Add("  }");
@@ -252,7 +328,7 @@ internal static class SupportTranslator
     // ----------------------------------------------------------------------------------------------- methods
 
     private static void EmitMethod(SupportClassInfo cls, MemberFunction fn, PageScope scope, List<string> lines, List<(string Key, int Start, int End)> ranges,
-        SupportModule module, ISet<string> demoted)
+        SupportModule module, ISet<string> demoted, ServerBoundRules serverRules)
     {
         var m = fn.Member;
         if (m.Body is null) return;
@@ -264,7 +340,9 @@ internal static class SupportTranslator
             Kind = MemberKind.Method, Name = m.Name, Type = m.Type, Body = m.Body, IsStatic = m.IsStatic,
             Parameters = m.Parameters.Select(p => new ParameterIr { Name = p.Name, Type = StripRef(p.Type), DefaultValue = p.DefaultValue }).ToList()
         };
-        var translation = TranslateBody(scope, shaped, demoted.Contains(key) || byRef, allowAwait: fn.IsAsync, out var body, out var stub, translationKey: key);
+        var serverMarker = serverRules.Match(m.Body);
+        var translation = TranslateBody(scope, shaped, demoted.Contains(key) || byRef || serverMarker is not null, allowAwait: fn.IsAsync, out var body, out var stub, translationKey: key,
+            demotedLines: LineDemotion.For(demoted, key), stubReason: serverMarker is not null ? $"server-side code (uses {serverMarker}): needs the backend" : null);
         if (byRef) translation.Reasons.Add("ref/out parameter (the generated signature takes the value only)");
         translation.IsAsync = fn.IsAsync;
         module.Methods.Add(translation);
@@ -282,14 +360,14 @@ internal static class SupportTranslator
 
     // -------------------------------------------------------------------------------------------------- shared
 
-    private static MethodTranslation TranslateBody(PageScope scope, MemberIr member, bool forceStub, bool allowAwait, out List<string> body, out bool stub, string? translationKey = null)
+    private static MethodTranslation TranslateBody(PageScope scope, MemberIr member, bool forceStub, bool allowAwait, out List<string> body, out bool stub, string? translationKey = null, string? stubReason = null, IReadOnlySet<int>? demotedLines = null)
     {
         var translation = new MethodTranslation { Member = member, TsName = translationKey ?? member.Name };
         body = new List<string>();
         stub = false;
         if (forceStub)
         {
-            translation.Reasons.Add("demoted by the TypeScript compile gate");
+            translation.Reasons.Add(stubReason ?? "demoted by the TypeScript compile gate");
             translation.Todos = 1;
             translation.Status = TranslationStatus.NotTranslated;
             stub = true;
@@ -298,7 +376,10 @@ internal static class SupportTranslator
 
         var translator = new MethodTranslator(scope, member);
         body = translator.TranslateBody(out var top, out var fallbacks);
-        translation.Todos = translator.Todos;
+        body = PageTranslator.RenameUnusedLocals(body);   // addresses of demoted statements index this first-emission body
+        body = LineDemotion.Apply(body, demotedLines ?? new HashSet<int>(), out var demotedCount);
+        if (demotedCount > 0) { translation.Reasons.Add("statement fails the TypeScript check"); body = PageTranslator.RenameUnusedLocals(body, merge: false); }
+        translation.Todos = translator.Todos + demotedCount;
         translation.Reasons.AddRange(translator.Reasons);
         translation.Bypasses.AddRange(translator.Bypasses);
 
@@ -315,7 +396,6 @@ internal static class SupportTranslator
         var allFellBack = top > 0 && fallbacks == top && body.All(l => l.TrimStart().StartsWith("//", StringComparison.Ordinal));
         translation.Status = allFellBack ? TranslationStatus.NotTranslated : translation.Todos > 0 ? TranslationStatus.Partial : TranslationStatus.Complete;
         stub = translation.Status == TranslationStatus.NotTranslated;
-        if (!stub) body = PageTranslator.RenameUnusedLocals(body);
         return translation;
     }
 

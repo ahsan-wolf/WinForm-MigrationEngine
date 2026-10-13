@@ -35,7 +35,9 @@ public sealed class ReactAppGenerator
         var scopeUnits = scope.Keys.Select(n => ir.Units[n]).ToList();
 
         // Only the project classes the generated pages reach (directly or through each other) become part of the app.
-        var supportFile = ir.Support is { Classes.Count: > 0 } ? SupportPruner.Reachable(ir.Support, scopeUnits) : null;
+        var serverRules = ServerBoundRules.Load(_options.ServerBoundRulesPath);
+        var serverBound = new List<string>();
+        var supportFile = ir.Support is { Classes.Count: > 0 } ? SupportPruner.Reachable(ir.Support, scopeUnits, serverRules, serverBound) : null;
 
         // External contracts first: the translator needs their vocabulary (facade methods, type names) before any page is generated.
         var contracts = new List<ContractEmitResult>();
@@ -69,7 +71,7 @@ public sealed class ReactAppGenerator
             supportRegistry.ColorAsync(vocabulary);
         }
         var env = translate
-            ? new TranslationEnv { Vocabulary = vocabulary, Components = components, Units = ir.Units, Generated = generated, Support = supportRegistry, Bypass = BypassRules.Load(_options.BypassRulesPath) }
+            ? new TranslationEnv { Vocabulary = vocabulary, Components = components, Units = ir.Units, Generated = generated, Support = supportRegistry, Bypass = BypassRules.Load(_options.BypassRulesPath), ServerBound = serverRules }
             : null;
         SupportBuild? support = null;
         if (env is not null && supportRegistry is not null)
@@ -127,7 +129,7 @@ public sealed class ReactAppGenerator
             }
         }
 
-        AppWriter.Put(outputDirectory, "MIGRATION_REPORT.md", Report(ir, entry, options, spec, pages, result, skippedOutOfScope, contracts, translate, gate, support?.Module), result.Files);
+        AppWriter.Put(outputDirectory, "MIGRATION_REPORT.md", Report(ir, entry, options, spec, pages, result, skippedOutOfScope, contracts, translate, gate, support?.Module, serverBound), result.Files);
         return result;
     }
 
@@ -264,7 +266,7 @@ public sealed class ReactAppGenerator
         }
 
         var demoted = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
-        const int maxIterations = 5;
+        const int maxIterations = 10;
         List<TscDiagnostic>? diagnostics = null;
         for (var iteration = 0; iteration < maxIterations; iteration++)
         {
@@ -275,12 +277,23 @@ public sealed class ReactAppGenerator
 
             var touched = new HashSet<string>(StringComparer.Ordinal);
             var supportTouched = false;
+            // Line addresses are mapped against the emission this round's errors refer to: demotions added during the round are not in it yet.
+            var snapshot = demoted.ToDictionary(kv => kv.Key, kv => new HashSet<string>(kv.Value, StringComparer.Ordinal), StringComparer.Ordinal);
+            var supportSnapshot = support is null ? new HashSet<string>() : new HashSet<string>(support.Demoted, StringComparer.Ordinal);
+            string[]? supportLines = null;
+            var pageLines = new Dictionary<string, string[]>(StringComparer.Ordinal);
             foreach (var d in diagnostics)
             {
                 if (support is not null && d.File == SupportTranslator.ModulePath)
                 {
                     var supportRange = support.Module.Ranges.FirstOrDefault(r => r.Start <= d.Line && d.Line <= r.End);
-                    if (supportRange.Key is not null && support.Demoted.Add(supportRange.Key)) supportTouched = true;
+                    if (supportRange.Key is null) continue;
+                    supportLines ??= support.Module.Source.Split('\n');
+                    if (support.Demoted.Contains(supportRange.Key)) continue;
+                    if (!supportRange.Key.Contains(".get") && !supportRange.Key.Contains(".set") && !supportRange.Key.EndsWith(".constructor", StringComparison.Ordinal)
+                        && TryLineKey(supportLines, supportRange.Start, d.Line, supportRange.Key, supportSnapshot) is { } supportLineKey)
+                    { if (support.Demoted.Add(supportLineKey)) supportTouched = true; }
+                    else if (support.Demoted.Add(supportRange.Key)) supportTouched = true;
                     continue;
                 }
 
@@ -289,7 +302,12 @@ public sealed class ReactAppGenerator
                 var range = pages[index].Page.MethodRanges.FirstOrDefault(r => r.Start <= d.Line && d.Line <= r.End);
                 if (range.TsName is null) continue;
                 if (!demoted.TryGetValue(pages[index].Unit, out var set)) demoted[pages[index].Unit] = set = new HashSet<string>(StringComparer.Ordinal);
-                if (set.Add(range.TsName)) touched.Add(pages[index].Unit);
+                if (set.Contains(range.TsName)) continue;
+                if (!pageLines.TryGetValue(pages[index].Unit, out var source)) pageLines[pages[index].Unit] = source = pages[index].Page.Source.Split('\n');
+                // One failing simple statement is commented out on its own; anything else demotes the whole method.
+                var before = snapshot.GetValueOrDefault(pages[index].Unit) ?? new HashSet<string>();
+                if (TryLineKey(source, range.Start, d.Line, range.TsName, before) is { } lineKey) { if (set.Add(lineKey)) touched.Add(pages[index].Unit); }
+                else if (set.Add(range.TsName)) touched.Add(pages[index].Unit);
             }
             if (touched.Count == 0 && !supportTouched) break;
 
@@ -316,6 +334,29 @@ public sealed class ReactAppGenerator
         return gate;
     }
 
+    /// <summary>
+    /// The statement-level demotion key (`method#codeLineIndex`) for an error line inside a method, or null when the line is not a simple statement of the body
+    /// (header, block line, continuation) or the method already lost too many statements: then the whole method is demoted.
+    /// </summary>
+    private static string? TryLineKey(string[] sourceLines, int rangeStart, int errorLine, string method, ISet<string> demoted)
+    {
+        // The header is the first code line at or after the range start; the body's code lines follow it.
+        var header = rangeStart - 1;
+        while (header < sourceLines.Length && !LineDemotion.IsCode(sourceLines[header])) header++;
+        if (errorLine - 1 <= header || errorLine - 1 >= sourceLines.Length) return null;
+
+        var already = LineDemotion.For(demoted, method);
+        if (already.Count >= LineDemotion.MaxPerMethod) return null;
+
+        var current = 0;
+        string? previousCode = null;
+        for (var i = header + 1; i < errorLine - 1; i++)
+            if (LineDemotion.IsCode(sourceLines[i])) { current++; previousCode = sourceLines[i]; }
+        var line = sourceLines[errorLine - 1];
+        if (!LineDemotion.IsCode(line) || !LineDemotion.IsSimple(line, previousCode)) return null;
+        return $"{method}#{LineDemotion.ToOriginal(current, already)}";
+    }
+
     /// <summary>Breadth-first over Show/ShowDialog navigation, bounded by depth (null = all reachable).</summary>
     private static Dictionary<string, int> Reachable(IrFolder ir, string entry, int? maxDepth)
     {
@@ -334,7 +375,7 @@ public sealed class ReactAppGenerator
     }
 
     private static string Report(IrFolder ir, string entry, GenerationOptions options, SpecCatalog spec,
-        List<(string Unit, int Depth, GeneratedPage Page)> pages, GenerationResult result, List<string> outOfScope, List<ContractEmitResult> contracts, bool translate, GateSummary gate, SupportModule? supportModule)
+        List<(string Unit, int Depth, GeneratedPage Page)> pages, GenerationResult result, List<string> outOfScope, List<ContractEmitResult> contracts, bool translate, GateSummary gate, SupportModule? supportModule, List<string> serverBound)
     {
         var sb = new StringBuilder();
         sb.AppendLine("# Migration report — react-app");
@@ -390,6 +431,17 @@ public sealed class ReactAppGenerator
                 sb.AppendLine();
                 sb.AppendLine($"{bypassed.Count} statement(s) use Windows-only APIs that a browser cannot call. Each was replaced by a `// BYPASSED` comment (the original is kept) and the rest of its method was translated. Review what each one did in the original:");
                 foreach (var g in bypassed.GroupBy(b => b).OrderByDescending(g => g.Count()).Take(20)) sb.AppendLine($"- {g.Count()}× {g.Key}");
+            }
+
+            var serverStubs = supportModule?.Methods.Count(m => m.Reasons.Any(r => r.StartsWith("server-side code", StringComparison.Ordinal))) ?? 0;
+            if (serverBound.Count > 0 || serverStubs > 0)
+            {
+                sb.AppendLine();
+                sb.AppendLine("### Server-side code left out (backend work)");
+                sb.AppendLine();
+                sb.AppendLine($"{serverBound.Count} class(es) that mostly use data access, the file system or configuration are not generated, and {serverStubs} method(s) in generated classes are typed stubs for the same reason. Statements that call them stay TODO until the backend exists (a REST layer over this code):");
+                foreach (var name in serverBound.Take(40)) sb.AppendLine($"- {name}");
+                if (serverBound.Count > 40) sb.AppendLine($"- ... and {serverBound.Count - 40} more");
             }
 
             if (supportModule is not null)

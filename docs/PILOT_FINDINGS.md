@@ -78,4 +78,8 @@ A multi-project solution (17 projects; 15 forms + 144 user controls; ~2,200 cont
 
 Result: 159 units generated, `tsc` 0 errors, lint 0, build OK; first application unchanged (375 / 706).
 
+Second-app follow-ups: the entities the pages use live in a **referenced project outside the analysed folder** (a generated entity layer). Following such references (classes as typed shapes, library bodies not translated), merging partial classes, real inheritance,
+ComboBox `Items`/`SelectedIndex` support and statement-level demotion in the compile gate took the HR app from 1,792 / 4,123 complete (+ 766 methods demoted whole) to 1,736 complete, 1,428 partial, 959 not translated (496 demoted whole), `tsc` 0, lint 0, with typed entities available to translated code.
+The first application: 375 / 237 / 94 (was 375 / 209 / 122). Server-side code (data access, configuration) is listed in the report: 53 classes and ~300 methods in the HR app are backend work.
+
 Control wave A (date/time picker, radio button with groups, numeric up/down, tabs, link label as real components): the HR app's fallback-rendered controls dropped from 111 to 14 (tree views, list boxes, ...); `tsc`/lint/build clean, all 159 pages render.

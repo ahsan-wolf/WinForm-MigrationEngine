@@ -36,7 +36,8 @@ public static class IrFileWriter
                 Technology = engine.Technology,
                 FrameworkVersion = analysis.FrameworkVersion,
                 RootPath = Path.GetFullPath(analysis.RootPath),
-                StartupForm = analysis.StartupForm
+                StartupForm = analysis.StartupForm,
+                AdditionalRoots = analysis.AdditionalRoots?.Select(Path.GetFullPath).ToList() ?? new List<string>()
             }
         };
 
@@ -66,6 +67,9 @@ public static class IrFileWriter
 
         if (engine is ISupportSourceEngine supportEngine && supportEngine.ExtractSupport(analysis) is { Classes.Count: > 0 } support)
             WriteJson(Path.Combine(irRoot, SupportFileName), support, written);
+
+        if (engine is IDependencySourceEngine dependencies)
+            project.Shared.ExternalAssemblies.AddRange(dependencies.FindExternalAssemblies(analysis));
 
         var projectPath = Path.Combine(irRoot, "project.ir.json");
         WriteJson(projectPath, project, written);

@@ -15,6 +15,9 @@ public sealed class ReactTargetOptions
 
     /// <summary>Windows-specific APIs to bypass during translation (data file; copy and extend it per project).</summary>
     public string BypassRulesPath { get; set; } = "rules/windows-bypass.json";
+
+    /// <summary>Markers of server-side code (data access, file system, configuration) that is left out of the browser app (data file).</summary>
+    public string ServerBoundRulesPath { get; set; } = "rules/server-bound.json";
 }
 
 public sealed class ReactTargetModule : IEngineModule
@@ -24,7 +27,7 @@ public sealed class ReactTargetModule : IEngineModule
     public ReactTargetModule(EngineOptions options)
     {
         var bound = options.Bind<ReactTargetOptions>();
-        _options = new ReactTargetOptions { UiSpecPath = options.ResolvePath(bound.UiSpecPath), UiLibraryPath = options.ResolvePath(bound.UiLibraryPath), BypassRulesPath = options.ResolvePath(bound.BypassRulesPath) };
+        _options = new ReactTargetOptions { UiSpecPath = options.ResolvePath(bound.UiSpecPath), UiLibraryPath = options.ResolvePath(bound.UiLibraryPath), BypassRulesPath = options.ResolvePath(bound.BypassRulesPath), ServerBoundRulesPath = options.ResolvePath(bound.ServerBoundRulesPath) };
     }
 
     public void Register(IEngineRegistry registry) => registry.RegisterTarget(new ReactTargetEngine(_options));

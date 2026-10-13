@@ -56,6 +56,7 @@ git branch -d <branch>
 - Behaviour comes from **structure** (base types such as `SoapHttpClientProtocol`, attributes such as `[WebMethod]`, static mutable state, API usage) or from **data**: the loaded contract, the IR, and an optional per-project profile/rules file that lives **with the project, outside this repo** (source paths, WSDL files, overrides, extra bypass rules). Defaults must work with no profile.
 - Rule lists (Windows-specific calls to bypass, name hints) are data files that can be extended without a rebuild, like `llm-config`.
 - Check before finishing a slice: `grep -rnE "<pilot names>" src ui-library` finds nothing outside comments; the pilot result is unchanged; when feasible, also run a second, different application.
+- Rule lists (`rules/windows-bypass.json`, `rules/server-bound.json`, `ui-spec/fallbacks.json`) are data: extend a copy per project, never hard-code application names in them.
 - Backend code (class libraries, ASMX/WCF services), WSDLs, URLs, credentials and connection strings of an application are **inputs**: read-only, kept in git-ignored folders, never committed, never emitted to browser code.
 
 ---
@@ -159,6 +160,7 @@ public interface IProjectAwareSourceEngine : ISourceEngine { IEnumerable<IIrExtr
 public interface IIrProjectionProvider { IEnumerable<IIrProjection> Projections { get; } }   // technology-specific facet files (WinForms: layout)
 public interface IUnsupportedReporter { IEnumerable<string> FindUnsupported(IrExtractionContext c); } // unhandled constructs -> project.ir.json Shared.Unsupported
 public interface ISupportSourceEngine { SupportFileIr ExtractSupport(ProjectAnalysis a); }   // the project's own non-UI classes -> ir/support.ir.json (WinForms-owned sidecar)
+public interface IDependencySourceEngine { IReadOnlyList<ExternalAssemblyIr> FindExternalAssemblies(ProjectAnalysis a); }   // referenced binary assemblies -> project.ir.json Shared.ExternalAssemblies
 public interface IProjectTargetEngine : ITargetEngine { GenerationResult GenerateProject(string irFolder, string outDir, GenerationOptions o); } // whole-app generation from the IR FOLDER only (never a source engine)
 ```
 Host pieces: `EngineRegistry`, `EngineLoader` (reads `engines.json`), `SourceIrRunner` (per-unit failure isolation), `IrFileWriter` + `IIrProjection` (facet files), `WinNavigation` (see §4.2).

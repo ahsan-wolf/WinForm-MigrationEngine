@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "note": "Code that talks to a database, the file system, configuration or a service stack belongs on the server, not in the browser. A method whose body uses one of these markers is left as a typed stub (original kept as a comment), and a class where at least classThreshold of its methods do is not generated at all and not followed into its dependencies; the report lists both as backend work. Data only: extend per project in a copy and point the target engine option serverBoundRulesPath at it.",
+  "classThreshold": 0.5,
+  "markers": [
+    "SqlConnection", "SqlCommand", "SqlDataAdapter", "SqlDataReader", "SqlParameter", "SqlTransaction", "SqlBulkCopy",
+    "DbConnection", "DbCommand", "DbDataReader", "DbTransaction", "IDbConnection", "IDbCommand", "DbContext", "DbSet",
+    "OleDbConnection", "OdbcConnection", "OracleConnection", "DatabaseFactory", "ExecuteReader", "ExecuteNonQuery", "ExecuteScalar", "ExecuteDataSet",
+    "ConfigurationManager", "ConfigurationSettings", "TransactionManager", "TransactionScope",
+    "StreamReader", "StreamWriter", "FileStream", "File.ReadAllText", "File.WriteAllText", "File.Exists", "File.Delete", "File.Copy", "File.Move",
+    "Directory.GetFiles", "Directory.CreateDirectory", "Directory.Exists", "SmtpClient", "HttpWebRequest", "WebClient", "HttpClient"
+  ]
+}

@@ -15,10 +15,12 @@ public sealed partial class WinFormsProjectAnalyzer : IProjectAnalyzer
 {
     private static readonly string[] SkippedDirectories = { "bin", "obj", ".git", ".vs", "node_modules" };
 
-    public ProjectAnalysis Analyze(string rootPath)
+    public ProjectAnalysis Analyze(string rootPath, AnalysisOptions? options = null)
     {
         if (!Directory.Exists(rootPath))
             throw new DirectoryNotFoundException($"Source folder not found: {rootPath}");
+
+        var extraRoots = (options ?? new AnalysisOptions()).IncludeReferencedProjects ? FindReferencedProjectRoots(rootPath) : new List<string>();
 
         var pairs = EnumerateFiles(rootPath, "*.Designer.cs")
             .Select(d => (Designer: d, CodeBehind: d[..^".Designer.cs".Length] + ".cs"))
@@ -29,7 +31,7 @@ public sealed partial class WinFormsProjectAnalyzer : IProjectAnalyzer
         // (BaseForm, BaseUserControl) still resolve.
         var baseOf = new Dictionary<string, string>();
         var filesOf = new Dictionary<string, List<string>>();
-        foreach (var file in EnumerateFiles(rootPath, "*.cs"))
+        foreach (var file in new[] { rootPath }.Concat(extraRoots).SelectMany(r => EnumerateFiles(r, "*.cs")))
             foreach (var cls in CSharpSyntaxTree.ParseText(File.ReadAllText(file)).GetCompilationUnitRoot()
                          .DescendantNodes().OfType<ClassDeclarationSyntax>())
             {
@@ -57,7 +59,7 @@ public sealed partial class WinFormsProjectAnalyzer : IProjectAnalyzer
             (kind == SourceUnitKind.UserControl ? userControls : forms).Add(new SourceUnit(name, kind, designer, codeBehind));
         }
 
-        return new ProjectAnalysis(rootPath, FindFrameworkVersion(rootPath), FindStartupForm(rootPath), forms, userControls, baseOf, filesOf.ToDictionary(kv => kv.Key, kv => (IReadOnlyList<string>)kv.Value));
+        return new ProjectAnalysis(rootPath, FindFrameworkVersion(rootPath), FindStartupForm(rootPath), forms, userControls, baseOf, filesOf.ToDictionary(kv => kv.Key, kv => (IReadOnlyList<string>)kv.Value), extraRoots);
     }
 
     private static bool IsUserControl(string className, Dictionary<string, string> baseOf)
@@ -96,6 +98,41 @@ public sealed partial class WinFormsProjectAnalyzer : IProjectAnalyzer
         {
             return null;
         }
+    }
+
+    /// <summary>
+    /// Folders of projects referenced by `ProjectReference` that lie outside the analysed folder (generated entity layers, shared libraries), followed transitively.
+    /// A referenced project whose folder contains the analysed folder is skipped (it would pull in everything). Reading project files only.
+    /// </summary>
+    private static List<string> FindReferencedProjectRoots(string rootPath)
+    {
+        var root = Path.GetFullPath(rootPath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var roots = new List<string>();
+        var queue = new Queue<string>(EnumerateFiles(rootPath, "*.csproj"));
+
+        while (queue.Count > 0 && roots.Count < 40)
+        {
+            var project = Path.GetFullPath(queue.Dequeue());
+            if (!visited.Add(project)) continue;
+
+            XDocument doc;
+            try { doc = XDocument.Load(project); }
+            catch (Exception ex) when (ex is System.Xml.XmlException or IOException) { continue; }
+
+            foreach (var include in doc.Descendants().Where(e => e.Name.LocalName == "ProjectReference").Select(e => e.Attribute("Include")?.Value).OfType<string>())
+            {
+                var normalized = include.Replace('\\', Path.DirectorySeparatorChar).Replace('/', Path.DirectorySeparatorChar);
+                var target = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(project)!, normalized));
+                if (!File.Exists(target) || target.StartsWith(root, StringComparison.OrdinalIgnoreCase) || visited.Contains(target)) continue;
+
+                var folder = Path.GetDirectoryName(target)!;
+                if (root.StartsWith(folder.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)) continue; // contains the analysed folder
+                if (!roots.Contains(folder, StringComparer.OrdinalIgnoreCase)) roots.Add(folder);
+                queue.Enqueue(target);
+            }
+        }
+        return roots;
     }
 
     private static IEnumerable<string> EnumerateFiles(string root, string pattern) =>

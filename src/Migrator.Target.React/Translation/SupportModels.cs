@@ -66,6 +66,7 @@ public sealed class SupportRegistry
 
         foreach (var cls in Classes.Values)
         {
+            if (cls.Ir.External) continue;   // library classes are shape-only stubs: synchronous
             foreach (var (name, overloads) in cls.Functions)
             {
                 var key = (cls.Name, name);
@@ -131,16 +132,36 @@ public sealed class SupportModule
 /// </summary>
 public static class SupportPruner
 {
-    public static SupportFileIr Reachable(SupportFileIr all, IEnumerable<Migrator.Target.React.Generation.UnitIr> units)
+    public static SupportFileIr Reachable(SupportFileIr all, IEnumerable<Migrator.Target.React.Generation.UnitIr> units, ServerBoundRules rules, List<string> serverBound)
     {
         var byName = all.Classes.GroupBy(c => c.Name).ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
         var reached = new HashSet<string>(StringComparer.Ordinal);
         var queue = new Queue<SupportClassIr>();
 
+        var excluded = new Dictionary<string, string?>(StringComparer.Ordinal);
+
+        // A class where at least ClassThreshold of its methods use data access / file system / configuration is server-side code: not generated, not followed.
+        string? ServerMarker(SupportClassIr cls)
+        {
+            if (excluded.TryGetValue(cls.Name, out var known)) return known;
+            var methods = cls.Members.Where(m => m.Kind == WebFormsMigrator.IR.Models.MemberKind.Method && m.Name != ".ctor" && m.Body != null).ToList();
+            var marked = methods.Select(m => rules.Match(m.Body)).Where(x => x is not null).ToList();
+            return excluded[cls.Name] = methods.Count >= 2 && !rules.IsEmpty && marked.Count >= methods.Count * rules.ClassThreshold ? marked[0] : null;
+        }
+
         void Mention(string text)
         {
             foreach (System.Text.RegularExpressions.Match w in System.Text.RegularExpressions.Regex.Matches(text, @"\b[A-Za-z_]\w*\b"))
-                if (byName.TryGetValue(w.Value, out var cls) && reached.Add(cls.Name)) queue.Enqueue(cls);
+            {
+                if (!byName.TryGetValue(w.Value, out var cls) || reached.Contains(cls.Name)) continue;
+                if (ServerMarker(cls) is { } marker)
+                {
+                    if (!serverBound.Any(s => s.StartsWith(cls.Name + " ", StringComparison.Ordinal))) serverBound.Add($"{cls.Name} (uses {marker})");
+                    continue;
+                }
+                reached.Add(cls.Name);
+                queue.Enqueue(cls);
+            }
         }
 
         foreach (var unit in units)
@@ -151,8 +172,8 @@ public static class SupportPruner
         {
             var cls = queue.Dequeue();
             if (cls.BaseType is { } baseType) Mention(baseType);
-            foreach (var m in cls.Members)
-                Mention(string.Join(' ', new[] { m.Type }.Concat(m.Parameters.Select(p => p.Type)).Append(m.Body ?? "")));
+            foreach (var m in cls.Members)   // a library class (outside the analysed folder) is used for its shape: signatures only, never its bodies
+                Mention(string.Join(' ', new[] { m.Type }.Concat(m.Parameters.Select(p => p.Type)).Append(cls.External ? "" : m.Body ?? "")));
             foreach (var v in cls.EnumValues) if (v.Value is not null) Mention(v.Value);
         }
 

@@ -84,7 +84,7 @@ static int ExtractIr(string[] args)
     Migrator.Engine.Contracts.ProjectAnalysis analysis;
     try
     {
-        analysis = engine.Analyzer.Analyze(source);
+        analysis = engine.Analyzer.Analyze(source, new Migrator.Engine.Contracts.AnalysisOptions { IncludeReferencedProjects = !args.Contains("--no-external-projects") });
     }
     catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotImplementedException)
     {
@@ -92,6 +92,9 @@ static int ExtractIr(string[] args)
     }
     Console.WriteLine($"{engine.Technology}: {analysis.Forms.Count} form(s), {analysis.UserControls.Count} user control(s); " +
                       $"startup: {analysis.StartupForm ?? "(not found)"}; framework: {analysis.FrameworkVersion ?? "(unknown)"}");
+
+    if (analysis.AdditionalRoots is { Count: > 0 })
+        Console.WriteLine($"  included {analysis.AdditionalRoots.Count} referenced project folder(s) outside the source folder (classes only; --no-external-projects to skip): {string.Join(", ", analysis.AdditionalRoots.Take(6).Select(r => Path.GetFileName(r.TrimEnd('/', '\\'))))}{(analysis.AdditionalRoots.Count > 6 ? ", ..." : "")}");
 
     var results = SourceIrRunner.Run(engine, analysis);
     foreach (var failure in results.Where(r => r.Page is null))

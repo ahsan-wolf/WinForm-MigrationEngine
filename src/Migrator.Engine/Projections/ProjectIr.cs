@@ -22,6 +22,9 @@ public sealed class ProjectSourceIr
     public string? FrameworkVersion { get; set; }
     public string RootPath { get; set; } = "";
     public string? StartupForm { get; set; }
+
+    /// <summary>Referenced project folders outside <see cref="RootPath"/> whose classes were included.</summary>
+    public List<string> AdditionalRoots { get; set; } = new();
 }
 
 /// <summary><c>IrFile</c> is relative to the folder holding project.ir.json, with forward slashes.</summary>
@@ -39,6 +42,20 @@ public sealed class ProjectSharedIr
     public List<string> Resources { get; set; } = new();
     public List<string> Dependencies { get; set; } = new();
     public List<string> Unsupported { get; set; } = new();
+
+    /// <summary>Binary assemblies the project references (not framework, not project references): candidates for contract extraction.</summary>
+    public List<ExternalAssemblyIr> ExternalAssemblies { get; set; } = new();
+}
+
+/// <summary>A referenced assembly: its name, the path its project resolves it to (HintPath relative to the project, made absolute), and whether that file exists.</summary>
+public sealed class ExternalAssemblyIr
+{
+    public string Name { get; set; } = "";
+    public string? Path { get; set; }
+    public bool Exists { get; set; }
+
+    /// <summary>The project file(s) that reference it.</summary>
+    public List<string> ReferencedBy { get; set; } = new();
 }
 
 public sealed class ProjectFailureIr

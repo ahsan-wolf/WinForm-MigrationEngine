@@ -16,6 +16,7 @@ public sealed class TranslationEnv
     public ISet<string> Generated { get; init; } = new HashSet<string>();
     public SupportRegistry? Support { get; init; }
     public BypassRules Bypass { get; init; } = BypassRules.Empty;
+    public ServerBoundRules ServerBound { get; init; } = ServerBoundRules.Empty;
 }
 
 /// <summary>Where an event handler method is wired: first control + event that uses it.</summary>
@@ -54,6 +55,7 @@ public static class PageTranslator
             scope.Controls.Add(node.Id);
             if (node.Effective() == "System.Windows.Forms.ListView") scope.ListViews.Add(node.Id);
             if (node.Effective() == "System.Windows.Forms.TabControl") scope.TabControls.Add(node.Id);
+            if (node.Effective() is "System.Windows.Forms.ComboBox" or "System.Windows.Forms.ToolStripComboBox") scope.Combos.Add(node.Id);
             foreach (var (key, value) in node.Attributes.Where(a => a.Key.StartsWith("Fallback.Alias.", StringComparison.Ordinal)))
             {
                 if (!scope.Aliases.TryGetValue(node.Id, out var map)) scope.Aliases[node.Id] = map = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -87,7 +89,7 @@ public static class PageTranslator
         foreach (var t in translations)
         {
             var fn = scope.Functions[t.Member.Name].First(f => f.Member == t.Member);
-            TranslateMethod(scope, t, fn, demoted.Contains(t.TsName), wired);
+            TranslateMethod(scope, t, fn, demoted.Contains(t.TsName), wired, LineDemotion.For(demoted, t.TsName));
             output.Methods.Add(t);
             output.ByMember[t.Member] = t;
         }
@@ -236,7 +238,7 @@ public static class PageTranslator
 
     // -------------------------------------------------------------------------------------------------- methods
 
-    private static void TranslateMethod(PageScope scope, MethodTranslation t, MemberFunction fn, bool demoted, IReadOnlyDictionary<string, WiredHandler> wired)
+    private static void TranslateMethod(PageScope scope, MethodTranslation t, MemberFunction fn, bool demoted, IReadOnlyDictionary<string, WiredHandler> wired, IReadOnlySet<int> demotedLines)
     {
         var m = t.Member;
         var translator = new MethodTranslator(scope, m);
@@ -250,7 +252,11 @@ public static class PageTranslator
         else
         {
             body = translator.TranslateBody(out top, out fallbacks);
-            t.Todos = translator.Todos;
+            // Addresses of demoted statements are indices into the body as the first emission produced it (after local clean-up), so demote first and only rename afterwards.
+            body = RenameUnusedLocals(body);
+            body = LineDemotion.Apply(body, demotedLines, out var demotedCount);
+            if (demotedCount > 0) { t.Reasons.Add("statement fails the TypeScript check"); body = RenameUnusedLocals(body, merge: false); }
+            t.Todos = translator.Todos + demotedCount;
             t.Reasons.AddRange(translator.Reasons);
             t.Bypasses.AddRange(translator.Bypasses);
         }
@@ -276,7 +282,7 @@ public static class PageTranslator
         else
         {
             if (t.Status == TranslationStatus.Partial) lines.Add($"  // TODO: partially translated — {t.Todos} statement(s) need manual work");
-            foreach (var l in RenameUnusedLocals(body)) lines.Add(l.Length == 0 ? l : "  " + l);
+            foreach (var l in body) lines.Add(l.Length == 0 ? l : "  " + l);
         }
         lines.Add("}");
         lines.Add("");
@@ -375,7 +381,8 @@ public static class PageTranslator
     /// or used only by statements that fell back) becomes `_name`; (2) a `let x = init` that no emitted line reassigns becomes `const`.
     /// Decided on the emitted lines, so it always matches what ships.
     /// </summary>
-    internal static List<string> RenameUnusedLocals(List<string> body)
+    /// <param name="merge">False keeps the line count (used after statement-level demotion, whose addresses are line indices): only names and const/let change.</param>
+    internal static List<string> RenameUnusedLocals(List<string> body, bool merge = true)
     {
         var result = new List<string>(body);
         string Code() => string.Join("\n", result.Where(l => !l.TrimStart().StartsWith("//", StringComparison.Ordinal)));
@@ -416,8 +423,30 @@ public static class PageTranslator
                 result[i] = Regex.Replace(result[i], @"for \(const (\w+) of ", "for (const _$1 of ");
         }
 
+        // A declaration whose own block never reads it (the same name is read in other blocks, or its readers were commented out by statement-level demotion):
+        // renamed with its writes inside that block, so it is not reported as unused.
+        for (var i = 0; i < result.Count; i++)
+        {
+            var decl = Regex.Match(result[i], @"^(\s*)(?:const|let) (\w+)\b");
+            if (!decl.Success || result[i].TrimStart().StartsWith("//", StringComparison.Ordinal) || decl.Groups[2].Value.StartsWith('_')) continue;
+
+            var indent = decl.Groups[1].Length;
+            var end = result.Count;
+            for (var k = i + 1; k < result.Count; k++)
+                if (result[k].Trim().Length > 0 && result[k].Length - result[k].TrimStart().Length < indent && result[k].TrimStart().StartsWith('}')) { end = k; break; }
+
+            var name = decl.Groups[2].Value;
+            var block = string.Join("\n", result.Skip(i + 1).Take(end - i - 1).Where(l => !l.TrimStart().StartsWith("//", StringComparison.Ordinal)));
+            if (CountOccurrences(block, name) - CountWrites(block, name) > 0) continue;
+
+            result[i] = Regex.Replace(result[i], $@"^(\s*(?:const|let) ){Regex.Escape(name)}\b", $"$1_{name}");
+            for (var k = i + 1; k < end; k++)
+                if (!result[k].TrimStart().StartsWith("//", StringComparison.Ordinal))
+                    result[k] = Regex.Replace(result[k], $@"(?<![\w.]){Regex.Escape(name)}\b", "_" + name);
+        }
+
         // `let x: T;` immediately followed by `x = v;` and never written again is a const declaration.
-        for (var i = 0; i + 1 < result.Count; i++)
+        for (var i = 0; merge && i + 1 < result.Count; i++)
         {
             var decl = Regex.Match(result[i], @"^(\s*)let (\w+)(: [^=]+)?;$");
             if (!decl.Success || result[i].TrimStart().StartsWith("//", StringComparison.Ordinal)) continue;
