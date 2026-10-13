@@ -51,6 +51,13 @@ git branch -d <branch>
 - Add capabilities by **adding** a module and registering it — not by editing the host (open/closed).
 - Never copy shared IR models into this repo; reference them (§2.2).
 
+### 0.5 Project independence (the engine knows no application)
+- Engine code, `ui-spec`, the UI library, prompts and docs' rules must not contain names from a pilot or customer application (class, namespace, assembly, service, form or property names). Pilot names may appear only in `docs/PILOT_FINDINGS.md` and in examples labelled as pilot data.
+- Behaviour comes from **structure** (base types such as `SoapHttpClientProtocol`, attributes such as `[WebMethod]`, static mutable state, API usage) or from **data**: the loaded contract, the IR, and an optional per-project profile/rules file that lives **with the project, outside this repo** (source paths, WSDL files, overrides, extra bypass rules). Defaults must work with no profile.
+- Rule lists (Windows-specific calls to bypass, name hints) are data files that can be extended without a rebuild, like `llm-config`.
+- Check before finishing a slice: `grep -rnE "<pilot names>" src ui-library` finds nothing outside comments; the pilot result is unchanged; when feasible, also run a second, different application.
+- Backend code (class libraries, ASMX/WCF services), WSDLs, URLs, credentials and connection strings of an application are **inputs**: read-only, kept in git-ignored folders, never committed, never emitted to browser code.
+
 ---
 
 ## 1. Mission

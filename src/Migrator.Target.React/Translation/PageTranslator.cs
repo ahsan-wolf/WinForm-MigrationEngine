@@ -190,7 +190,7 @@ public static class PageTranslator
                         if (recv is "MessageBox" or "System.Windows.Forms.MessageBox" && method == "Show") direct.Add(m.Name);
                         else if (method is "ShowDialog" or "Show" && (ma.Expression is ObjectCreationExpressionSyntax oc2 && scope.Units.ContainsKey(Simple(oc2.Type))
                                  || ma.Expression is IdentifierNameSyntax fid && formLocals.Contains(fid.Identifier.Text))) direct.Add(m.Name);
-                        else if (FacadeName(ma.Expression) is { } facade && scope.Vocabulary.IsFacade(facade) && !scope.Fields.ContainsKey(facade) && !scope.Controls.Contains(facade))
+                        else if (FacadeName(ma.Expression, scope.Vocabulary) is { } facade && scope.Vocabulary.IsFacade(facade) && !scope.Fields.ContainsKey(facade) && !scope.Controls.Contains(facade))
                         {
                             if (Enumerable.Range(0, 16).Any(n => scope.Vocabulary.FindCall(facade, method, n) is not null)) direct.Add(m.Name);
                         }
@@ -210,10 +210,10 @@ public static class PageTranslator
             foreach (var fn in overloads) fn.IsAsync = asyncNames.Contains(fn.Member.Name);
     }
 
-    internal static string? FacadeName(ExpressionSyntax e) => e switch
+    internal static string? FacadeName(ExpressionSyntax e, ContractVocabulary vocabulary) => e switch
     {
         IdentifierNameSyntax id => id.Identifier.Text,
-        MemberAccessExpressionSyntax { Expression: IdentifierNameSyntax ns } m when ns.Identifier.Text is "ECMLibrary" or "System" => m.Name.Identifier.Text,
+        MemberAccessExpressionSyntax { Expression: IdentifierNameSyntax ns } m when vocabulary.IsNamespaceRoot(ns.Identifier.Text) => m.Name.Identifier.Text,
         _ => null
     };
 

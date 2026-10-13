@@ -797,7 +797,7 @@ internal sealed partial class MethodTranslator
                 var n = id.Identifier.Text;
                 if (_locals.Contains(n) || _scope.Fields.ContainsKey(n) || _scope.Controls.Contains(n) || _formLocals.ContainsKey(n)) return null;
                 return char.IsUpper(n[0]) || n is "string" or "int" ? n : null;
-            case MemberAccessExpressionSyntax { Expression: IdentifierNameSyntax ns } m when m.Name.Identifier.Text.Length > 0 && char.IsUpper(m.Name.Identifier.Text[0]) && ns.Identifier.Text is "ECMLibrary" or "System" or "Windows":
+            case MemberAccessExpressionSyntax { Expression: IdentifierNameSyntax ns } m when m.Name.Identifier.Text.Length > 0 && char.IsUpper(m.Name.Identifier.Text[0]) && _scope.Vocabulary.IsNamespaceRoot(ns.Identifier.Text):
                 return m.Name.Identifier.Text;
             default: return null;
         }

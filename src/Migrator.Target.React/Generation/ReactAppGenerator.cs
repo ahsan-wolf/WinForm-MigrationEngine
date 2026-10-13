@@ -302,7 +302,7 @@ public sealed class ReactAppGenerator
                 sb.AppendLine();
                 sb.AppendLine("### Project classes (`src/support/index.ts`)");
                 sb.AppendLine();
-                sb.AppendLine($"{supportModule.Classes} classes/enums from the project's own non-form code (`main`, `Preferences`, data classes, enums); {sm.Count} methods/accessors/constructors: "
+                sb.AppendLine($"{supportModule.Classes} classes/enums from the project's own non-form code (static helper classes, data classes, enums); {sm.Count} methods/accessors/constructors: "
                               + $"**{sm.Count(m => m.Status == TranslationStatus.Complete)} complete**, {sm.Count(m => m.Status == TranslationStatus.Partial)} partial, "
                               + $"{sm.Count(m => m.Status == TranslationStatus.NotTranslated)} not translated (typed stubs; original C# kept as comments).");
                 var supportReasons = sm.SelectMany(m => m.Reasons).Select(r => System.Text.RegularExpressions.Regex.Replace(r, @"'[^']*'", "'…'"))
@@ -373,7 +373,7 @@ public sealed class ReactAppGenerator
         sb.AppendLine("## Known limitations of this generator");
         sb.AppendLine("- Handler bodies are not translated (planned LLM phase). Helper methods exist only in `src/legacy/*.cs.txt`.");
         sb.AppendLine("- `Show()` (modeless) is opened as a dialog; there is no router yet.");
-        sb.AppendLine("- Visibility toggled by code, data loading, validation and `ECMLibrary`-style backend calls are not wired.");
+        sb.AppendLine("- Visibility toggled by code, data loading, validation and backend (contract) calls are not wired.");
         sb.AppendLine("- ListView, TreeView, tabs, radio groups, date pickers and group boxes have no library component yet.");
         return sb.ToString();
     }

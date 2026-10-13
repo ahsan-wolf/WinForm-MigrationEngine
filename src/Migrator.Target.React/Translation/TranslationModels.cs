@@ -137,6 +137,9 @@ public sealed class ContractVocabulary
     /// <summary>TypeScript name of an emitted contract data type or enum, by simple C# name; null when it was not emitted.</summary>
     public string? DtoTypeName(string simpleName) => _result is not null && _result.TypeNameBySimple.TryGetValue(simpleName, out var ts) ? ts : null;
 
+    /// <summary>`System`/`Windows`, or a root namespace of the loaded contract: a name that qualifies a type rather than being a variable.</summary>
+    public bool IsNamespaceRoot(string name) => name is "System" or "Windows" || (_result?.NamespaceRoots.Contains(name) ?? false);
+
     public bool IsFacade(string simpleName) => _result?.Facades.ContainsKey(simpleName) ?? false;
 
     /// <summary>Finds the overload with this many original arguments; Keep says which of them reach the generated service.</summary>
