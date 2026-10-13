@@ -21,16 +21,27 @@ public static class ViewerShell
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
 
-    public static void Write(string appDir, string appName, string uiLibraryDir, IReadOnlyList<ViewerUnit> units, List<string> files)
+    /// <param name="title">Shown in the shell's caption (the project folder name).</param>
+    /// <param name="appShell">The WinForms-style app shell instead of the plain viewer; manifest and pages are identical.</param>
+    public static void Write(string appDir, string appName, string uiLibraryDir, IReadOnlyList<ViewerUnit> units, string title, bool appShell, List<string> files)
     {
         AppWriter.Write(appDir, appName, entryComponent: null, uiLibraryDir, files);
-        AppWriter.Put(appDir, "src/manifest.ts", Manifest(units), files);
-        AppWriter.Put(appDir, "src/viewer.css", ViewerCss, files);
-        AppWriter.Put(appDir, "src/main.tsx", ViewerMain, files);
+        AppWriter.Put(appDir, "src/manifest.ts", Manifest(units, title), files);
+        if (appShell)
+        {
+            AppWriter.Put(appDir, "src/appshell.css", AppShellTemplates.Css, files);
+            AppWriter.Put(appDir, "src/main.tsx", AppShellTemplates.Main, files);
+        }
+        else
+        {
+            AppWriter.Put(appDir, "src/viewer.css", ViewerCss, files);
+            AppWriter.Put(appDir, "src/main.tsx", ViewerMain, files);
+        }
     }
 
-    private static string Manifest(IReadOnlyList<ViewerUnit> units) =>
-        "// Generated. Every form and user control of the project, for the viewer sidebar.\n" +
+    private static string Manifest(IReadOnlyList<ViewerUnit> units, string title) =>
+        "// Generated. Every form and user control of the project, for the viewer sidebar / app shell navigation.\n" +
+        "export const shell = { title: " + JsonSerializer.Serialize(title) + " };\n\n" +
         "export interface ViewerUnit {\n" +
         "  id: string;\n  component: string;\n  file: string;\n  kind: 'form' | 'control';\n  title: string;\n  group: string;\n  source: string;\n" +
         "  controls: number;\n  fallbacks: string[];\n  unsupported: string[];\n  designWidth?: number;\n  designHeight?: number;\n  error?: string;\n}\n\n" +

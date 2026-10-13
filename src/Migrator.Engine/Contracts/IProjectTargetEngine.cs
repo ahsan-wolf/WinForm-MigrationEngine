@@ -15,6 +15,12 @@ public sealed class GenerationOptions
     /// </summary>
     public bool Preview { get; init; }
 
+    /// <summary>
+    /// WinForms-style app shell (`<out>/<target>-appshell`): the same visual-only pages as <see cref="Preview"/>, hosted by a bordered window with hyperlink navigation on the left
+    /// and a form-style frame on the right. Implies <see cref="Preview"/>.
+    /// </summary>
+    public bool AppShell { get; init; }
+
     /// <summary>Generate every form and user control of the project, not only those reachable from the entry form by Show/ShowDialog (needed for shells that open modules dynamically).</summary>
     public bool AllUnits { get; init; }
 
