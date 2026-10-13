@@ -81,6 +81,16 @@ The viewer has a sidebar (forms and user controls, grouped by source folder, wit
 "design size" frames a unit at its designed width/height; a background switch helps with dark or light surfaces. A unit that could not be generated stays listed with its error. `VIEWER_REPORT.md` lists units, fallback controls and controls without a component.
 Use it to review what the engine understood of each screen before looking at behaviour (the functional app is in `react-app`).
 
+### 5.2 App shell (`--appshell`)
+`migrate --source <dir> --out <dir> --appshell` writes `<out>/react-appshell/`: the same visual-only pages as the viewer, hosted by a **WinForms-style window**. Left: a bordered "Navigation" pane with a filter box and **hyperlinks** (LinkLabel look: blue, underlined on hover,
+bold with a marker when active) grouped by kind (Forms / User controls) and source folder; a draggable (or arrow-key) splitter separates it from the right-hand **main container**, which loads the clicked unit inside a **form-style frame** (title bar with the unit title and source, border, client area).
+A title bar names the project, a status bar shows the unit count and the selected unit; Previous/Next, arrow keys and a "design size" switch are available. Links are real anchors (`#/<UnitName>`), so back/forward, deep links and open-in-new-tab work.
+
+```bash
+cd "<output folder>/react-appshell" && npm install && npm run dev
+```
+Colours and fonts are CSS variables at the top of `src/appshell.css` (system-style defaults; they follow the UI library tokens when present), so a project can restyle the shell without touching the pages. Use `--preview` instead for the plainer developer viewer.
+
 ## 6. Reading the results
 
 ### 6.1 The report (`MIGRATION_REPORT.md`)

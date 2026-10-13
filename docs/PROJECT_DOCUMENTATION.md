@@ -73,6 +73,7 @@ Known extractor limits: handlers in a third partial file, workflow steps deeper 
 - **Constructor arguments → props** with fixture defaults for contract data types, and `field = arg;` seeding the field model, so a dialog opens on its own.
 - **Fallback controls**: a control without a library component renders as the closest available one (data file `fallbacks.json`: date picker -> text box, tree/list box -> list, tabs -> panels), marked and reported; **Windows-specific calls** are bypassed with a marker (data file `rules/windows-bypass.json`).
 - **Lists**: `WfListView` columns from `ColumnHeader` children; code-created lists get clearly marked sample rows.
+- **App shell** (`--appshell`): the same visual-only pages in a WinForms-style host window: hyperlink navigation on the left, the selected unit in a form-style frame on the right (USER_GUIDE 5.2).
 - **Component viewer** (`--preview`): a separate generated app with a visual-only page for every form and user control and a sidebar shell that loads the selected one; no logic of any kind (see USER_GUIDE 5.1, ENGINE_AUTHORING).
 - **Dev launcher** in `main.tsx`: `?page=<Name>` / `?page=`; render errors shown, not blank.
 - **Contracts**: `src/services/<assembly>/{types,fixtures,service}.ts`; secret-looking members omitted/stripped (SERVER-ONLY list in the report).
