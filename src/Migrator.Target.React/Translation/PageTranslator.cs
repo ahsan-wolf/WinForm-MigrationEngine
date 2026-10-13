@@ -15,6 +15,7 @@ public sealed class TranslationEnv
     public IReadOnlyDictionary<string, UnitIr> Units { get; init; } = new Dictionary<string, UnitIr>();
     public ISet<string> Generated { get; init; } = new HashSet<string>();
     public SupportRegistry? Support { get; init; }
+    public BypassRules Bypass { get; init; } = BypassRules.Empty;
 }
 
 /// <summary>Where an event handler method is wired: first control + event that uses it.</summary>
@@ -45,12 +46,18 @@ public static class PageTranslator
             Units = env.Units,
             Generated = env.Generated,
             Support = env.Support?.Classes ?? new Dictionary<string, SupportClassInfo>(),
+            Bypass = env.Bypass,
             Output = output
         };
         foreach (var node in Walk(root).Skip(1))
         {
             scope.Controls.Add(node.Id);
             if (node.Effective() == "System.Windows.Forms.ListView") scope.ListViews.Add(node.Id);
+            foreach (var (key, value) in node.Attributes.Where(a => a.Key.StartsWith("Fallback.Alias.", StringComparison.Ordinal)))
+            {
+                if (!scope.Aliases.TryGetValue(node.Id, out var map)) scope.Aliases[node.Id] = map = new Dictionary<string, string>(StringComparer.Ordinal);
+                map[key["Fallback.Alias.".Length..]] = value;
+            }
         }
 
         foreach (var m in unit.Page.Members.Where(m => m.Kind is MemberKind.Field or MemberKind.Property))
@@ -244,6 +251,7 @@ public static class PageTranslator
             body = translator.TranslateBody(out top, out fallbacks);
             t.Todos = translator.Todos;
             t.Reasons.AddRange(translator.Reasons);
+            t.Bypasses.AddRange(translator.Bypasses);
         }
 
         var allFellBack = demoted || (top > 0 && fallbacks == top && body.All(l => l.TrimStart().StartsWith("//", StringComparison.Ordinal)));
@@ -354,7 +362,7 @@ public static class PageTranslator
         if (type.IsEnum) return type.Ir.EnumValues.Count > 0 ? $"{ts}.{type.Ir.EnumValues[0].Name}" : $"0 as {ts}";
         if (type.Ir.IsStatic) return $"null as unknown as {ts}";
         var ctors = type.Constructors.ToList();
-        return ctors.Count == 0 || ctors.Any(c => c.Parameters.All(p => p.DefaultValue != null)) ? $"new {ts}()" : $"null as unknown as {ts}";
+        return ctors.Count == 0 || ctors.Any(c => c.Parameters.All(p => p.DefaultValue != null)) ? $"new {ts}()" : $"Object.create({ts}.prototype) as {ts}"; // needs constructor arguments: an instance without running it, so member reads do not throw
     }
 
     /// <summary>Reserved words get a suffix; `useX` would be mistaken for a React hook by the lint rules, so it becomes `doUseX`.</summary>

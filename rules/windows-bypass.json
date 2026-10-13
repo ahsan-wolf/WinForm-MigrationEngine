@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "note": "Windows-specific APIs a browser app cannot call. A simple statement that uses one is replaced by a '// BYPASSED' comment (original kept) and listed in the migration report; the translation continues. Data only: extend per project in a copy and point the target engine option bypassRulesPath at it.",
+  "namespaces": [
+    "System.DirectoryServices", "Microsoft.Win32", "System.Runtime.InteropServices", "System.Security.Principal",
+    "System.Management", "System.IO.Ports", "System.Drawing.Printing"
+  ],
+  "types": [
+    { "name": "Registry" }, { "name": "RegistryKey" }, { "name": "Clipboard" }, { "name": "SendKeys" }, { "name": "Screen" },
+    { "name": "WindowsIdentity" }, { "name": "WindowsPrincipal" }, { "name": "Marshal" }, { "name": "NotifyIcon" },
+    { "name": "DirectoryEntry" }, { "name": "DirectorySearcher" }, { "name": "PrincipalContext" }, { "name": "UserPrincipal" },
+    { "name": "GroupPrincipal" }, { "name": "SerialPort" }, { "name": "PrintDocument" }, { "name": "ManagementObjectSearcher" },
+    { "name": "Process", "members": ["Start", "GetCurrentProcess", "GetProcessesByName", "GetProcesses", "Kill"] },
+    { "name": "Environment", "members": ["UserName", "UserDomainName", "MachineName", "GetFolderPath", "CurrentDirectory", "GetEnvironmentVariable", "ExpandEnvironmentVariables", "Exit"] },
+    { "name": "Application", "members": ["Exit", "ExitThread", "DoEvents", "Restart", "StartupPath", "ExecutablePath", "LocalUserAppDataPath", "UserAppDataPath", "CommonAppDataPath", "EnableVisualStyles", "SetCompatibleTextRenderingDefault", "Run"] }
+  ]
+}

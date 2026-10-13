@@ -10,7 +10,7 @@ Independent of the migration engine and of any IR (CLAUDE.md §5). Generated app
 
 MVP control set = what the pilot startup form needs: `WfForm`, `WfMenuBar`/`WfMenuItem`/`WfSeparator`, `WfToolbar`/`WfToolbarButton`, `WfStatusBar`,
 `WfPanel`, `WfGroupBox` (fieldset + legend), `WfSplit`/`WfSplitPane`, `WfLabel`, `WfButton`, `WfTextBox`, `WfComboBox`, `WfCheckBox`, `WfProgress`, `WfPictureBox`, `WfDataGrid`,
-`WfListView` (details list: columns, rows with sub items, row selection with Ctrl/Shift and arrow keys, check boxes; controlled, with `wfListItem` / `wfListItemFromArray` helpers), `WfContextMenu`, dialog service (`WfDialogProvider` + `useWfDialog`: `alert`, `confirm`, `show`), `useWfModel` (imperative-compatible state: immediate reads, one batched re-render per write burst), `WfUnsupported`. Not yet: TreeView, Tabs,
+`WfListView` (details list: columns, rows with sub items, row selection with Ctrl/Shift and arrow keys, check boxes; controlled, with `wfListItem` / `wfListItemFromArray` helpers), `WfContextMenu`, dialog service (`WfDialogProvider` + `useWfDialog`: `alert`, `confirm`, `show`), `useWfModel` (imperative-compatible state: immediate reads, one batched re-render per write burst), `WfUnsupported`. `ui-spec/fallbacks.json` lists which component stands in for a WinForms control that has none yet. Not yet: TreeView, Tabs,
 RadioGroup, DatePicker (the generator emits `WfUnsupported` for them).
 
 ```bash

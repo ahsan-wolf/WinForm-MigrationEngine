@@ -77,6 +77,15 @@ root control with `TriggerEvent = "Method:{name}"`. Not navigation: `MessageBox`
 - `migrate --units all` generates every form and user control (needed when a shell opens modules dynamically, e.g. `Activator.CreateInstance(type)` from menu data, which static navigation extraction cannot see).
 - Support classes are pruned to those the generated pages reach (directly or through each other); classes deriving from controls/components are UI and are never support classes.
 
+## Control fallbacks and Windows bypass (data-driven, project-independent)
+- **Fallback controls** (`ui-library/ui-spec/fallbacks.json`): a WinForms control (resolved type) with no component in `controls.json` is rendered by the closest component: DateTimePicker/MonthCalendar -> `WfTextBox` (ISO text), NumericUpDown/MaskedTextBox/RichTextBox -> `WfTextBox`,
+  RadioButton -> `WfCheckBox`, ListBox/CheckedListBox/TreeView -> `WfListView` (flat), TabControl -> `WfPanel`, TabPage -> `WfGroupBox`, LinkLabel -> `WfButton`, TrackBar/scroll bars -> `WfProgress`, anything else -> `WfPanel` (has children) or `WfLabel` (text or `[Type]`).
+  `propertyAliases` / `eventAliases` rename members (`Value` -> `Text`, `ValueChanged` -> `TextChanged`) so code that reads `dt.Value` reads the replacement's state. The generator rewrites the node in memory (`ResolvedType` = the replacement's type, `Fallback.From`, `Fallback.Alias.*`),
+  adds `/* FALLBACK: <Type> */` to the element and reports category `fallback-control`. Edit the file to change a mapping; no rebuild. When a real component is added to `ui-spec`, remove its fallback entry.
+- **Windows bypass** (`rules/windows-bypass.json`, option `bypassRulesPath` of the target engine): types (optionally with specific members) and namespaces a browser cannot use. A *simple* statement (expression, declaration, return, throw) that uses one becomes
+  `// BYPASSED — Windows-specific API (...)` with the original kept; declared names are poisoned so dependents fall back; the rest of the method translates. Statements inside conditions are not bypassed (they keep their TODO). Reported in a "Windows-specific code bypassed" section.
+  A project copies the file, adds its own entries and points `bypassRulesPath` at it.
+
 ## IR files (CLAUDE.md §4.1)
 `migrator ir` writes, per Form/UserControl, `<out>/ir/{Name}/{Name}.{facet}.ir.json` for `complete` (source of truth), `controls`,
 `control-properties`, `code-behind` and `layout`, plus `<out>/ir/project.ir.json`. Every facet is a pure function of the

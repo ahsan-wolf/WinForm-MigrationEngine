@@ -28,6 +28,7 @@ public sealed class GeneratedPage
     public int MethodsNotTranslated { get; set; }
     public int MethodsDemoted { get; set; }
     public List<string> TodoReasons { get; } = new();
+    public List<string> Bypassed { get; } = new();
 
     /// <summary>Line ranges (1-based, inclusive) of each translated function in Source; the compile gate maps TypeScript errors back to methods through them.</summary>
     public List<(string TsName, int Start, int End)> MethodRanges { get; } = new();
@@ -133,6 +134,7 @@ public sealed partial class PageGenerator
         var root = unit.Page.RootControl ?? throw new InvalidDataException($"{unit.Name} has no control tree.");
         var component = _components[unit.Name];
         var c = new Ctx(unit, component);
+        ApplyFallbacks(c, root);
         foreach (var n in Walk(root)) c.ById.TryAdd(n.Id, n);
         Prescan(c, root);
         if (_translation is not null)
@@ -183,6 +185,7 @@ public sealed partial class PageGenerator
         {
             var codeText = PageTranslator.StripStrings(string.Join("\n", handlerCode.Concat(jsx).Where(l => !l.TrimStart().StartsWith("//", StringComparison.Ordinal))
                 .Concat(usesFields ? c.Translation!.FieldInitials.Values : Enumerable.Empty<string>()).Concat(c.Translation!.CtorProps.Select(p => p.Type + " " + p.Default))));
+            codeText = Regex.Replace(codeText, @"/\*.*?\*/", "");
             var used = supportRegistry.Classes.Keys.Where(n => Regex.IsMatch(codeText, $@"(?<![\w.]){Regex.Escape(n)}\b")).OrderBy(n => n, StringComparer.Ordinal).ToList();
             if (used.Count > 0) sb.AppendLine($"import {{ {string.Join(", ", used)} }} from '../support';");
         }
@@ -263,6 +266,7 @@ public sealed partial class PageGenerator
             page.MethodsDemoted = stats.Methods.Count(m => m.Reasons.Contains("demoted by the TypeScript compile gate"));
             foreach (var m in stats.Methods)
                 foreach (var reason in m.Reasons.Distinct()) page.TodoReasons.Add($"{m.Member.Name}: {reason}");
+            page.Bypassed.AddRange(stats.Methods.SelectMany(m => m.Bypasses));
             AddRanges(page, stats);
         }
         return page;
@@ -292,6 +296,7 @@ public sealed partial class PageGenerator
 
         c.Lib.Add(spec.Name);
         var attrs = new List<string>();
+        if (node.Attributes.TryGetValue("Fallback.From", out var fallbackFrom)) attrs.Add($"/* FALLBACK: {ShortType(fallbackFrom)} */");
         BuildProps(node, spec, c, attrs, isRoot);
         BuildEvents(node, spec, c, attrs, isRoot);
         var children = RenderChildren(node, spec, c);
@@ -319,6 +324,47 @@ public sealed partial class PageGenerator
             lines = new List<string> { $"{{vm.{node.Id}.visible && (" }.Concat(Indent(lines)).Append(")}").ToList();
         }
         return lines;
+    }
+
+    /// <summary>
+    /// A control with no library component is rendered by the closest available one (ui-spec fallbacks.json; default: a panel when it has children, else a label).
+    /// The node is rewritten in memory: its resolved type becomes the replacement's type, aliased properties/events are copied, and `Fallback.From` / `Fallback.Alias.*`
+    /// remember what happened (so a regeneration reports it again and the translator reads the right member).
+    /// </summary>
+    private void ApplyFallbacks(Ctx c, ControlNodeIr root)
+    {
+        foreach (var node in Walk(root).Skip(1))
+        {
+            if (node.Attributes.TryGetValue("Fallback.From", out var already))
+            {
+                c.Issue("fallback-control", $"{node.Id}: {ShortType(already)} rendered as {_spec.Find(node.Effective())?.Name}");
+                continue;
+            }
+
+            var effective = node.Effective();
+            var shortType = ShortType(effective);
+            if (_spec.Find(effective) is not null || NonVisualTypes.Contains(shortType) || node.Attributes.GetValueOrDefault("ParentSlot") == "Columns") continue;
+            if (shortType.StartsWith("DataGridView", StringComparison.Ordinal) && shortType.EndsWith("Column", StringComparison.Ordinal)) continue;
+            if (effective.EndsWith("UserControl", StringComparison.Ordinal) && node.Children.Count > 0) continue; // inlined user controls render as panels (RenderFallback)
+            if (effective.StartsWith("System.", StringComparison.Ordinal) && !effective.StartsWith("System.Windows.Forms.", StringComparison.Ordinal)) continue; // non-visual component
+
+            var fallback = _spec.FindFallback(effective);
+            var use = fallback?.Use ?? (node.Children.Count > 0 ? _spec.DefaultWithChildren : _spec.DefaultOther);
+            if (_spec.ByName(use) is not { WinformsTypes.Length: > 0 } target) continue;
+
+            foreach (var (from, to) in fallback?.PropertyAliases ?? new Dictionary<string, string>())
+            {
+                if (node.Attributes.TryGetValue(from, out var value) && !node.Attributes.ContainsKey(to)) node.Attributes[to] = value;
+                node.Attributes["Fallback.Alias." + from] = to;
+            }
+            foreach (var (from, to) in fallback?.EventAliases ?? new Dictionary<string, string>())
+                if (node.Attributes.TryGetValue("On" + from, out var handler) && !node.Attributes.ContainsKey("On" + to)) node.Attributes["On" + to] = handler;
+
+            node.Attributes["Fallback.From"] = effective;
+            node.Attributes[ControlTypes.ResolvedTypeKey] = target.WinformsTypes[0];
+            if (use == "WfLabel" && !node.Attributes.ContainsKey("Text")) node.Attributes["Text"] = $"[{shortType}]";
+            c.Issue("fallback-control", $"{node.Id}: {shortType} rendered as {use}{(fallback?.Note is { } note ? $" ({note})" : "")}");
+        }
     }
 
     private SpecControl? RootSpec(ControlNodeIr root)
@@ -458,7 +504,8 @@ public sealed partial class PageGenerator
         {
             var id = m.Groups[1].Value == "this" ? root.Id : m.Groups[1].Value;
             if (!c.ById.TryGetValue(id, out var node)) continue;
-            if (node != root || m.Groups[2].Value is "Text" or "Enabled" or "Visible") AddToModel(c, node, m.Groups[2].Value);
+            var prop = node.Attributes.GetValueOrDefault("Fallback.Alias." + m.Groups[2].Value) ?? m.Groups[2].Value;
+            if (node != root || prop is "Text" or "Enabled" or "Visible") AddToModel(c, node, prop);
         }
     }
 

@@ -1,0 +1,29 @@
+{
+  "specVersion": "0.1.0",
+  "note": "When a WinForms control has no component in controls.json, the generator renders the closest available library component instead of a placeholder. Data only: edit or extend without rebuilding. `use` is a component name from controls.json; propertyAliases / eventAliases rename WinForms members to the ones that component's spec reads (code that uses `dt.Value` then reads the text box state).",
+  "fallbacks": [
+    { "winformsTypes": ["System.Windows.Forms.DateTimePicker", "System.Windows.Forms.MonthCalendar"], "use": "WfTextBox",
+      "propertyAliases": { "Value": "Text" }, "eventAliases": { "ValueChanged": "TextChanged", "DateChanged": "TextChanged" },
+      "note": "date shown and edited as ISO text" },
+    { "winformsTypes": ["System.Windows.Forms.NumericUpDown", "System.Windows.Forms.DomainUpDown", "System.Windows.Forms.MaskedTextBox", "System.Windows.Forms.RichTextBox"], "use": "WfTextBox",
+      "propertyAliases": { "Value": "Text" }, "eventAliases": { "ValueChanged": "TextChanged" },
+      "note": "free-text input" },
+    { "winformsTypes": ["System.Windows.Forms.RadioButton"], "use": "WfCheckBox",
+      "eventAliases": { "CheckedChanged": "CheckedChanged" },
+      "note": "a radio group is rendered as independent check boxes" },
+    { "winformsTypes": ["System.Windows.Forms.ListBox", "System.Windows.Forms.CheckedListBox", "System.Windows.Forms.TreeView"], "use": "WfListView",
+      "eventAliases": { "AfterSelect": "SelectedIndexChanged", "SelectedValueChanged": "SelectedIndexChanged" },
+      "note": "list or tree shown as a flat list" },
+    { "winformsTypes": ["System.Windows.Forms.TabControl"], "use": "WfPanel", "note": "tabs are shown one after another" },
+    { "winformsTypes": ["System.Windows.Forms.TabPage"], "use": "WfGroupBox", "note": "a tab page is a titled group" },
+    { "winformsTypes": ["System.Windows.Forms.LinkLabel"], "use": "WfButton", "eventAliases": { "LinkClicked": "Click" }, "note": "link shown as a button" },
+    { "winformsTypes": ["System.Windows.Forms.TrackBar", "System.Windows.Forms.HScrollBar", "System.Windows.Forms.VScrollBar"], "use": "WfProgress", "note": "slider shown as a progress bar" },
+    { "winformsTypes": ["System.Windows.Forms.ToolStripDropDownButton", "System.Windows.Forms.ToolStripSplitButton"], "use": "WfToolbarButton", "note": "drop-down shown as a plain toolbar button" },
+    { "winformsTypes": ["System.Windows.Forms.ToolStripTextBox"], "use": "WfTextBox" }
+  ],
+  "default": {
+    "note": "any other control (third-party, owner-drawn, a viewer): a panel when it has children, otherwise a label with its text (or its type name)",
+    "withChildren": "WfPanel",
+    "other": "WfLabel"
+  }
+}

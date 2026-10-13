@@ -509,6 +509,8 @@ unknown calls become `// TODO: wire to real API`.
 | `Application.DoEvents`, modal message loops | remove; restructure async |
 | Multi-monitor / `Screen` / window position APIs | drop |
 | Third-party suites (DevExpress, Telerik, Infragistics, Syncfusion) | map to vendor's web equivalent (list in report); otherwise manual |
+| **Any control with no library component (as built)** | closest library component from `ui-spec/fallbacks.json` (date picker -> `WfTextBox`, radio -> `WfCheckBox`, list/tree -> `WfListView`, tabs -> `WfPanel`/`WfGroupBox`, link label -> `WfButton`, other -> `WfPanel`/`WfLabel`), marked `/* FALLBACK */`, reported |
+| **Windows-only APIs (as built)** | bypassed with `// BYPASSED` (rules in `rules/windows-bypass.json`): registry, clipboard, `Process.Start`, directory services, principals, interop, `Application.Exit/DoEvents`, `Environment.GetFolderPath` ... |
 | Crystal Reports / ReportViewer | server PDF + `<iframe>` |
 | Localization via `.resx` | i18n JSON (`react-i18next` / `@ngx-translate`) — mechanical; list in report |
 | `ConfigurationManager` / `app.config` sections, registry, `Environment.UserName` | TODO (server-supplied config); never emit connection strings or keys |

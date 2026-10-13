@@ -261,7 +261,7 @@ Hard rules:
 4. **Themeable** through CSS variables from `ui-spec` tokens; no hard-coded colors.
 5. **Accessible by default** (labels, roles, keyboard, `accesskey` from `&` mnemonics).
 6. **Versioned & backward compatible.** Spec changes are additive; breaking changes require a major bump and a migration note in `docs/`.
-7. A control not in the library → generator emits `WfUnsupported` + TODO (never raw third-party markup). Then add the control to `ui-spec` and implement it in all three packages (Skill 18).
+7. A control not in the library → the generator renders the **closest available library component** (`ui-spec/fallbacks.json`, data; default: a panel when it has children, else a label), marked `/* FALLBACK: <Type> */` and listed in the report. `WfUnsupported` + TODO remains only for controls that cannot even be given a fallback. Never raw third-party markup. To make a fallback a real control: add it to `ui-spec` and implement it in all three packages (Skill 18) and drop its fallback entry.
 8. No tests, Storybook or demo app inside `ui-library/` — the separate demo project covers that.
 
 The control catalog and WinForms → `Wf*` mapping is in **SKILLS.md (Skill 0)**.
@@ -276,7 +276,8 @@ Small local models (e.g. phi4-mini ≈ 3.8B) are good at mechanical translation,
 |---|---|
 | C# body translated by an LLM | `// LLM-translated — verify` (first line of the method) |
 | Call to a type/API not resolvable from IR | `// TODO: wire to real API — call to {Type}.{Method} not resolvable from IR` |
-| Control/feature with no library component | `<WfUnsupported …/>` + `// TODO: no {Target} equivalent generated — replace manually` |
+| Control with no library component | Rendered by the closest library component with `/* FALLBACK: {Type} */` + report entry; `<WfUnsupported …/>` + `// TODO: no {Target} equivalent generated — replace manually` only when no fallback exists |
+| Windows-specific API with no browser equivalent (registry, clipboard, directory services, `Process.Start`, ...) | `// BYPASSED — Windows-specific API ({api}) has no browser equivalent: {original}` (rules in `rules/windows-bypass.json`) + report section |
 | Type inferred from columns/format | `// inferred — check against backend contract` |
 | Mock auth / mock API / in-memory state | `// MOCK — replace with real implementation` |
 | Member/method of an external contract that looks like a secret (password, key, license, connection string, credentials) | Omitted from generated services, or a credentials-object parameter is stripped and the operation kept; listed in `MIGRATION_REPORT.md` (SERVER-ONLY). Never in browser code |

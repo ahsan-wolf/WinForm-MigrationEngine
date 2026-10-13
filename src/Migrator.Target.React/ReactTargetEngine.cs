@@ -12,6 +12,9 @@ public sealed class ReactTargetOptions
 {
     public string UiSpecPath { get; set; } = "ui-library/ui-spec/controls.json";
     public string UiLibraryPath { get; set; } = "ui-library/ui-react";
+
+    /// <summary>Windows-specific APIs to bypass during translation (data file; copy and extend it per project).</summary>
+    public string BypassRulesPath { get; set; } = "rules/windows-bypass.json";
 }
 
 public sealed class ReactTargetModule : IEngineModule
@@ -21,7 +24,7 @@ public sealed class ReactTargetModule : IEngineModule
     public ReactTargetModule(EngineOptions options)
     {
         var bound = options.Bind<ReactTargetOptions>();
-        _options = new ReactTargetOptions { UiSpecPath = options.ResolvePath(bound.UiSpecPath), UiLibraryPath = options.ResolvePath(bound.UiLibraryPath) };
+        _options = new ReactTargetOptions { UiSpecPath = options.ResolvePath(bound.UiSpecPath), UiLibraryPath = options.ResolvePath(bound.UiLibraryPath), BypassRulesPath = options.ResolvePath(bound.BypassRulesPath) };
     }
 
     public void Register(IEngineRegistry registry) => registry.RegisterTarget(new ReactTargetEngine(_options));
