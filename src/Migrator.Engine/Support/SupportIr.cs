@@ -26,6 +26,9 @@ public sealed class SupportClassIr
     public string? BaseType { get; set; }
     public string RelativePath { get; set; } = "";
 
+    /// <summary>True for a class of a referenced project outside the analysed folder: a library, used for its shape (types, members), not translated.</summary>
+    public bool External { get; set; }
+
     /// <summary>
     /// Kind Field/Property/Method. <c>Body</c>: field/auto-property = initializer expression; method = full body; property with accessors = the accessor
     /// list text <c>{ get {...} set {...} }</c> (expression-bodied properties are normalised to it). <c>Attributes</c> carries modifiers as

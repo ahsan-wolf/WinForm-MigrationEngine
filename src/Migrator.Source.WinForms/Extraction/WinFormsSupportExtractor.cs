@@ -21,28 +21,47 @@ internal static class WinFormsSupportExtractor
         var resolver = new WinFormsTypeResolver(analysis.TypeBases);
         var file = new SupportFileIr();
 
-        foreach (var path in Directory.EnumerateFiles(analysis.RootPath, "*.cs", SearchOption.AllDirectories).OrderBy(p => p, StringComparer.Ordinal))
+        foreach (var (folder, path) in new[] { analysis.RootPath }.Concat(analysis.AdditionalRoots ?? Array.Empty<string>())
+                     .SelectMany(r => Directory.EnumerateFiles(r, "*.cs", SearchOption.AllDirectories).OrderBy(p => p, StringComparer.Ordinal).Select(p => (Root: r, Path: p))))
         {
-            var relative = Path.GetRelativePath(analysis.RootPath, path).Replace('\\', '/');
+            // Files of a referenced project outside the analysed folder are shown relative to that project's parent (`Entities/Employee.cs`).
+            var baseFolder = folder == analysis.RootPath ? analysis.RootPath : Path.GetDirectoryName(folder.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)) ?? folder;
+            var relative = Path.GetRelativePath(baseFolder, path).Replace('\\', '/');
             if (relative.Split('/').SkipLast(1).Any(part => SkippedFolders.Contains(part, StringComparer.OrdinalIgnoreCase))) continue;
             if (path.EndsWith(".Designer.cs", StringComparison.OrdinalIgnoreCase) || Path.GetFileName(path).Equals("Program.cs", StringComparison.OrdinalIgnoreCase)) continue;
 
             var root = CSharpSyntaxTree.ParseText(File.ReadAllText(path)).GetCompilationUnitRoot();
-            foreach (var type in root.DescendantNodes().OfType<BaseTypeDeclarationSyntax>())
+            foreach (var type in root.DescendantNodes().OfType<BaseTypeDeclarationSyntax>().Where(t => t is not InterfaceDeclarationSyntax))
             {
                 // Controls and components (including custom ones derived from them) are UI, not support code.
                 if (unitNames.Contains(type.Identifier.ValueText) || IsUiType(type) || type is not EnumDeclarationSyntax && resolver.Resolve(type.Identifier.ValueText) is not null) continue;
                 var container = (type.Parent as BaseTypeDeclarationSyntax)?.Identifier.ValueText;
-                file.Classes.Add(Build(type, relative, container));
+                var built = Build(type, relative, container);
+                built.External = folder != analysis.RootPath;
+                file.Classes.Add(built);
             }
         }
 
-        // The same simple name in two namespaces would collide in the generated modules; the first wins and the rest are reported.
-        var seen = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var duplicate in file.Classes.Where(c => !seen.Add(c.Name)).ToList())
+        // Partial classes (generated + hand-written halves) arrive as several declarations of one name: their members are merged. A different kind with the
+        // same name (or the same name in two namespaces) would collide in the generated modules: the first wins and the rest is reported.
+        var merged = new Dictionary<string, SupportClassIr>(StringComparer.Ordinal);
+        foreach (var cls in file.Classes.ToList())
         {
-            file.Classes.Remove(duplicate);
-            file.Classes.First(c => c.Name == duplicate.Name).Unsupported.Add($"duplicate type name in {duplicate.RelativePath} was not extracted");
+            if (!merged.TryGetValue(cls.Name, out var first)) { merged[cls.Name] = cls; continue; }
+            file.Classes.Remove(cls);
+            if (first.Kind != cls.Kind || cls.Kind == "enum") { first.Unsupported.Add($"duplicate type name in {cls.RelativePath} was not extracted"); continue; }
+
+            foreach (var member in cls.Members)
+            {
+                // Fields and properties are one namespace (a name is declared once across the halves); methods are told apart by parameter count.
+                var isData = member.Kind is WebFormsMigrator.IR.Models.MemberKind.Field or WebFormsMigrator.IR.Models.MemberKind.Property;
+                if (!first.Members.Any(x => isData
+                        ? x.Kind is WebFormsMigrator.IR.Models.MemberKind.Field or WebFormsMigrator.IR.Models.MemberKind.Property && x.Name == member.Name
+                        : x.Kind == member.Kind && x.Name == member.Name && x.Parameters.Count == member.Parameters.Count))
+                    first.Members.Add(member);
+            }
+            first.Unsupported.AddRange(cls.Unsupported);
+            first.BaseType ??= cls.BaseType;
         }
         return file;
     }
