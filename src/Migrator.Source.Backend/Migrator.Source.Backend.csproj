@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>Migrator.Source.Backend</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Syntax-only reader of .NET Framework class libraries and ASMX services. References no other engine. -->
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.8.0" />
+  </ItemGroup>
+
+</Project>
