@@ -21,7 +21,7 @@ static int Run(string[] args)
               contract --assembly <dll> --out <dir>
                                                   Read a managed assembly's public API from metadata only (never loaded or run) -> <out>/<name>/contract.json
                                                   and data-access.json (SQL table/procedure names; connection-string-like literals are only counted)
-              migrate --source <dir> --out <dir> [--target react-app] [--entry <form>] [--depth <n|all>] [--units all] [--preview] [--contract <contract.json>]... [--contract-scope used|all] [--translate none|rules|llm] [--compile-gate] [--config <engines.json>]
+              migrate --source <dir> --out <dir> [--target react-app] [--entry <form>] [--depth <n|all>] [--units all] [--preview|--appshell] [--contract <contract.json>]... [--contract-scope used|all] [--translate none|rules|llm] [--compile-gate] [--config <engines.json>]
                                                   ir step, then generate an app into <out>/<target> (default depth 1: entry form + forms it opens)
             """);
         return args.Length == 0 ? 1 : 0;
@@ -160,8 +160,9 @@ static int Migrate(string[] args)
     var depthText = OptionValue(args, "--depth");
     int? depth = depthText is null ? 1 : depthText.Equals("all", StringComparison.OrdinalIgnoreCase) ? null : int.TryParse(depthText, out var d1) ? d1 : 1;
 
-    var preview = args.Contains("--preview");
-    var outputName = preview ? targetId.Replace("-app", "") + "-viewer" : targetId;
+    var appShell = args.Contains("--appshell");
+    var preview = appShell || args.Contains("--preview");
+    var outputName = appShell ? targetId.Replace("-app", "") + "-appshell" : preview ? targetId.Replace("-app", "") + "-viewer" : targetId;
 
     GenerationResult result;
     try
@@ -172,6 +173,7 @@ static int Migrate(string[] args)
             Depth = depth,
             AllUnits = OptionValue(args, "--units")?.Equals("all", StringComparison.OrdinalIgnoreCase) == true,
             Preview = preview,
+            AppShell = appShell,
             ContractFiles = OptionValues(args, "--contract"),
             ContractScope = OptionValue(args, "--contract-scope") ?? "used",
             Translate = OptionValue(args, "--translate") ?? "none",
@@ -185,7 +187,7 @@ static int Migrate(string[] args)
     }
 
     Console.WriteLine(preview
-        ? $"{outputName}: {result.GeneratedUnits.Count} visual-only page(s) for the component viewer ({result.SkippedUnits.Count} unit(s) could not be generated)"
+        ? $"{outputName}: {result.GeneratedUnits.Count} visual-only page(s) for the {(appShell ? "app shell" : "component viewer")} ({result.SkippedUnits.Count} unit(s) could not be generated)"
         : $"{targetId}: generated {result.GeneratedUnits.Count} unit(s): {string.Join(", ", result.GeneratedUnits)}");
     Console.WriteLine($"  not generated: {result.SkippedUnits.Count}; {result.Files.Count} file(s) -> {result.OutputDirectory}");
     if (result.Stats.TryGetValue("methods", out var methods))

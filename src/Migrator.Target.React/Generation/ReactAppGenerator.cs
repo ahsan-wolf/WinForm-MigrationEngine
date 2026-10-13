@@ -18,7 +18,7 @@ public sealed class ReactAppGenerator
     {
         var ir = IrFolder.Load(irFolder);
         var spec = SpecCatalog.Load(_options.UiSpecPath);
-        if (options.Preview) return RunPreview(ir, spec, outputDirectory);
+        if (options.Preview || options.AppShell) return RunPreview(ir, spec, outputDirectory, options.AppShell);
 
         var entry = options.EntryForm ?? ir.Project.Source.StartupForm ?? ir.Project.Forms.FirstOrDefault()?.Name
                     ?? throw new InvalidOperationException("No entry form: the project has no forms and none was given.");
@@ -136,7 +136,7 @@ public sealed class ReactAppGenerator
     /// Component viewer: every form and user control becomes a visual-only page, listed in a manifest, plus the viewer shell. No entry form, navigation,
     /// contracts, translation, support module or legacy copies.
     /// </summary>
-    private GenerationResult RunPreview(IrFolder ir, SpecCatalog spec, string outputDirectory)
+    private GenerationResult RunPreview(IrFolder ir, SpecCatalog spec, string outputDirectory, bool appShell)
     {
         var result = new GenerationResult { OutputDirectory = outputDirectory };
         var components = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -172,7 +172,9 @@ public sealed class ReactAppGenerator
             }
         }
 
-        ViewerShell.Write(outputDirectory, "viewer-" + Naming.Camel(Naming.StripPrefix(ir.Project.Source.Technology)).ToLowerInvariant(), Path.GetFullPath(_options.UiLibraryPath), viewerUnits, result.Files);
+        var projectName = Path.GetFileName((ir.Project.Source.RootPath ?? "").TrimEnd('/', '\\'));
+        ViewerShell.Write(outputDirectory, (appShell ? "winform-appshell" : "viewer-" + Naming.Camel(Naming.StripPrefix(ir.Project.Source.Technology)).ToLowerInvariant()),
+            Path.GetFullPath(_options.UiLibraryPath), viewerUnits, projectName.Length > 0 ? projectName : "Application", appShell, result.Files);
         AppWriter.Put(outputDirectory, "VIEWER_REPORT.md", ViewerReport(viewerUnits, result), result.Files);
         result.Stats["viewer.units"] = viewerUnits.Count;
         return result;
