@@ -154,7 +154,7 @@ What to click through: the menu and toolbar, each dialog from the entry form, li
 - No pixel fidelity: layout is derived from Dock/Anchor/Location facts into flex/grid.
 - Windows-only APIs are bypassed, not translated (`rules/windows-bypass.json`; the report lists each).
 - Not translated today: `ref`/`out`, event subscriptions in code, `string.Format` format specifiers, `ConfigurationManager`/registry/file access, GDI+/P/Invoke/COM, UI calls inside non-form classes, LINQ query syntax, lambdas, `dgv.Rows` and `pnl.Controls` members, runtime-created controls.
-- Controls without a library component yet (TreeView, tabs, radio group, date picker, list box, rich/masked text, ...) are rendered by the closest component (`ui-spec/fallbacks.json`): a date picker is a text box, a tree a flat list, tabs stacked panels. They work, but look and behave simply.
+- Controls without a library component yet (TreeView, list box, rich/masked text, month calendar, ...) are rendered by the closest component (`ui-spec/fallbacks.json`): a date picker is a text box, a tree a flat list, tabs stacked panels. They work, but look and behave simply.
 - Only the React target exists; Angular and HTML+jQuery are planned. See `PROJECT_PLAN.md` for the roadmap.
 
 ## 11. Troubleshooting
