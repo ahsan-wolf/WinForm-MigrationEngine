@@ -50,7 +50,8 @@ public sealed partial class PageGenerator
     private static readonly (string Control, string Event)[] StateEvents =
     {
         ("WfTextBox", "valueChange"), ("WfComboBox", "selectionChange"), ("WfCheckBox", "checkedChange"), ("WfRadioButton", "checkedChange"),
-        ("WfDateTimePicker", "valueChange"), ("WfNumericUpDown", "valueChange"), ("WfTabs", "selectionChange")
+        ("WfDateTimePicker", "valueChange"), ("WfNumericUpDown", "valueChange"), ("WfTabs", "selectionChange"),
+        ("WfMaskedTextBox", "valueChange"), ("WfRichTextBox", "valueChange"), ("WfMonthCalendar", "valueChange"), ("WfListBox", "selectionChange")
     };
 
     private static readonly JsonSerializerOptions JsonOut = new() { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
@@ -512,7 +513,7 @@ public sealed partial class PageGenerator
 
         var code = string.Join("\n", c.Unit.Page.Members.Where(m => m.Kind == MemberKind.Method && m.Body != null).Select(m => m.Body));
         foreach (Match m in ComboUsageRegex().Matches(code))
-            if (c.ById.TryGetValue(m.Groups[1].Value, out var comboNode) && comboNode != root && _spec.Find(comboNode.Effective())?.Name == "WfComboBox" && c.ComboIds.Add(comboNode.Id))
+            if (c.ById.TryGetValue(m.Groups[1].Value, out var comboNode) && comboNode != root && _spec.Find(comboNode.Effective())?.Name is "WfComboBox" or "WfListBox" && c.ComboIds.Add(comboNode.Id))
                 AddComboModel(c, comboNode);
         foreach (Match m in UsedPropertyRegex().Matches(code))
         {
@@ -601,6 +602,7 @@ public sealed partial class PageGenerator
             "Checked" or "ReadOnly" => raw == "true" ? "true" : "false",
             "Value" when node.Effective().EndsWith("DateTimePicker", StringComparison.Ordinal) => "new Date().toISOString()",
             "Value" => double.TryParse(raw, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var n) ? n.ToString(System.Globalization.CultureInfo.InvariantCulture) : "0",
+            "SelectionStart" => "new Date().toISOString().slice(0, 10)",
             "SelectedIndex" => int.TryParse(raw, out var index) ? index.ToString() : "0",
             _ => "null"
         };
@@ -797,7 +799,7 @@ public sealed partial class PageGenerator
     /// <summary>Placeholders so a control is never an empty or blank box in the viewer: sample combo items, a visible name for unnamed labels and buttons.</summary>
     private static void PreviewDefaults(ControlNodeIr node, SpecControl spec, List<string> attrs)
     {
-        if (spec.Name == "WfComboBox" && !node.Attributes.ContainsKey("Items")) attrs.Add("items={[\"Item 1\", \"Item 2\"]}");
+        if (spec.Name is "WfComboBox" or "WfListBox" && !node.Attributes.ContainsKey("Items")) attrs.Add("items={[\"Item 1\", \"Item 2\"]}");
         if (spec.Name is "WfButton" or "WfLabel" && string.IsNullOrWhiteSpace(node.Attributes.GetValueOrDefault("Text"))) attrs.Add(Attr("text", $"[{node.Id}]"));
     }
 
@@ -827,6 +829,8 @@ public sealed partial class PageGenerator
     {
         foreach (var ev in spec.Events)
         {
+            // Two WinForms events can feed one canonical event (DateChanged / DateSelected): the first one that produced the attribute wins.
+            if (attrs.Any(a => a.StartsWith(ev.React + "=", StringComparison.Ordinal))) continue;
             string? handlerName = null;
             MemberIr? handlerMember = null;
             if (node.Attributes.TryGetValue("On" + ev.From, out var method) && c.Methods.TryGetValue(method, out var member))
@@ -1041,13 +1045,15 @@ public sealed partial class PageGenerator
 
     // ------------------------------------------------------------------------------------------------ utils
 
-    private static bool IsStateful(string specName) => specName is "WfTextBox" or "WfComboBox" or "WfCheckBox" or "WfRadioButton" or "WfDateTimePicker" or "WfNumericUpDown";
+    private static bool IsStateful(string specName) => specName is "WfTextBox" or "WfComboBox" or "WfCheckBox" or "WfRadioButton" or "WfDateTimePicker" or "WfNumericUpDown"
+        or "WfMaskedTextBox" or "WfRichTextBox" or "WfMonthCalendar" or "WfListBox";
 
     /// <summary>The WinForms property a stateful control keeps in the page model.</summary>
     private static string StatefulProp(string specName) => specName switch
     {
         "WfCheckBox" or "WfRadioButton" => "Checked",
         "WfDateTimePicker" or "WfNumericUpDown" => "Value",
+        "WfMonthCalendar" => "SelectionStart",
         "WfTabs" => "SelectedIndex",
         _ => "Text"
     };

@@ -572,6 +572,11 @@ internal sealed partial class MethodTranslator
             if (_scope.ListViews.Contains(controlId) && name is "Items" or "SelectedItems" or "CheckedItems" or "Columns" or "SelectedIndices")
                 return ListCollection(controlId, name);
             if (_scope.Combos.Contains(controlId) && ComboMember(controlId, name) is { } comboMember) return comboMember;
+            if (name is "SelectionStart" or "SelectionEnd" && _scope.Calendars.Contains(controlId))
+            {
+                _scope.Output.UsesViewModel = true;
+                return $"vm.{controlId}.selectionStart";
+            }
             if (name == "SelectedIndex" && _scope.TabControls.Contains(controlId))
             {
                 _scope.Output.UsesViewModel = true;
@@ -1130,6 +1135,10 @@ internal sealed partial class MethodTranslator
 
         // control.Method(...) is not translated (Select, Sort, ...)
         if (ControlOf(receiver) is { } cid) throw new Untranslatable($"call to control member {cid}.{method}(...) (not supported by the library or the model yet)");
+        if (receiver is MemberAccessExpressionSyntax { Expression: var innerOwner, Name.Identifier.ValueText: var innerMember } && ControlOf(innerOwner) is { } ownerId && method == "ToString"
+            && (inv.ArgumentList.Arguments.Count == 0 || (inv.ArgumentList.Arguments.Count == 1 && _scope.Calendars.Contains(ownerId) && innerMember == "SelectionStart"
+                && inv.ArgumentList.Arguments[0].Expression is LiteralExpressionSyntax { Token.ValueText: "yyyy-MM-dd" })))
+            return $"String({Ex(receiver)})"; // model-backed value (selected text, ISO date): already text
         if (receiver is MemberAccessExpressionSyntax { Expression: var inner } && ControlOf(inner) is { } cid2)
             throw new Untranslatable($"call to {cid2}.{((MemberAccessExpressionSyntax)receiver).Name.Identifier.ValueText}.{method}(...) (collection UI such as ListView/grid is not translated yet)");
 

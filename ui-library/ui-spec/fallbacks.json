@@ -4,23 +4,7 @@
   "fallbacks": [
     {
       "winformsTypes": [
-        "System.Windows.Forms.MonthCalendar"
-      ],
-      "use": "WfTextBox",
-      "propertyAliases": {
-        "Value": "Text"
-      },
-      "eventAliases": {
-        "ValueChanged": "TextChanged",
-        "DateChanged": "TextChanged"
-      },
-      "note": "date shown and edited as ISO text"
-    },
-    {
-      "winformsTypes": [
-        "System.Windows.Forms.DomainUpDown",
-        "System.Windows.Forms.MaskedTextBox",
-        "System.Windows.Forms.RichTextBox"
+        "System.Windows.Forms.DomainUpDown"
       ],
       "use": "WfTextBox",
       "propertyAliases": {
@@ -33,7 +17,6 @@
     },
     {
       "winformsTypes": [
-        "System.Windows.Forms.ListBox",
         "System.Windows.Forms.CheckedListBox",
         "System.Windows.Forms.TreeView"
       ],
