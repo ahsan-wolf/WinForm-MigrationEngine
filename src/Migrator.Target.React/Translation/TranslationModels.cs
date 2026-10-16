@@ -103,6 +103,9 @@ public sealed class PageScope
     /// <summary>Controls of type TabControl: `SelectedIndex` is `vm.<id>.selectedIndex`.</summary>
     public HashSet<string> TabControls { get; } = new(StringComparer.Ordinal);
 
+    /// <summary>Controls of type MonthCalendar: `SelectionStart` is `vm.<id>.selectionStart` (ISO date text).</summary>
+    public HashSet<string> Calendars { get; } = new(StringComparer.Ordinal);
+
     /// <summary>The project's own non-UI classes (`main`, `Preferences`, enums, data classes), emitted as <c>src/support</c>.</summary>
     public IReadOnlyDictionary<string, SupportClassInfo> Support { get; init; } = new Dictionary<string, SupportClassInfo>();
 
