@@ -122,3 +122,5 @@ P4.3 LLM tier for the residue → real data for pages (openers passing construct
 
 ## 13. Document map
 `CLAUDE.md` (rules, architecture contract, markers, git) · `SKILLS.md` (control/event/pattern mappings, translation cheat sheet, extension skills) · `docs/USER_GUIDE.md` · `docs/UI_CONTROL_MAPPING.md` (which component represents which WinForms control) · `docs/PROJECT_DOCUMENTATION.md` (this file) · `docs/ENGINE_AUTHORING.md` (engine/IR/translator conventions and extension) · `docs/PROJECT_PLAN.md` (status, scope, plan, risks) · `docs/PILOT_FINDINGS.md` · `docs/WINFORMS_MIGRATION_PROMPT.md` (prompt pack for LLM-assisted steps) · `ui-library/README.md`.
+
+Versioned end-to-end guide (UI generation, backend, workflow, project independence): `guide/LATEST.md`.
