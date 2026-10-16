@@ -17,8 +17,7 @@
     },
     {
       "winformsTypes": [
-        "System.Windows.Forms.CheckedListBox",
-        "System.Windows.Forms.TreeView"
+        "System.Windows.Forms.CheckedListBox"
       ],
       "use": "WfListView",
       "eventAliases": {

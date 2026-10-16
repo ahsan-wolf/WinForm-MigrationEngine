@@ -2,6 +2,9 @@ import { useReducer, useState } from 'react';
 
 type Notify = () => void;
 
+/** Wrapper -> wrapped object, so storing a model object elsewhere in the model keeps ONE identity (`vm.tv.selectedNode = vm.tv.nodes[0]` is `===` the node). */
+const raw = new WeakMap<object, object>();
+
 /** Wraps an object (and, lazily, every nested object/array) so that writes mark the model dirty. Wrappers are cached per target. */
 function wrap<T extends object>(target: T, notify: Notify, cache: WeakMap<object, object>): T {
   const cached = cache.get(target);
@@ -16,7 +19,8 @@ function wrap<T extends object>(target: T, notify: Notify, cache: WeakMap<object
       return value;
     },
     set(obj, key, value, receiver) {
-      const ok = Reflect.set(obj, key, value, receiver);
+      const stored = value !== null && typeof value === 'object' ? raw.get(value as object) ?? value : value;
+      const ok = Reflect.set(obj, key, stored, receiver);
       notify();
       return ok;
     },
@@ -27,6 +31,7 @@ function wrap<T extends object>(target: T, notify: Notify, cache: WeakMap<object
     },
   });
   cache.set(target, proxy);
+  raw.set(proxy, target);
   return proxy;
 }
 

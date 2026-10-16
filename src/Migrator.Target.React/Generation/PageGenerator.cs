@@ -107,6 +107,7 @@ public sealed partial class PageGenerator
         public Dictionary<string, Handler> Handlers { get; } = new();
         public HashSet<string> StatefulIds { get; } = new();
         public HashSet<string> ListViewIds { get; } = new();
+        public HashSet<string> TreeViewIds { get; } = new();
         public HashSet<string> ComboIds { get; } = new();
 
         /// <summary>Control id -> id of its parent control (radio buttons of one container form a group).</summary>
@@ -155,6 +156,7 @@ public sealed partial class PageGenerator
         var jsx = RenderElement(root, c, isRoot: true) ?? throw new InvalidDataException($"{unit.Name}: root control produced no output.");
         var handlerCode = BuildFunctions(c, jsx);
         SeedListViewSamples(c, handlerCode);
+        SeedTreeViewSamples(c, handlerCode);
         var usesFields = false;
         string? serviceImport = null;
         List<string> typeImports = new();
@@ -180,6 +182,8 @@ public sealed partial class PageGenerator
             tr.UsesFormat = Regex.IsMatch(text, @"\bformatString\(");
             foreach (var helper in new[] { "wfListItem", "wfListItemFromArray" }) if (Regex.IsMatch(text, $@"\b{helper}\(")) c.Lib.Add(helper);
             if (Regex.IsMatch(text + "\n" + (usesFields ? fieldText : ""), @"\bWfListItem\b")) c.LibTypes.Add("WfListItem");
+            foreach (var helper in new[] { "wfTreeNode", "wfSetExpanded" }) if (Regex.IsMatch(text, $@"\b{helper}\(")) c.Lib.Add(helper);
+            if (Regex.IsMatch(text + "\n" + (usesFields ? fieldText : ""), @"\bWfTreeNode\b")) c.LibTypes.Add("WfTreeNode");
         }
 
         var sb = new StringBuilder();
@@ -509,6 +513,7 @@ public sealed partial class PageGenerator
             }
             if (node.Attributes.GetValueOrDefault("Visible") == "false") AddToModel(c, node, "Visible");
             if (spec?.Name == "WfListView") { c.ListViewIds.Add(node.Id); AddListViewModel(c, node); }
+            if (spec?.Name == "WfTreeView") { c.TreeViewIds.Add(node.Id); AddTreeViewModel(c, node); }
         }
 
         var code = string.Join("\n", c.Unit.Page.Members.Where(m => m.Kind == MemberKind.Method && m.Body != null).Select(m => m.Body));
@@ -643,6 +648,47 @@ public sealed partial class PageGenerator
         if (_preview) PreviewDefaults(node, spec, attrs);
         if (spec.Name == "WfDataGrid") AddGrid(node, c, attrs);
         if (spec.Name == "WfListView") AddListView(node, c, attrs);
+        if (spec.Name == "WfTreeView") AddTreeView(node, c, attrs);
+    }
+
+    /// <summary>A tree view keeps its nodes and selected node in the model so `Nodes.Add`, `new TreeNode`, `SelectedNode` and `node.Nodes` translate onto them.</summary>
+    private static void AddTreeViewModel(Ctx c, ControlNodeIr node)
+    {
+        c.LibTypes.Add("WfTreeNode");
+        c.ModelSet(node.Id, "Nodes", "[] as WfTreeNode[]");
+        c.ModelSet(node.Id, "SelectedNode", "null as WfTreeNode | null");
+    }
+
+    private const string SampleTree = "[wfTreeNode('Node 1', [wfTreeNode('Child 1.1'), wfTreeNode('Child 1.2')]), wfTreeNode('Node 2', [wfTreeNode('Child 2.1')])]";
+
+    /// <summary>A tree the translated code never fills (the original builds it in untranslated code) gets clearly marked sample nodes, so the control is visible and testable.</summary>
+    private static void SeedTreeViewSamples(Ctx c, List<string> handlerCode)
+    {
+        if (c.TreeViewIds.Count == 0) return;
+        var code = string.Join("\n", handlerCode.Where(l => !l.TrimStart().StartsWith("//", StringComparison.Ordinal)));
+        foreach (var id in c.TreeViewIds)
+        {
+            if (Regex.IsMatch(code, $@"\bvm\.{Regex.Escape(id)}\.nodes(\.(push|splice)\b|\s*=[^=])")) continue;
+            c.Model[id]["nodes"] = SampleTree + " as WfTreeNode[]";
+            c.Lib.Add("wfTreeNode");
+            c.ModelComments.Add($"// MOCK — {id} nodes are sample data: the original fills it in code that is not translated; replace with real implementation");
+        }
+    }
+
+    private void AddTreeView(ControlNodeIr node, Ctx c, List<string> attrs)
+    {
+        c.LibTypes.Add("WfTreeNode");
+        if (_preview)
+        {
+            c.Lib.Add("wfTreeNode");
+            var name = Naming.StateName(node.Id) + "Nodes";
+            c.TopLevel.Add($"const {name}: WfTreeNode[] = {SampleTree};");
+            attrs.Add($"nodes={{{name}}}");
+            return;
+        }
+        c.UsesModel = true;
+        attrs.Add($"nodes={{vm.{node.Id}.nodes}}");
+        attrs.Add($"selectedNode={{vm.{node.Id}.selectedNode}}");
     }
 
     private void AddListView(ControlNodeIr node, Ctx c, List<string> attrs)
@@ -859,6 +905,14 @@ public sealed partial class PageGenerator
                 attrs.Add(ev.Name == "selectionChange"
                     ? $"{ev.React}={{(sel) => {{ vm.{node.Id}.items.forEach((it, i) => {{ it.selected = sel.includes(i); }});{call} }}}}"
                     : $"{ev.React}={{(i, v) => {{ vm.{node.Id}.items[i].checked = v;{call} }}}}");
+                continue;
+            }
+
+            // TreeView selection is written back to the model so `SelectedNode` reads it immediately.
+            if (spec.Name == "WfTreeView" && ev.Name == "selectionChange" && c.TreeViewIds.Contains(node.Id) && !_preview)
+            {
+                c.UsesModel = true;
+                attrs.Add($"{ev.React}={{(n) => {{ vm.{node.Id}.selectedNode = n;{(handlerName is null ? "" : $" {handlerName}();")} }}}}");
                 continue;
             }
 

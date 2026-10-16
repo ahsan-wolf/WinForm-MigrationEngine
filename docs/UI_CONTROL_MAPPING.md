@@ -3,7 +3,7 @@
 As built, for the React target (`@wfm/ui-react`). The sources of truth are `ui-library/ui-spec/controls.json` (components), `ui-library/ui-spec/fallbacks.json` (stand-ins) and `ui-library/ui-spec/tokens.css` (theme); this page summarises them.
 Generated pages import `Wf*` components only. Identical names, props and canonical events are the contract for the Angular and HTML+jQuery libraries (not started).
 
-## 1. Components that represent a WinForms control directly (31)
+## 1. Components that represent a WinForms control directly (32)
 
 | WinForms control(s) | React component | Props (from the WinForms property) | Events (from the WinForms event) |
 |---|---|---|---|
@@ -31,6 +31,7 @@ Generated pages import `Wf*` components only. Identical names, props and canonic
 | `RichTextBox` | `WfRichTextBox` | `value`, `readOnly` (plain text; formatting is not reproduced) | `onValueChange` |
 | `MonthCalendar` | `WfMonthCalendar` | `value` (from `SelectionStart`, ISO date) | `onValueChange` (DateChanged / DateSelected) |
 | `ListBox` | `WfListBox` | `items`, `value` (selected text; the page model also keeps `SelectedIndex` / `SelectedItem`, as for a combo box) | `onSelectionChange` |
+| `TreeView` | `WfTreeView` (+ helpers `wfTreeNode`, `wfSetExpanded`) | `nodes` (page model: text, name, tag, checked, expanded, nodes), `selectedNode`, `checkBoxes` | `onSelectionChange` (AfterSelect), `onNodeCheckedChange` (AfterCheck), `onNodeClick`, `onNodeDoubleClick` |
 | `NumericUpDown` | `WfNumericUpDown` | `value`, `min`, `max`, `step`, `decimals`, `readOnly` | `onValueChange` |
 | `ProgressBar`, `ToolStripProgressBar` | `WfProgress` | `value`, `max` | — |
 | `PictureBox` | `WfPictureBox` | `src`, `fit` | `onClick` |
@@ -54,7 +55,7 @@ The closest component is rendered, marked `/* FALLBACK: Type */`, and listed in 
 | WinForms control(s) | Rendered as |
 |---|---|
 | `DomainUpDown`, `ToolStripTextBox` | `WfTextBox` (`Value` read as `Text`) |
-| `CheckedListBox`, `TreeView` | `WfListView` (flat list) |
+| `CheckedListBox` | `WfListView` (flat list) |
 | `TrackBar`, `HScrollBar`, `VScrollBar` | `WfProgress` |
 | `ToolStripDropDownButton`, `ToolStripSplitButton` | `WfToolbarButton` |
 | anything else (third-party, owner-drawn, report viewers, ...) | `WfPanel` when it has children, otherwise `WfLabel` (its text, or `[TypeName]`) |
@@ -69,4 +70,4 @@ The closest component is rendered, marked `/* FALLBACK: Type */`, and listed in 
 
 ## 5. Gaps
 
-No real component yet for `TreeView` and `CheckedListBox` (they use the stand-ins above). `@wfm/ui-angular` and `@wfm/ui-html` are not started: they will implement the same names, props and events.
+No real component yet for `CheckedListBox` (it uses the stand-in above). `@wfm/ui-angular` and `@wfm/ui-html` are not started: they will implement the same names, props and events.

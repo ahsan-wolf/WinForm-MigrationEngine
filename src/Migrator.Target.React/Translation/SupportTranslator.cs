@@ -60,7 +60,8 @@ internal static class SupportTranslator
         if (Regex.IsMatch(code, @"\bformatString\(")) header.Add("import { formatString } from '../lib/csharp';");
         var uiImports = new List<string>();
         if (Regex.IsMatch(code, @"\bWfListItem\b")) uiImports.Add("type WfListItem");
-        foreach (var helper in new[] { "wfListItem", "wfListItemFromArray" }) if (Regex.IsMatch(code, $@"\b{helper}\(")) uiImports.Add(helper);
+        if (Regex.IsMatch(code, @"\bWfTreeNode\b")) uiImports.Add("type WfTreeNode");
+        foreach (var helper in new[] { "wfListItem", "wfListItemFromArray", "wfTreeNode", "wfSetExpanded" }) if (Regex.IsMatch(code, $@"\b{helper}\(")) uiImports.Add(helper);
         if (uiImports.Count > 0) header.Add($"import {{ {string.Join(", ", uiImports)} }} from '@wfm/ui-react';");
         header.Add("");
 
