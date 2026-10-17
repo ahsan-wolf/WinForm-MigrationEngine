@@ -3,16 +3,37 @@ import { WfButton } from './Controls';
 
 type Render<T> = (close: (result?: T) => void) => ReactNode;
 
+export type WfMessageIcon = 'info' | 'warning' | 'error' | 'question';
+export type WfMessageButtons = 'ok' | 'okCancel' | 'yesNo' | 'yesNoCancel' | 'retryCancel' | 'abortRetryIgnore';
+/** The DialogResult names MessageBox.Show returns. */
+export type WfDialogResult = 'OK' | 'Cancel' | 'Yes' | 'No' | 'Retry' | 'Abort' | 'Ignore';
+
+export interface WfMessageOptions { title?: string; buttons?: WfMessageButtons; icon?: WfMessageIcon; defaultButton?: WfDialogResult }
+
 export interface WfDialogService {
   /** MessageBox.Show(text) */
-  alert(message: string, title?: string): Promise<void>;
-  /** MessageBox.Show(text, ..., YesNo) -> true for Yes/OK */
-  confirm(message: string, title?: string): Promise<boolean>;
+  alert(message: string, title?: string, icon?: WfMessageIcon): Promise<void>;
+  /** MessageBox.Show(text, ..., YesNo | OKCancel) -> true for Yes/OK */
+  confirm(message: string, title?: string, icon?: WfMessageIcon): Promise<boolean>;
+  /** MessageBox.Show with any button set -> the DialogResult name; closing with Escape gives the Cancel/No/Ignore/OK result the button set allows. */
+  message(message: string, options?: WfMessageOptions): Promise<WfDialogResult>;
   /** Form.ShowDialog(): resolves with whatever the content passes to `close` (DialogResult), or undefined when dismissed. */
   show<T = void>(render: Render<T>, options?: { title?: string }): Promise<T | undefined>;
 }
 
 interface Entry { key: number; title?: string; render: Render<unknown>; resolve: (value: unknown) => void }
+
+const BUTTONS: Record<WfMessageButtons, { text: string; result: WfDialogResult }[]> = {
+  ok: [{ text: 'OK', result: 'OK' }],
+  okCancel: [{ text: 'OK', result: 'OK' }, { text: 'Cancel', result: 'Cancel' }],
+  yesNo: [{ text: '&Yes', result: 'Yes' }, { text: '&No', result: 'No' }],
+  yesNoCancel: [{ text: '&Yes', result: 'Yes' }, { text: '&No', result: 'No' }, { text: 'Cancel', result: 'Cancel' }],
+  retryCancel: [{ text: '&Retry', result: 'Retry' }, { text: 'Cancel', result: 'Cancel' }],
+  abortRetryIgnore: [{ text: '&Abort', result: 'Abort' }, { text: '&Retry', result: 'Retry' }, { text: '&Ignore', result: 'Ignore' }],
+};
+/** What Escape (or the title bar close) answers: the cancelling button of the set. */
+const DISMISS: Record<WfMessageButtons, WfDialogResult> = { ok: 'OK', okCancel: 'Cancel', yesNo: 'No', yesNoCancel: 'Cancel', retryCancel: 'Cancel', abortRetryIgnore: 'Ignore' };
+const GLYPH: Record<WfMessageIcon, string> = { info: 'i', warning: '!', error: '×', question: '?' };
 
 const DialogContext = createContext<WfDialogService | null>(null);
 
@@ -33,15 +54,25 @@ export function WfDialogProvider({ children }: { children?: ReactNode }) {
         const key = ++counter.current;
         setStack(s => [...s, { key, title: options?.title, render: render as Render<unknown>, resolve: resolve as (v: unknown) => void }]);
       });
+
+    const message = (text: string, options: WfMessageOptions = {}) => {
+      const set = options.buttons ?? 'ok';
+      return show<WfDialogResult>(done => (
+        <div className="wf-dialog-body wf-message">
+          {options.icon && <span className={`wf-message-icon wf-message-${options.icon}`} aria-hidden="true">{GLYPH[options.icon]}</span>}
+          <p>{text}</p>
+          <div className="wf-dialog-actions">
+            {BUTTONS[set].map((b, i) => <WfButton key={b.result} text={b.text} variant={(options.defaultButton ?? BUTTONS[set][0].result) === b.result || (!options.defaultButton && i === 0) ? 'primary' : 'default'} onClick={() => done(b.result)} />)}
+          </div>
+        </div>
+      ), { title: options.title }).then(r => r ?? DISMISS[set]);
+    };
+
     return {
       show,
-      alert: (message, title) => show<void>(done => (
-        <div className="wf-dialog-body"><p>{message}</p><div className="wf-dialog-actions"><WfButton text="OK" variant="primary" onClick={() => done()} /></div></div>
-      ), { title }).then(() => undefined),
-      confirm: (message, title) => show<boolean>(done => (
-        <div className="wf-dialog-body"><p>{message}</p>
-          <div className="wf-dialog-actions"><WfButton text="&Yes" variant="primary" onClick={() => done(true)} /><WfButton text="&No" onClick={() => done(false)} /></div></div>
-      ), { title }).then(r => r === true),
+      message,
+      alert: (text, title, icon) => message(text, { title, icon }).then(() => undefined),
+      confirm: (text, title, icon) => message(text, { title, icon, buttons: 'yesNo' }).then(r => r === 'Yes'),
     };
   }, []);
 
@@ -53,20 +84,27 @@ export function WfDialogProvider({ children }: { children?: ReactNode }) {
   );
 }
 
+/** A modal native <dialog>: the browser provides the top layer, focus containment and the backdrop; Escape asks the content to close with its dismiss result. */
 function DialogFrame({ entry, onClose }: { entry: Entry; onClose: (value?: unknown) => void }) {
+  const ref = useRef<HTMLDialogElement>(null);
+
   useEffect(() => {
+    const dialog = ref.current;
+    if (!dialog) return;
+    if (typeof dialog.showModal === 'function') { if (!dialog.open) dialog.showModal(); } else dialog.setAttribute('open', '');
+    const onCancel = (e: Event) => { e.preventDefault(); onClose(); };
+    dialog.addEventListener('cancel', onCancel);
+    // Environments without native <dialog> cancel handling still get Escape.
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
+    return () => { dialog.removeEventListener('cancel', onCancel); document.removeEventListener('keydown', onKey); if (dialog.open && typeof dialog.close === 'function') dialog.close(); };
   }, [onClose]);
 
   return (
-    <div className="wf-dialog-backdrop">
-      <div role="dialog" aria-modal="true" aria-label={entry.title ?? 'Dialog'} className="wf-dialog">
-        {entry.title && <header className="wf-dialog-title">{entry.title}</header>}
-        {entry.render(onClose)}
-      </div>
-    </div>
+    <dialog ref={ref} role="dialog" aria-modal="true" aria-label={entry.title ?? 'Dialog'} className="wf-dialog">
+      {entry.title && <header className="wf-dialog-title">{entry.title}</header>}
+      {entry.render(onClose)}
+    </dialog>
   );
 }
 

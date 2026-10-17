@@ -48,7 +48,13 @@ textarea.wf-textbox { height: auto; padding: var(--wf-space-1); }
 .wf-datagrid tbody tr:hover { background: var(--wf-color-hover); } .wf-datagrid .wf-row-selected, .wf-datagrid .wf-row-selected:hover { background: var(--wf-color-selected); }
 .wf-grid-empty { color: var(--wf-color-muted); text-align: center; }
 
-.wf-dialog-backdrop { position: fixed; inset: 0; background: rgba(0, 0, 0, .35); display: flex; align-items: center; justify-content: center; z-index: var(--wf-z-dialog); }
+.wf-dialog::backdrop { background: rgba(0, 0, 0, .35); }
+.wf-dialog { padding: 0; margin: auto; }
+.wf-message { display: grid; grid-template-columns: auto 1fr; column-gap: var(--wf-space-3); align-items: start; } .wf-message > .wf-dialog-actions { grid-column: 1 / -1; }
+.wf-message > p { margin: 0; align-self: center; }
+.wf-message-icon { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 50%; color: #fff; font-weight: 700; }
+.wf-message-info { background: var(--wf-color-accent, #316ac5); } .wf-message-question { background: var(--wf-color-accent, #316ac5); }
+.wf-message-warning { background: #e0a000; } .wf-message-error { background: var(--wf-color-danger, #b00020); }
 .wf-dialog { min-width: 320px; max-width: 90vw; max-height: 90vh; overflow: auto; background: var(--wf-color-bg); color: var(--wf-color-text); font: var(--wf-font-size) var(--wf-font-family); border: 1px solid var(--wf-color-border); border-radius: var(--wf-radius); box-shadow: var(--wf-shadow); }
 .wf-dialog-title { padding: var(--wf-space-2) var(--wf-space-3); border-bottom: 1px solid var(--wf-color-border); font-weight: 600; }
 .wf-dialog-body { padding: var(--wf-space-3); } .wf-dialog-actions { display: flex; gap: var(--wf-space-2); justify-content: flex-end; margin-top: var(--wf-space-3); }

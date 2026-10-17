@@ -26,7 +26,7 @@ Generated pages import `Wf*` components only. Identical names, props and canonic
 | `ComboBox`, `ToolStripComboBox` | `WfComboBox` | `items`, `value`, `disabled` | `onSelectionChange` |
 | `CheckBox` | `WfCheckBox` | `text`, `checked` | `onCheckedChange` |
 | `RadioButton` | `WfRadioButton` | `text`, `checked`, `group` (the parent container: its radio buttons are mutually exclusive) | `onCheckedChange` |
-| `DateTimePicker` | `WfDateTimePicker` | `value` (ISO text), `kind` = date / datetime / time (from Format / CustomFormat) | `onValueChange` |
+| `DateTimePicker` | `WfDateTimePicker` | `value` (ISO text), `kind` = date / datetime / time (from Format / CustomFormat), `minDate` / `maxDate` (from MinDate / MaxDate); a native `input type=date|time|datetime-local` | `onValueChange` |
 | `MaskedTextBox` | `WfMaskedTextBox` | `value`, `mask` (WinForms mask applied while typing: `0` `9` `#` `L` `?` `A` `a` `&` `C`; other characters are literals), `readOnly` | `onValueChange` (TextChanged) |
 | `RichTextBox` | `WfRichTextBox` | `value`, `readOnly` (plain text; formatting is not reproduced) | `onValueChange` |
 | `MonthCalendar` | `WfMonthCalendar` | `value` (from `SelectionStart`, ISO date) | `onValueChange` (DateChanged / DateSelected) |
@@ -49,7 +49,7 @@ Inputs are controlled when a change handler is passed and uncontrolled otherwise
 
 | Piece | Role |
 |---|---|
-| `WfDialogProvider` + `useWfDialog` | `alert`, `confirm`, `show(render)`: replace `MessageBox` and `ShowDialog` (DialogResult) |
+| `WfDialogProvider` + `useWfDialog` | Modal popups on the native `<dialog>` element (top layer, focus containment, Escape): `alert`, `confirm` (Yes/No and OK/Cancel give a boolean), `message(text, { buttons, icon, title })` (YesNoCancel, RetryCancel, AbortRetryIgnore give the DialogResult name; Escape answers the cancelling button), `show(render)` for `ShowDialog` forms. `MessageBoxIcon` becomes an `info` / `warning` / `error` / `question` badge |
 | `useWfModel` | Per-page state as a deep proxy: reads are immediate, writes re-render once. `vm` holds control properties (text, enabled, visible, checked, value, items, selected index, rows), `f` holds form fields, so translated imperative WinForms code maps one to one |
 | `WfUnsupported` | Last-resort visible placeholder for a control that cannot even get a fallback |
 

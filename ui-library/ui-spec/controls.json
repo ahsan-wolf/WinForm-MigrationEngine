@@ -97,6 +97,8 @@
       "props": [
         { "name": "value", "type": "string", "from": ["Value"], "note": "ISO text. Page model: vm.<id>.value." },
         { "name": "kind", "type": "enum:date|datetime|time", "note": "From Format / CustomFormat (the generator reads them; no direct from)." },
+        { "name": "minDate", "type": "string", "from": ["MinDate"], "note": "ISO date; the generator reads the DateTime literal of MinDate." },
+        { "name": "maxDate", "type": "string", "from": ["MaxDate"], "note": "ISO date; the generator reads the DateTime literal of MaxDate." },
         { "name": "disabled", "type": "boolean", "from": ["Enabled"], "transform": "invert" } ],
       "events": [ { "name": "valueChange", "from": "ValueChanged", "react": "onValueChange" } ],
       "a11y": "native date / datetime-local / time input.", "example": "<WfDateTimePicker value={d} onValueChange={setD} />" },

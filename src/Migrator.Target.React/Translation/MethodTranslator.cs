@@ -1190,10 +1190,32 @@ internal sealed partial class MethodTranslator
         return false;
     }
 
-    private static bool HasButtons(InvocationExpressionSyntax mb)
+    /// <summary>The MessageBoxButtons member named by the call (`OK` when none is given).</summary>
+    private static string ButtonSet(InvocationExpressionSyntax mb)
     {
         var args = mb.ArgumentList.Arguments;
-        return args.Count >= 3 && args[2].Expression.ToString() is var b && b.Contains("YesNo") | b.Contains("OKCancel") | b.Contains("RetryCancel");
+        if (args.Count < 3) return "OK";
+        var text = args[2].Expression.ToString();
+        return text[(text.LastIndexOf('.') + 1)..];
+    }
+
+    /// <summary>Yes/No and OK/Cancel are a boolean (`dialog.confirm`); the other button sets answer with a DialogResult name (`dialog.message`).</summary>
+    private static bool HasButtons(InvocationExpressionSyntax mb) => ButtonSet(mb) is "YesNo" or "OKCancel";
+
+    private static string? MessageIcon(InvocationExpressionSyntax mb)
+    {
+        var args = mb.ArgumentList.Arguments;
+        if (args.Count < 4) return null;
+        var icon = args[3].Expression.ToString();
+        icon = icon[(icon.LastIndexOf('.') + 1)..];
+        return icon switch
+        {
+            "Error" or "Hand" or "Stop" => "error",
+            "Warning" or "Exclamation" => "warning",
+            "Question" => "question",
+            "Information" or "Asterisk" => "info",
+            _ => null
+        };
     }
 
     private static string Await(string call, bool top) => top ? $"await {call}" : $"(await {call})";
@@ -1316,9 +1338,21 @@ internal sealed partial class MethodTranslator
         _scope.Output.UsesDialog = true;
 
         var text = Ex(args[0].Expression);
-        var caption = args.Count >= 2 ? ", " + Ex(args[1].Expression) : "";
-        var confirm = HasButtons(inv);
-        var call = $"dialog.{(confirm ? "confirm" : "alert")}({text}{caption})";
+        var title = args.Count >= 2 ? Ex(args[1].Expression) : null;
+        var icon = MessageIcon(inv);
+        var set = ButtonSet(inv);
+
+        if (set is "YesNoCancel" or "RetryCancel" or "AbortRetryIgnore")
+        {
+            var buttons = char.ToLowerInvariant(set[0]) + set[1..];
+            var options = new List<string>();
+            if (title is not null) options.Add($"title: {title}");
+            options.Add($"buttons: '{buttons}'");
+            if (icon is not null) options.Add($"icon: '{icon}'");
+            return Await($"dialog.message({text}, {{ {string.Join(", ", options)} }})", top);
+        }
+
+        var call = $"dialog.{(HasButtons(inv) ? "confirm" : "alert")}({text}{(title is null && icon is null ? "" : ", " + (title ?? "undefined"))}{(icon is null ? "" : $", '{icon}'")})";
         return Await(call, top);
     }
 

@@ -618,6 +618,9 @@ public sealed partial class PageGenerator
         c.ModelSet(node.Id, winFormsProp, initial);
     }
 
+    [GeneratedRegex(@"DateTime\(\s*(\d{1,4})\s*,\s*(\d{1,2})\s*,\s*(\d{1,2})")]
+    private static partial Regex DateLiteralRegex();
+
     [GeneratedRegex(@"\b(\w+)\s*\.\s*(Text|Enabled|Visible|Checked|Value|ReadOnly|SelectedIndex)\b")]
     private static partial Regex UsedPropertyRegex();
 
@@ -720,6 +723,11 @@ public sealed partial class PageGenerator
             case "shortcut":
                 var keys = KeysRegex().Matches(raw).Select(m => m.Groups[1].Value).ToList();
                 return Attr("shortcut", keys.Count > 0 ? string.Join('+', keys) : raw);
+            case "minDate":
+            case "maxDate":
+                // new System.DateTime(2000, 1, 1, 0, 0, 0, 0) -> "2000-01-01"
+                var dm = DateLiteralRegex().Match(raw);
+                return dm.Success ? Attr(prop.Name, $"{int.Parse(dm.Groups[1].Value):0000}-{int.Parse(dm.Groups[2].Value):00}-{int.Parse(dm.Groups[3].Value):00}") : null;
             case "orientation":
                 var o = LastToken(raw).ToLowerInvariant();
                 return o is "horizontal" or "vertical" ? Attr("orientation", o) : null;
