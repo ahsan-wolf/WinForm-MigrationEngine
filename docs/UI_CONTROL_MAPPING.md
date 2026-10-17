@@ -49,7 +49,7 @@ Inputs are controlled when a change handler is passed and uncontrolled otherwise
 
 | Piece | Role |
 |---|---|
-| `WfDialogProvider` + `useWfDialog` | Modal popups on the native `<dialog>` element (top layer, focus containment, Escape): `alert`, `confirm` (Yes/No and OK/Cancel give a boolean), `message(text, { buttons, icon, title })` (YesNoCancel, RetryCancel, AbortRetryIgnore give the DialogResult name; Escape answers the cancelling button), `show(render)` for `ShowDialog` forms. `MessageBoxIcon` becomes an `info` / `warning` / `error` / `question` badge |
+| `WfDialogProvider` + `useWfDialog` | Modal popups on the native `<dialog>` element (top layer, focus containment, Escape): `alert`, `confirm` (Yes/No and OK/Cancel give a boolean), `message(text, { buttons, icon, title })` (YesNoCancel, RetryCancel, AbortRetryIgnore give the DialogResult name; Escape answers the cancelling button), `show(render)` for `ShowDialog` forms. Every popup has a title-bar ✕ (answers like Escape), so a form without its own Close button can still be closed. `MessageBoxIcon` becomes an `info` / `warning` / `error` / `question` badge |
 | `useWfModel` | Per-page state as a deep proxy: reads are immediate, writes re-render once. `vm` holds control properties (text, enabled, visible, checked, value, items, selected index, rows), `f` holds form fields, so translated imperative WinForms code maps one to one |
 | `WfUnsupported` | Last-resort visible placeholder for a control that cannot even get a fallback |
 
@@ -68,6 +68,7 @@ The closest component is rendered, marked `/* FALLBACK: Type */`, and listed in 
 - **Custom controls** (a class derived from a standard control, in the project or a referenced library) resolve through their base-type chain (`ResolvedType`) and use the component of the standard type.
 - **User controls** are inlined into their host as a `WfPanel`, and are also available as their own page (viewer, app shell).
 - **Non-visual components** are not rendered and are listed in the report: `ImageList`, `ToolTip`, `BindingSource`, `Timer`, the file/folder/colour/font/print/page-setup dialogs, `NotifyIcon`, `ErrorProvider`, `BackgroundWorker`, `HelpProvider`, `PrintDocument`.
+- **Navigation the translator could not keep:** when the statement that opened (`ShowDialog`) or closed a form sat inside code that could not be translated, the handler still opens the popup (with the sample data every generated page has) or calls `onClose`, marked `// MOCK` and listed in the report (`nav-mock-open`, `nav-mock-close`).
 - **Layout** is derived from Dock/Location facts (flex rows and columns), never from pixels.
 - **Windows-only APIs** are bypassed with a marker, and data-access/file/configuration code is left to the backend (see `ENGINE_AUTHORING.md`).
 

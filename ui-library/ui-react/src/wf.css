@@ -26,6 +26,8 @@ textarea.wf-textbox { height: auto; padding: var(--wf-space-1); }
 .wf-statusbar { display: flex; gap: var(--wf-space-3); align-items: center; padding: 2px var(--wf-space-2); border-top: 1px solid var(--wf-color-border); background: var(--wf-color-surface); color: var(--wf-color-muted); }
 
 .wf-menubar, .wf-toolbar { display: flex; align-items: center; gap: 2px; background: var(--wf-color-surface); border-bottom: 1px solid var(--wf-color-border); padding: 1px var(--wf-space-1); position: relative; z-index: var(--wf-z-menu); }
+/* an open menu must paint over the toolbar below the menu bar (same stacking level, later in the page) */
+.wf-menubar { z-index: calc(var(--wf-z-menu) + 1); }
 .wf-menuitem { position: relative; }
 .wf-menuitem > button { display: flex; align-items: center; gap: var(--wf-space-2); width: 100%; background: none; border: 0; border-radius: var(--wf-radius); padding: 3px var(--wf-space-2); color: var(--wf-color-text); font: inherit; cursor: pointer; text-align: left; white-space: nowrap; }
 .wf-menuitem > button:hover:not(:disabled), .wf-menuitem > button[aria-expanded="true"] { background: var(--wf-color-hover); }
@@ -65,6 +67,8 @@ textarea.wf-textbox { height: auto; padding: var(--wf-space-1); }
 .wf-message-warning { background: #e0a000; } .wf-message-error { background: var(--wf-color-danger, #b00020); }
 .wf-dialog { min-width: 320px; max-width: 90vw; max-height: 90vh; overflow: auto; background: var(--wf-color-bg); color: var(--wf-color-text); font: var(--wf-font-size) var(--wf-font-family); border: 1px solid var(--wf-color-border); border-radius: var(--wf-radius); box-shadow: var(--wf-shadow); }
 .wf-dialog-title { padding: var(--wf-space-2) var(--wf-space-3); border-bottom: 1px solid var(--wf-color-border); font-weight: 600; }
+.wf-dialog-title { display: flex; align-items: center; justify-content: space-between; gap: var(--wf-space-3); }
+.wf-dialog-x { border: 0; background: none; color: inherit; font: inherit; font-size: 1.3em; line-height: 1; padding: 0 var(--wf-space-1); cursor: pointer; border-radius: var(--wf-radius); } .wf-dialog-x:hover { background: var(--wf-color-hover); }
 .wf-dialog-body { padding: var(--wf-space-3); } .wf-dialog-actions { display: flex; gap: var(--wf-space-2); justify-content: flex-end; margin-top: var(--wf-space-3); }
 
 .wf-listview { overflow: auto; border: 1px solid var(--wf-color-border); background: var(--wf-color-bg); outline: none; }

@@ -102,7 +102,10 @@ function DialogFrame({ entry, onClose }: { entry: Entry; onClose: (value?: unkno
 
   return (
     <dialog ref={ref} role="dialog" aria-modal="true" aria-label={entry.title ?? 'Dialog'} className="wf-dialog">
-      {entry.title && <header className="wf-dialog-title">{entry.title}</header>}
+      <header className="wf-dialog-title">
+        <span>{entry.title ?? ''}</span>
+        <button type="button" className="wf-dialog-x" aria-label="Close" title="Close" onClick={() => onClose()}>×</button>
+      </header>
       {entry.render(onClose)}
     </dialog>
   );

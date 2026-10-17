@@ -1057,7 +1057,7 @@ public sealed partial class PageGenerator
             var others = PageTranslator.StripStrings(string.Join("\n", jsx.Concat(tr.Methods.Where(m => m != t && !m.Lines.Any(l => shadow.IsMatch(l))).SelectMany(m => m.Lines))
                 .Where(l => !l.TrimStart().StartsWith("//", StringComparison.Ordinal))));
             var unused = !System.Text.RegularExpressions.Regex.IsMatch(others, $@"(?<![\w.]){System.Text.RegularExpressions.Regex.Escape(t.TsName)}\b");
-            foreach (var l in t.Lines)
+            foreach (var l in EnsureNavigation(c, tr, t))
             {
                 if (unused && System.Text.RegularExpressions.Regex.IsMatch(l, $@"^(async )?function {System.Text.RegularExpressions.Regex.Escape(t.TsName)}\("))
                     lines.Add("// eslint-disable-next-line @typescript-eslint/no-unused-vars -- not wired to any control or call; kept for the original logic");
@@ -1070,6 +1070,63 @@ public sealed partial class PageGenerator
             .Where(h => tr.ByMember.TryGetValue(h.Member, out var mt) && mt.Status == TranslationStatus.NotTranslated && mt.Lines.Count == 0)
             .GroupBy(h => h.Name).Select(g => g.First());
         lines.AddRange(BuildHandlers(c, stubs));
+        return lines;
+    }
+
+    /// <summary>
+    /// A wired handler whose navigation the IR proves (a `ShowDialog` or `Close` on this control event) but whose translated code lost it, because the statement that
+    /// opened or closed the form depends on code that could not be translated: the popup is opened (with the sample data every generated page has) or the dialog is closed
+    /// at the end of the handler, marked MOCK and listed in the report. Handlers that already open the form, or call a function that does, are left alone.
+    /// </summary>
+    private List<string> EnsureNavigation(Ctx c, PageTranslation tr, MethodTranslation t)
+    {
+        var handler = c.Handlers.Values.FirstOrDefault(h => tr.ByMember.TryGetValue(h.Member, out var mt) && ReferenceEquals(mt, t));
+        if (handler is null || t.Status == TranslationStatus.NotTranslated) return t.Lines;
+        var sites = c.Unit.Page.Navigations.Where(n => n.SourceControlId == handler.ControlId && n.TriggerEvent == handler.Event).ToList();
+
+        // Everything this handler runs: its own code and, transitively, the translated functions it calls.
+        var reach = new StringBuilder();
+        var seen = new HashSet<MethodTranslation>();
+        void Visit(MethodTranslation m)
+        {
+            if (!seen.Add(m)) return;
+            var code = string.Join("\n", m.Lines.Where(l => !l.TrimStart().StartsWith("//", StringComparison.Ordinal)));
+            reach.AppendLine(code);
+            foreach (var other in tr.Methods.Where(o => o.Lines.Count > 0 && o != m && Regex.IsMatch(code, $@"(?<![\w.]){Regex.Escape(o.TsName)}\(")))
+                Visit(other);
+        }
+        Visit(t);
+        var text = reach.ToString();
+
+        // Navigation found in a method this handler calls is recorded against the method (`Method:<name>`), not the control event.
+        foreach (var m in seen)
+            sites.AddRange(c.Unit.Page.Navigations.Where(n => n.TriggerEvent == "Method:" + m.Member.Name && !sites.Contains(n)));
+        if (sites.Count == 0) return t.Lines;
+
+        var add = new List<string>();
+        var shows = sites.Where(x => x.TargetType is "Show" or "ShowDialog").Select(x => x.Target).Distinct().ToList();
+        if (shows.Count > 0 && _generated.Contains(shows[0]) && _components.TryGetValue(shows[0], out var comp) && !Regex.IsMatch(text, $@"dialog\.show<[^>]*>\(\(close\) => <{Regex.Escape(comp)}\b"))
+        {
+            c.PageImports[comp] = comp;
+            add.Add($"// MOCK — {shows[0]} is opened here without the original condition and arguments (the code that decided this was not translated); replace with real implementation");
+            add.Add($"await dialog.show<unknown>((close) => <{comp} onClose={{close}} />, {{ title: {Str(_units[shows[0]].Title)} }});");
+            c.Issue("nav-mock-open", $"{handler.ControlId}.{handler.Event} opens {shows[0]}: wired without its original condition and arguments");
+        }
+        if (sites.Any(x => x.TargetType is "Close" or "Hide") && !Regex.IsMatch(text, @"(?<![\w.])onClose\b"))
+        {
+            add.Add("// MOCK — the original closes the form here, but the code that decided this was not translated; replace with real implementation");
+            add.Add("onClose?.();");
+            c.Issue("nav-mock-close", $"{handler.ControlId}.{handler.Event} closes the form: wired without its original condition");
+        }
+        if (add.Count == 0) return t.Lines;
+
+        var lines = new List<string>(t.Lines);
+        var close = lines.FindLastIndex(l => l.TrimEnd() == "}");
+        if (close < 0) return t.Lines;
+        var start = lines.FindIndex(l => Regex.IsMatch(l, @"^(async )?function \w+\("));
+        if (start >= 0 && add.Any(l => l.StartsWith("await ", StringComparison.Ordinal)) && !lines[start].StartsWith("async ", StringComparison.Ordinal))
+            lines[start] = "async " + lines[start];
+        lines.InsertRange(close, add.Select(l => "  " + l));
         return lines;
     }
 
