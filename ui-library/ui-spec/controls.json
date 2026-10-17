@@ -155,7 +155,7 @@
         { "name": "rowKey", "type": "string", "note": "Field that identifies a row, so the selection survives a reload of the rows (hand-written use; the generator does not set it)." },
         { "name": "pageSize", "type": "number", "note": "Rows per page with a pager; omit to show every row." },
         { "name": "resizable", "type": "boolean", "note": "Column widths can be dragged (default true)." } ],
-      "columnProps": "field, header, width, format ('date' | 'number' | a format string), editable (cell edit in place, only when the grid is not readOnly), formatter (value, row) => text (counterpart of CellFormatting).",
+      "columnProps": "field, header, width, format ('date' | 'number' | a format string), editable (cell edit in place, only when the grid is not readOnly; false keeps a column read-only under readOnly={false}), formatter (value, row) => text (counterpart of CellFormatting).",
       "events": [ { "name": "rowSelect", "from": "SelectionChanged", "react": "onRowSelect" },
                   { "name": "cellEdit", "from": "CellEndEdit", "react": "onCellEdit" },
                   { "name": "cellClick", "from": "CellClick", "react": "onCellClick" },

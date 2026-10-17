@@ -2,7 +2,7 @@ import { useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, ty
 
 export interface WfGridColumn {
   field: string; header: string; width?: number; format?: 'date' | 'number' | string;
-  /** Cells of this column can be edited in place (double-click, or F2 / Enter on the selected row). */
+  /** Cells of this column can be edited in place (double-click, or F2 / Enter on the selected row). `false` keeps it read-only even when the grid has `readOnly={false}`. */
   editable?: boolean;
   /** Custom cell text (the counterpart of WinForms `CellFormatting`): receives the cell value and its row. */
   formatter?: (value: unknown, row: GridRow) => string;
@@ -15,6 +15,10 @@ export interface WfDataGridProps {
   columns: WfGridColumn[];
   selectionMode?: 'none' | 'single' | 'multi';
   sortable?: boolean;
+  /**
+   * `true`: no cell can be edited. `false` (like a WinForms DataGridView with ReadOnly = false): every column is editable except those with `editable: false`.
+   * Left out: only columns with `editable: true` can be edited.
+   */
   readOnly?: boolean;
   /** Field that identifies a row. Selection follows the key when rows are reloaded; without it rows are identified by object identity. */
   rowKey?: string;
@@ -81,7 +85,7 @@ export function WfDataGrid({
   };
 
   const cellValue = (row: GridRow, field: string): unknown => overrides.get(keyOf(row))?.[field] ?? row[field];
-  const canEdit = (c: WfGridColumn) => !!c.editable && !readOnly;
+  const canEdit = (c: WfGridColumn) => !readOnly && (c.editable ?? readOnly === false);
 
   const apply = (row: GridRow, rowIndex: number, c: WfGridColumn, value: unknown) => {
     if (onCellEdit) onCellEdit({ row, field: c.field, rowIndex, value });
