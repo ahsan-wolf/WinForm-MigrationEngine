@@ -21,6 +21,12 @@ public sealed class GeneratedPage
     public int NavigationHandlers { get; init; }
     public List<string> NonVisual { get; init; } = new();
 
+    /// <summary>Icon files this page needs, as (path relative to the app folder, bytes): `public/icons/&lt;unit&gt;/&lt;control&gt;.png`.</summary>
+    public List<(string Path, byte[] Data)> Assets { get; init; } = new();
+    public int IconsExtracted { get; init; }
+    public int IconsConverted { get; init; }
+    public int IconsPlaceholder { get; init; }
+
     // Translation (rules) results; all zero when translation is off.
     public int MethodsTotal { get; set; }
     public int MethodsComplete { get; set; }
@@ -136,6 +142,10 @@ public sealed partial class PageGenerator
         public bool UsesDialog { get; set; }
         public bool UsesOnClose { get; set; }
         public bool ImageNoted { get; set; }
+        public List<(string Path, byte[] Data)> Assets { get; } = new();
+        public int IconsExtracted { get; set; }
+        public int IconsConverted { get; set; }
+        public int IconsPlaceholder { get; set; }
 
         public void Issue(string category, string message) => Issues.Add(new GenerationIssue(Unit.Name, category, message));
     }
@@ -271,7 +281,11 @@ public sealed partial class PageGenerator
             Controls = Walk(root).Count(),
             Handlers = c.Handlers.Count,
             NavigationHandlers = navHandlers,
-            NonVisual = c.NonVisual
+            NonVisual = c.NonVisual,
+            Assets = c.Assets,
+            IconsExtracted = c.IconsExtracted,
+            IconsConverted = c.IconsConverted,
+            IconsPlaceholder = c.IconsPlaceholder
         };
         page.Issues.AddRange(c.Issues);
         if (c.Translation is { } stats)
@@ -633,7 +647,7 @@ public sealed partial class PageGenerator
         foreach (var prop in spec.Props.Where(p => p.From.Length > 0))
         {
             if (prop.Name == "visible") continue; // handled by the Visible wrapper
-            if (prop.Name == "icon") { NoteImages(c); continue; }
+            if (prop.Name == "icon") { if (IconAttr(node, c) is { } iconAttr) attrs.Add(iconAttr); continue; }
 
             // A property that code reads/writes (or that is user-editable state) is bound to the model: vm.<id>.<prop>.
             var modelProp = prop.From.FirstOrDefault(f => c.ModelHas(node.Id, f));
@@ -709,6 +723,36 @@ public sealed partial class PageGenerator
         if (node.Attributes.GetValueOrDefault("MultiSelect") == "false") attrs.Add("multiSelect={false}");
     }
 
+    /// <summary>A neutral square shown where the original had an image that could not be turned into a web file.</summary>
+    private const string PlaceholderIcon = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16'%3E%3Crect x='2' y='2' width='12' height='12' rx='2' fill='%23d0d0d0' stroke='%23808080'/%3E%3C/svg%3E";
+
+    /// <summary>
+    /// The `icon` of a menu item or toolbar button: the image the extractor kept (`Image.Data`) written as a web file under `public/icons` (ICO and BMP converted to PNG),
+    /// or a placeholder when the control had an image that could not be read (ImageList entry, unsupported format). No image at all: no icon.
+    /// </summary>
+    private string? IconAttr(ControlNodeIr node, Ctx c)
+    {
+        var a = node.Attributes;
+        if (a.TryGetValue("Image.Data", out var base64) && a.TryGetValue("Image.Format", out var format))
+        {
+            var web = IconConverter.ToWeb(System.Convert.FromBase64String(base64), format);
+            if (web is not null)
+            {
+                var path = $"icons/{c.Unit.Name}/{node.Id}.{web.Extension}";
+                c.Assets.Add(($"public/{path}", web.Data));
+                if (web.Converted) c.IconsConverted++; else c.IconsExtracted++;
+                return Attr("icon", "/" + path);
+            }
+        }
+        if (a.ContainsKey("Image") || a.ContainsKey("ImageIndex") || a.ContainsKey("ImageKey"))
+        {
+            c.IconsPlaceholder++;
+            c.Issue("icon-placeholder", $"{node.Id}: the image could not be read (ImageList entry, external file or unsupported format); a placeholder icon is shown");
+            return Attr("icon", PlaceholderIcon);
+        }
+        return null;
+    }
+
     private static void NoteImages(Ctx c)
     {
         if (c.ImageNoted) return;
@@ -723,6 +767,9 @@ public sealed partial class PageGenerator
             case "shortcut":
                 var keys = KeysRegex().Matches(raw).Select(m => m.Groups[1].Value).ToList();
                 return Attr("shortcut", keys.Count > 0 ? string.Join('+', keys) : raw);
+            case "displayStyle":
+                // ToolStripItemDisplayStyle.Image | Text | ImageAndText (None leaves the default)
+                return LastToken(raw) switch { "Image" => Attr("displayStyle", "image"), "Text" => Attr("displayStyle", "text"), "ImageAndText" => Attr("displayStyle", "imageAndText"), _ => null };
             case "minDate":
             case "maxDate":
                 // new System.DateTime(2000, 1, 1, 0, 0, 0, 0) -> "2000-01-01"
@@ -851,7 +898,8 @@ public sealed partial class PageGenerator
         sb.AppendLine("  );");
         sb.AppendLine("}");
 
-        var page = new GeneratedPage { ComponentName = component, Source = sb.ToString(), LegacySource = "", Controls = Walk(root).Count(), NonVisual = c.NonVisual };
+        var page = new GeneratedPage { ComponentName = component, Source = sb.ToString(), LegacySource = "", Controls = Walk(root).Count(), NonVisual = c.NonVisual,
+            Assets = c.Assets, IconsExtracted = c.IconsExtracted, IconsConverted = c.IconsConverted, IconsPlaceholder = c.IconsPlaceholder };
         page.Issues.AddRange(c.Issues);
         return page;
     }

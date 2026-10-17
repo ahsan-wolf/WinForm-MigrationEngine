@@ -9,10 +9,10 @@ Generated pages import `Wf*` components only. Identical names, props and canonic
 |---|---|---|---|
 | `Form`, custom base forms | `WfForm` | `title` (Text), `acceptButtonId`, `cancelButtonId` | `onLoad` (Load) |
 | `MenuStrip` | `WfMenuBar` | children | — |
-| `ToolStripMenuItem` | `WfMenuItem` | `text` (the `&` mnemonic becomes an underline and access key), `shortcut`, `checked`, `disabled` | `onClick` |
+| `ToolStripMenuItem` | `WfMenuItem` | `text` (the `&` mnemonic becomes an underline and access key), `shortcut`, `checked`, `icon` (web path in the icon column), `disabled` | `onClick` |
 | `ToolStripSeparator` | `WfSeparator` | — | — |
 | `ToolStrip` | `WfToolbar` | children | — |
-| `ToolStripButton` | `WfToolbarButton` | `text`, `tooltip`, `disabled` | `onClick` |
+| `ToolStripButton` | `WfToolbarButton` | `text`, `tooltip`, `icon`, `displayStyle` (Image, Text or ImageAndText; default: the image when there is one, else the text), `disabled` | `onClick` |
 | `StatusStrip` | `WfStatusBar` | children | — |
 | `ContextMenuStrip` | `WfContextMenu` (wraps the control that owns it) | menu items | — |
 | `Panel`, `FlowLayoutPanel` | `WfPanel` | `visible` | — |
@@ -64,6 +64,7 @@ The closest component is rendered, marked `/* FALLBACK: Type */`, and listed in 
 
 ## 4. How other controls get there
 
+- **Icons** (`Image` of menu items, toolbar buttons and drop-down buttons): the source engine keeps the image of a readable `.resx` byte-array entry (`resources.GetObject("x.Image")`) as base64; the React target writes it as a web file under `public/icons/<unit>/<control>.png` and passes the path as `icon`. PNG, GIF, JPEG and SVG are copied; **ICO and BMP are converted to PNG** in managed code (no Windows API, the largest frame up to 32 px). An image that cannot be read (ImageList entries, external file references, unsupported formats) shows a neutral placeholder icon and is listed in the report (`icon-placeholder`).
 - **Custom controls** (a class derived from a standard control, in the project or a referenced library) resolve through their base-type chain (`ResolvedType`) and use the component of the standard type.
 - **User controls** are inlined into their host as a `WfPanel`, and are also available as their own page (viewer, app shell).
 - **Non-visual components** are not rendered and are listed in the report: `ImageList`, `ToolTip`, `BindingSource`, `Timer`, the file/folder/colour/font/print/page-setup dialogs, `NotifyIcon`, `ErrorProvider`, `BackgroundWorker`, `HelpProvider`, `PrintDocument`.

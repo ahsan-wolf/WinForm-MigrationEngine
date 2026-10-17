@@ -25,6 +25,7 @@
       "props": [
         { "name": "text", "type": "string", "from": ["Text"], "transform": "mnemonic" },
         { "name": "shortcut", "type": "string", "from": ["ShortcutKeyDisplayString", "ShortcutKeys"] },
+        { "name": "icon", "type": "string", "from": ["Image", "ImageKey", "ImageIndex"], "note": "A web path, URL or data URI. The engine writes designer images (ICO and BMP converted to PNG) to public/icons and passes the path; a placeholder is used when an image cannot be read." } ,
         { "name": "checked", "type": "boolean", "from": ["Checked"], "transform": "bool" },
         { "name": "disabled", "type": "boolean", "from": ["Enabled"], "transform": "invert" } ],
       "events": [ { "name": "click", "from": "Click", "react": "onClick" } ],
@@ -39,7 +40,8 @@
       "props": [
         { "name": "text", "type": "string", "from": ["Text"], "transform": "mnemonic" },
         { "name": "tooltip", "type": "string", "from": ["ToolTipText"] },
-        { "name": "icon", "type": "string", "from": ["Image"], "note": "Designer images live in .resx; the generator does not extract them in 0.1." },
+        { "name": "icon", "type": "string", "from": ["Image", "ImageKey", "ImageIndex"], "note": "A web path, URL or data URI. The engine writes designer images (ICO and BMP converted to PNG) to public/icons and passes the path; a placeholder is used when an image cannot be read." },
+        { "name": "displayStyle", "type": "enum:image|text|imageAndText", "from": ["DisplayStyle"], "note": "ToolStripItemDisplayStyle. Default: the image when the button has one, otherwise the text." },
         { "name": "disabled", "type": "boolean", "from": ["Enabled"], "transform": "invert" } ],
       "events": [ { "name": "click", "from": "Click", "react": "onClick" } ],
       "a11y": "button with aria-label = tooltip or text.", "example": "<WfToolbarButton tooltip=\"Add Files\" onClick={handleAdd} />" },
@@ -252,7 +254,8 @@
       "props": [
         { "name": "text", "type": "string", "from": ["Text"], "transform": "mnemonic" },
         { "name": "tooltip", "type": "string", "from": ["ToolTipText", "ToolTip"] },
-        { "name": "icon", "type": "string", "from": ["Image"] },
+        { "name": "icon", "type": "string", "from": ["Image", "ImageKey", "ImageIndex"] },
+        { "name": "displayStyle", "type": "enum:image|text|imageAndText", "from": ["DisplayStyle"], "note": "ToolStripItemDisplayStyle. Default: the image when the button has one, otherwise the text." },
         { "name": "disabled", "type": "boolean", "from": ["Enabled"], "transform": "invert" } ],
       "events": [ { "name": "click", "from": "ButtonClick", "react": "onClick" }, { "name": "click", "from": "Click", "react": "onClick" } ],
       "a11y": "button with aria-haspopup=menu; the menu holds WfMenuItem children; a split button has a separate arrow button; Escape closes.", "example": "<WfDropDownButton text=\"Open\"><WfMenuItem text=\"Recent\" /></WfDropDownButton>" },

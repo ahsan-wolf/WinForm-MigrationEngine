@@ -61,7 +61,9 @@ public sealed class WinFormsControlTreeExtractor : IIrExtractor
         Resolve(root);
 
         var resources = ResxReader.Parse(resourcesXml);
+        var images = ResxReader.ParseImages(resourcesXml);
         if (designer.ResourceKeys.TryGetValue("", out var rootKey)) MergeResources(root.Attributes, resources, rootKey);
+        MergeImages(root.Attributes, images, designer.ResourceKeys.GetValueOrDefault(""), "Icon");
 
         var nodesById = new Dictionary<string, ControlNodeIr>();
         foreach (var id in designer.ControlDeclarationOrder.Concat(designer.DeclaredControlTypes.Keys).Distinct())
@@ -76,6 +78,7 @@ public sealed class WinFormsControlTreeExtractor : IIrExtractor
                     attributes[$"On{eventName}"] = handler;
 
             if (designer.ResourceKeys.TryGetValue(id, out var key)) MergeResources(attributes, resources, key);
+            MergeImages(attributes, images, designer.ResourceKeys.GetValueOrDefault(id), "Image");
 
             var node = new ControlNodeIr { Id = id, TagName = tagName, Attributes = attributes };
             Resolve(node);
@@ -109,6 +112,19 @@ public sealed class WinFormsControlTreeExtractor : IIrExtractor
                 root.Children.Add(node);
 
         return root;
+    }
+
+    /// <summary>
+    /// The image a control's Image (or the form's Icon) points at, when it is a readable byte-array resource: kept as base64 under the pseudo-attributes
+    /// <c>{property}.Data</c> and <c>{property}.Format</c> (png, gif, jpg, bmp, ico, svg), so generators can write it as a web asset.
+    /// </summary>
+    private static void MergeImages(Dictionary<string, string> attributes, Dictionary<string, byte[]> images, string? resourceKey, string property)
+    {
+        if (images.Count == 0) return;
+        var name = ResxReader.ImageResourceName(attributes, resourceKey, property);
+        if (name is null || !images.TryGetValue(name, out var bytes)) return;
+        attributes[$"{property}.Data"] = Convert.ToBase64String(bytes);
+        attributes[$"{property}.Format"] = ResxReader.Sniff(bytes);
     }
 
     /// <summary>Localizable forms keep Text/ToolTip in the .resx; values set in code win over the resource.</summary>

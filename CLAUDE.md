@@ -237,7 +237,7 @@ Rules:
 - Only direct method calls become workflow steps (not 2+ levels deep); steps follow **call order** (implemented).
 - A handler name inside an inlined UserControl that equals a form method name would be attributed to the form.
 - `Controls.Add` order in designer code is reverse z-order, so child order is not visual order (generators order by TabIndex/Dock, Skill 4).
-- Non-string `.resx` resources (images, icons) and culture-specific `.resx` files are not read; items added by helper methods/loops and layout computed at runtime are not seen.
+- Culture-specific `.resx` files, `ImageList` streams and external `.resx` file references are not read; readable byte-array images become the pseudo-attributes `Image.Data` / `Image.Format` (the React target writes them to `public/icons`, converting ICO/BMP to PNG; unreadable ones get a placeholder icon); items added by helper methods/loops and layout computed at runtime are not seen.
 - No pixel/visual fidelity (layout facts only).
 - Binary-only inputs (EXE/DLL without source) are members-first and lossy; no event wiring unless wired with `+=` in code.
 

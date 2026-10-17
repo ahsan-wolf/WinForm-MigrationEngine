@@ -24,10 +24,12 @@ export function WfMenuBar({ children, id, className }: { children?: ReactNode; i
 }
 
 export interface WfMenuItemProps {
+  /** A web path, URL or data URI shown in the menu's icon column (top-level items show it before the text). */
+  icon?: string;
   text?: string; shortcut?: string; checked?: boolean; disabled?: boolean; onClick?: () => void; id?: string; children?: ReactNode;
 }
 /** Top-level items open on click (and on hover once a menu is open); submenus open on hover. */
-export function WfMenuItem({ text, shortcut, checked, disabled, onClick, id, children }: WfMenuItemProps) {
+export function WfMenuItem({ text, icon, shortcut, checked, disabled, onClick, id, children }: WfMenuItemProps) {
   const autoId = useId();
   const bar = useContext(BarContext);
   const depth = useContext(DepthContext);
@@ -51,8 +53,9 @@ export function WfMenuItem({ text, shortcut, checked, disabled, onClick, id, chi
          onMouseLeave={() => { if (depth > 0) setSubOpen(false); }}>
       <button type="button" id={id} role={checked === undefined ? 'menuitem' : 'menuitemcheckbox'} aria-checked={checked}
               aria-haspopup={hasSub || undefined} aria-expanded={hasSub ? open : undefined}
-              disabled={disabled} accessKey={parseMnemonic(text).accessKey} onClick={activate}>
-        <span className="wf-menuitem-check" aria-hidden="true">{checked ? '✓' : ''}</span>
+              disabled={disabled} accessKey={parseMnemonic(text).accessKey} onClick={activate} className={icon && checked ? 'wf-menuitem-checked' : undefined}>
+        <span className="wf-menuitem-check" aria-hidden="true">{icon && depth > 0 ? <img src={icon} alt="" className="wf-menuitem-icon" /> : checked ? '✓' : ''}</span>
+        {icon && depth === 0 && <img src={icon} alt="" className="wf-menuitem-icon" />}
         <span className="wf-menuitem-text"><MnemonicText text={text} /></span>
         {shortcut && <kbd className="wf-menuitem-shortcut">{shortcut}</kbd>}
         {hasSub && depth > 0 && <span aria-hidden="true">▸</span>}
@@ -75,26 +78,41 @@ export function WfToolbar({ children, id, className }: { children?: ReactNode; i
   return <div id={id} role="toolbar" className={`wf-toolbar${className ? ' ' + className : ''}`}>{children}</div>;
 }
 
-export interface WfToolbarButtonProps { text?: string; tooltip?: string; icon?: string; disabled?: boolean; onClick?: () => void; id?: string }
-export function WfToolbarButton({ text, tooltip, icon, disabled, onClick, id }: WfToolbarButtonProps) {
+export type WfDisplayStyle = 'image' | 'text' | 'imageAndText';
+
+/** What a toolbar button shows: the image when it has one (WinForms ToolStripButton default), otherwise its text; `displayStyle` overrides. */
+function face(label: string, tooltip: string | undefined, icon: string | undefined, displayStyle: WfDisplayStyle | undefined) {
+  const style = displayStyle ?? (icon ? 'image' : 'text');
+  const showImage = style !== 'text' || (!label && !icon);
+  const showText = style !== 'image' && label.length > 0;
+  return (
+    <>
+      {showImage && (icon ? <img src={icon} alt="" /> : <span aria-hidden="true">{(label || tooltip || '·').slice(0, 1)}</span>)}
+      {showText && <span className="wf-toolbar-text">{label}</span>}
+    </>
+  );
+}
+
+export interface WfToolbarButtonProps { text?: string; tooltip?: string; icon?: string; displayStyle?: WfDisplayStyle; disabled?: boolean; onClick?: () => void; id?: string }
+/** `icon` is a web path, URL or data URI; the text becomes the tooltip when only the image is shown. */
+export function WfToolbarButton({ text, tooltip, icon, displayStyle, disabled, onClick, id }: WfToolbarButtonProps) {
   const label = parseMnemonic(text).label;
   return (
     <button type="button" id={id} className="wf-toolbar-button" title={tooltip ?? label} aria-label={tooltip ?? (label || undefined)}
             disabled={disabled} onClick={onClick}>
-      {icon ? <img src={icon} alt="" /> : <span aria-hidden="true">{(label || tooltip || '·').slice(0, 1)}</span>}
-      {label && <span className="wf-toolbar-text">{label}</span>}
+      {face(label, tooltip, icon, displayStyle)}
     </button>
   );
 }
 
 export interface WfDropDownButtonProps {
-  text?: string; tooltip?: string; icon?: string; disabled?: boolean; id?: string;
+  text?: string; tooltip?: string; icon?: string; displayStyle?: WfDisplayStyle; disabled?: boolean; id?: string;
   /** Split button: the main part clicks, a separate arrow opens the menu. Without it the whole button opens the menu. */
   split?: boolean;
   onClick?: () => void; children?: ReactNode;
 }
 /** Toolbar button with a drop-down menu of WfMenuItem children (ToolStripDropDownButton / ToolStripSplitButton). */
-export function WfDropDownButton({ text, tooltip, icon, disabled, id, split, onClick, children }: WfDropDownButtonProps) {
+export function WfDropDownButton({ text, tooltip, icon, displayStyle, disabled, id, split, onClick, children }: WfDropDownButtonProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const label = parseMnemonic(text).label;
@@ -108,18 +126,12 @@ export function WfDropDownButton({ text, tooltip, icon, disabled, id, split, onC
     return () => { document.removeEventListener('mousedown', close); document.removeEventListener('keydown', esc); };
   }, [open]);
 
-  const face = (
-    <>
-      {icon ? <img src={icon} alt="" /> : <span aria-hidden="true">{(label || tooltip || '·').slice(0, 1)}</span>}
-      {label && <span className="wf-toolbar-text">{label}</span>}
-    </>
-  );
   return (
     <div ref={ref} className="wf-dropdown">
       <button type="button" id={id} className="wf-toolbar-button" title={tooltip ?? label} aria-label={tooltip ?? (label || undefined)} disabled={disabled}
               aria-haspopup={split ? undefined : 'menu'} aria-expanded={split ? undefined : open}
               onClick={() => { onClick?.(); if (!split) setOpen(o => !o); }}>
-        {face}{!split && <span className="wf-dropdown-arrow" aria-hidden="true">▾</span>}
+        {face(label, tooltip, icon, displayStyle)}{!split && <span className="wf-dropdown-arrow" aria-hidden="true">▾</span>}
       </button>
       {split && (
         <button type="button" className="wf-toolbar-button wf-dropdown-toggle" aria-label="Show menu" aria-haspopup="menu" aria-expanded={open} disabled={disabled}

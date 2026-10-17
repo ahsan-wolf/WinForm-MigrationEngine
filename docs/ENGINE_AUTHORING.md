@@ -56,7 +56,7 @@ Known limitations (carry into reports): handlers in a third partial file are not
 steps (not 2+ levels), ordered by call order; a handler name inside an inlined UserControl that equals a form method name
 would be attributed to the form; a custom base class stays as `RootControl.TagName` (e.g. `BaseForm`) rather than resolving to `Form`;
 `Controls.Add` order in designer code is reverse z-order, so child order is not visual order (generators order by TabIndex/Dock, Skill 4);
-non-string `.resx` resources (images, icons) and culture-specific `.resx` files are not read; ToolStrip items added through helper
+culture-specific `.resx` files, `ImageList` streams and external (`ResXFileRef`) resources are not read (controls using them get a placeholder icon); readable byte-array images are kept as `Image.Data` (base64) and `Image.Format` (png, gif, jpg, bmp, ico, svg), the form icon as `Icon.Data`; ToolStrip items added through helper
 methods or loops, and any layout computed at runtime, are not seen.
 
 ### Navigation extraction (found on the ECMNavigator pilot)
