@@ -70,10 +70,14 @@ public sealed partial class PageGenerator
     private readonly TranslationEnv? _translation;
     private readonly bool _preview;
 
+    /// <summary>App shell only: a visual-only page still opens the forms its buttons and menu items open (and closes itself), through the dialog service. Nothing else runs.</summary>
+    private readonly bool _previewNavigation;
+
     /// <param name="preview">Visual-only pages for the component viewer: controls and layout as designed with placeholder data; no handlers, model, dialogs, translation or imports other than the UI library.</param>
-    public PageGenerator(SpecCatalog spec, IReadOnlyDictionary<string, UnitIr> units, IReadOnlyDictionary<string, string> components, ISet<string> generated, TranslationEnv? translation = null, bool preview = false)
+    public PageGenerator(SpecCatalog spec, IReadOnlyDictionary<string, UnitIr> units, IReadOnlyDictionary<string, string> components, ISet<string> generated, TranslationEnv? translation = null, bool preview = false, bool previewNavigation = false)
     {
         _preview = preview;
+        _previewNavigation = previewNavigation;
         _translation = translation;
         _spec = spec;
         _units = units;
@@ -329,6 +333,7 @@ public sealed partial class PageGenerator
         if (node.Attributes.TryGetValue("Fallback.From", out var fallbackFrom)) attrs.Add($"/* FALLBACK: {ShortType(fallbackFrom)} */");
         BuildProps(node, spec, c, attrs, isRoot);
         if (!_preview) BuildEvents(node, spec, c, attrs, isRoot);
+        else if (_previewNavigation) AddPreviewNavigation(node, spec, c, attrs, isRoot);
         var children = RenderChildren(node, spec, c);
         var lines = Element(spec.Name, attrs, children);
 
@@ -889,14 +894,17 @@ public sealed partial class PageGenerator
         var jsx = RenderElement(root, c, isRoot: true) ?? throw new InvalidDataException($"{unit.Name}: root control produced no output.");
 
         var sb = new StringBuilder();
+        if (c.UsesDialog) c.Lib.Add("useWfDialog");
         sb.AppendLine($"// Visual-only preview of {unit.Name} ({unit.Page.RelativePath ?? "n/a"}): controls and layout as designed, placeholder data, no handlers, no logic.");
         var lib = new List<string>(c.Lib);
         lib.AddRange(c.LibTypes.Select(t => "type " + t));
         sb.AppendLine($"import {{ {string.Join(", ", lib)} }} from '@wfm/ui-react';");
+        foreach (var (comp, file) in c.PageImports) sb.AppendLine($"import {{ {comp} }} from './{file}';");
         sb.AppendLine();
         foreach (var t in c.TopLevel) sb.AppendLine(t);
         if (c.TopLevel.Count > 0) sb.AppendLine();
         sb.AppendLine($"export function {component}() {{");
+        if (c.UsesDialog) sb.AppendLine("  const dialog = useWfDialog();");
         sb.AppendLine("  return (");
         foreach (var line in jsx) sb.AppendLine("    " + line);
         sb.AppendLine("  );");
@@ -906,6 +914,39 @@ public sealed partial class PageGenerator
             Assets = c.Assets, IconsExtracted = c.IconsExtracted, IconsConverted = c.IconsConverted, IconsPlaceholder = c.IconsPlaceholder };
         page.Issues.AddRange(c.Issues);
         return page;
+    }
+
+    /// <summary>
+    /// App shell: a control whose event the IR proves opens a form (`ShowDialog`) or closes this one (`Close`, `Hide`, or a DialogResult button) gets exactly that,
+    /// through the dialog service, so a form can be walked through like the original window flow. No other handler exists in a visual-only page.
+    /// </summary>
+    private void AddPreviewNavigation(ControlNodeIr node, SpecControl spec, Ctx c, List<string> attrs, bool isRoot)
+    {
+        if (isRoot) return;
+        foreach (var ev in spec.Events)
+        {
+            if (attrs.Any(a => a.StartsWith(ev.React + "=", StringComparison.Ordinal))) continue;
+            var sites = c.Unit.Page.Navigations.Where(n => n.SourceControlId == node.Id && n.TriggerEvent == ev.From).ToList();
+
+            var target = sites.Where(s => s.TargetType is "Show" or "ShowDialog").Select(s => s.Target).FirstOrDefault(t => t != c.Unit.Name && _generated.Contains(t) && _components.ContainsKey(t));
+            if (target is not null)
+            {
+                var comp = _components[target];
+                c.PageImports[comp] = comp;
+                c.UsesDialog = true;
+                attrs.Add($"{ev.React}={{() => {{ void dialog.show(() => <{comp} />, {{ title: {Str(_units[target].Title)} }}); }}}}");
+            }
+            else if (spec.Name == "WfButton" && ev.Name == "click" && ButtonDialogResult(node) is { } result)
+            {
+                c.UsesDialog = true;
+                attrs.Add($"{ev.React}={{() => {{ dialog.close({Str(result)}); }}}}");
+            }
+            else if (sites.Any(s => s.TargetType is "Close" or "Hide"))
+            {
+                c.UsesDialog = true;
+                attrs.Add($"{ev.React}={{() => {{ dialog.close(); }}}}");
+            }
+        }
     }
 
     /// <summary>Placeholders so a control is never an empty or blank box in the viewer: sample combo items, a visible name for unnamed labels and buttons.</summary>
