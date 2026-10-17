@@ -15,18 +15,27 @@ function inputValue(value: string | undefined, kind: WfDateKind): string {
   return /^\d{2}:\d{2}/.test(time) ? time.slice(0, 5) : '';
 }
 
+/** A min/max ISO date as the string the input expects for the kind (time-only pickers have no date limit). */
+function limit(date: string | undefined, kind: WfDateKind, time: string): string | undefined {
+  if (!date || kind === 'time' || !/^\d{4}-\d{2}-\d{2}/.test(date)) return undefined;
+  return kind === 'datetime' ? `${date.slice(0, 10)}T${time}` : date.slice(0, 10);
+}
+
 export interface WfDateTimePickerProps extends Common {
   /** ISO text: `2026-01-05`, `2026-01-05T09:30:00` or `09:30`. */
   value?: string;
   kind?: WfDateKind;
+  /** Earliest / latest selectable date (ISO `2026-01-05`; for date-time kinds the time part is ignored). */
+  minDate?: string;
+  maxDate?: string;
   readOnly?: boolean;
   onValueChange?: (value: string) => void;
 }
 /** Date, date-time or time field (WinForms DateTimePicker): a native picker; the value is ISO text. */
-export function WfDateTimePicker({ value, kind = 'date', readOnly, onValueChange, disabled, id, className, tooltip }: WfDateTimePickerProps) {
+export function WfDateTimePicker({ value, kind = 'date', minDate, maxDate, readOnly, onValueChange, disabled, id, className, tooltip }: WfDateTimePickerProps) {
   return (
     <input type={kind === 'datetime' ? 'datetime-local' : kind} id={id} title={tooltip} disabled={disabled} readOnly={readOnly}
-           className={cls('wf-textbox wf-datetime', className)} {...(onValueChange ? { value: inputValue(value, kind) } : { defaultValue: inputValue(value, kind) })}
+           min={limit(minDate, kind, '00:00')} max={limit(maxDate, kind, '23:59')} className={cls('wf-textbox wf-datetime', className)} {...(onValueChange ? { value: inputValue(value, kind) } : { defaultValue: inputValue(value, kind) })}
            onChange={e => onValueChange?.(e.target.value)} />
   );
 }

@@ -156,6 +156,7 @@ public sealed class ReactAppGenerator
             {
                 var page = generator.Generate(unit);
                 AppWriter.Put(outputDirectory, $"src/pages/{page.ComponentName}.tsx", page.Source, result.Files);
+                AppWriter.PutAssets(outputDirectory, page, result.Files);
                 result.GeneratedUnits.Add(name);
                 result.Issues.AddRange(page.Issues);
                 result.Issues.AddRange(page.NonVisual.Select(n => new GenerationIssue(name, "non-visual", n)));
@@ -217,6 +218,7 @@ public sealed class ReactAppGenerator
     {
         AppWriter.Put(outputDirectory, $"src/pages/{page.ComponentName}.tsx", page.Source, result.Files);
         AppWriter.Put(outputDirectory, $"src/legacy/{page.ComponentName}.cs.txt", page.LegacySource, result.Files);
+        AppWriter.PutAssets(outputDirectory, page, result.Files);
     }
 
     /// <summary>The support module with what is needed to regenerate it when the compile gate demotes one of its methods.</summary>
@@ -394,6 +396,17 @@ public sealed class ReactAppGenerator
         sb.AppendLine("|---|---|---:|---:|---:|---:|---:|");
         foreach (var (unit, depth, page) in pages)
             sb.AppendLine($"| {unit} | `{page.ComponentName}` | {depth} | {page.Controls} | {page.Handlers} | {page.NavigationHandlers} | {page.Issues.Count + page.NonVisual.Count} |");
+
+        var extracted = pages.Sum(p => p.Page.IconsExtracted);
+        var converted = pages.Sum(p => p.Page.IconsConverted);
+        var placeholders = pages.Sum(p => p.Page.IconsPlaceholder);
+        if (extracted + converted + placeholders > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine("## Icons");
+            sb.AppendLine();
+            sb.AppendLine($"{extracted + converted} icon file(s) written to `public/icons/` ({converted} converted to PNG from ICO or BMP), {placeholders} placeholder(s) where the original image could not be read (ImageList entries and Windows-only formats are not decoded).");
+        }
 
         if (translate)
         {

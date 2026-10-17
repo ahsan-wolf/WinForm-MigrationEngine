@@ -180,6 +180,19 @@ public static class AppWriter
             """, files);
     }
 
+    public static void PutBytes(string dir, string relativePath, byte[] data, List<string> files)
+    {
+        var path = Path.Combine(dir, relativePath.Replace('/', Path.DirectorySeparatorChar));
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllBytes(path, data);
+        files.Add(path);
+    }
+
+    public static void PutAssets(string dir, GeneratedPage page, List<string> files)
+    {
+        foreach (var (path, data) in page.Assets) PutBytes(dir, path, data, files);
+    }
+
     public static void Put(string dir, string relativePath, string content, List<string> files)
     {
         var path = Path.Combine(dir, relativePath.Replace('/', Path.DirectorySeparatorChar));

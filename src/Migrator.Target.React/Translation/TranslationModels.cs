@@ -103,6 +103,9 @@ public sealed class PageScope
     /// <summary>Controls of type TabControl: `SelectedIndex` is `vm.<id>.selectedIndex`.</summary>
     public HashSet<string> TabControls { get; } = new(StringComparer.Ordinal);
 
+    /// <summary>Controls of type CheckedListBox: `CheckedIndices` / `CheckedItems` / `GetItemChecked` / `SetItemChecked` use `vm.<id>.checkedIndices`.</summary>
+    public HashSet<string> CheckedLists { get; } = new(StringComparer.Ordinal);
+
     /// <summary>Controls of type TreeView: `Nodes` / `SelectedNode` live in the page model (`vm.&lt;id&gt;.nodes`, `.selectedNode`).</summary>
     public HashSet<string> TreeViews { get; } = new(StringComparer.Ordinal);
 

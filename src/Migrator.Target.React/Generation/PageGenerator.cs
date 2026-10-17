@@ -21,6 +21,12 @@ public sealed class GeneratedPage
     public int NavigationHandlers { get; init; }
     public List<string> NonVisual { get; init; } = new();
 
+    /// <summary>Icon files this page needs, as (path relative to the app folder, bytes): `public/icons/&lt;unit&gt;/&lt;control&gt;.png`.</summary>
+    public List<(string Path, byte[] Data)> Assets { get; init; } = new();
+    public int IconsExtracted { get; init; }
+    public int IconsConverted { get; init; }
+    public int IconsPlaceholder { get; init; }
+
     // Translation (rules) results; all zero when translation is off.
     public int MethodsTotal { get; set; }
     public int MethodsComplete { get; set; }
@@ -51,7 +57,8 @@ public sealed partial class PageGenerator
     {
         ("WfTextBox", "valueChange"), ("WfComboBox", "selectionChange"), ("WfCheckBox", "checkedChange"), ("WfRadioButton", "checkedChange"),
         ("WfDateTimePicker", "valueChange"), ("WfNumericUpDown", "valueChange"), ("WfTabs", "selectionChange"),
-        ("WfMaskedTextBox", "valueChange"), ("WfRichTextBox", "valueChange"), ("WfMonthCalendar", "valueChange"), ("WfListBox", "selectionChange")
+        ("WfMaskedTextBox", "valueChange"), ("WfRichTextBox", "valueChange"), ("WfMonthCalendar", "valueChange"), ("WfListBox", "selectionChange"),
+        ("WfDomainUpDown", "selectionChange"), ("WfCheckedListBox", "selectionChange"), ("WfTrackBar", "valueChange"), ("WfScrollBar", "valueChange")
     };
 
     private static readonly JsonSerializerOptions JsonOut = new() { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
@@ -108,6 +115,7 @@ public sealed partial class PageGenerator
         public HashSet<string> StatefulIds { get; } = new();
         public HashSet<string> ListViewIds { get; } = new();
         public HashSet<string> TreeViewIds { get; } = new();
+        public HashSet<string> EditableGrids { get; } = new();
         public HashSet<string> ComboIds { get; } = new();
 
         /// <summary>Control id -> id of its parent control (radio buttons of one container form a group).</summary>
@@ -135,6 +143,10 @@ public sealed partial class PageGenerator
         public bool UsesDialog { get; set; }
         public bool UsesOnClose { get; set; }
         public bool ImageNoted { get; set; }
+        public List<(string Path, byte[] Data)> Assets { get; } = new();
+        public int IconsExtracted { get; set; }
+        public int IconsConverted { get; set; }
+        public int IconsPlaceholder { get; set; }
 
         public void Issue(string category, string message) => Issues.Add(new GenerationIssue(Unit.Name, category, message));
     }
@@ -182,7 +194,7 @@ public sealed partial class PageGenerator
             tr.UsesFormat = Regex.IsMatch(text, @"\bformatString\(");
             foreach (var helper in new[] { "wfListItem", "wfListItemFromArray" }) if (Regex.IsMatch(text, $@"\b{helper}\(")) c.Lib.Add(helper);
             if (Regex.IsMatch(text + "\n" + (usesFields ? fieldText : ""), @"\bWfListItem\b")) c.LibTypes.Add("WfListItem");
-            foreach (var helper in new[] { "wfTreeNode", "wfSetExpanded" }) if (Regex.IsMatch(text, $@"\b{helper}\(")) c.Lib.Add(helper);
+            foreach (var helper in new[] { "wfTreeNode", "wfSetExpanded", "wfSetItemChecked" }) if (Regex.IsMatch(text, $@"\b{helper}\(")) c.Lib.Add(helper);
             if (Regex.IsMatch(text + "\n" + (usesFields ? fieldText : ""), @"\bWfTreeNode\b")) c.LibTypes.Add("WfTreeNode");
         }
 
@@ -270,7 +282,11 @@ public sealed partial class PageGenerator
             Controls = Walk(root).Count(),
             Handlers = c.Handlers.Count,
             NavigationHandlers = navHandlers,
-            NonVisual = c.NonVisual
+            NonVisual = c.NonVisual,
+            Assets = c.Assets,
+            IconsExtracted = c.IconsExtracted,
+            IconsConverted = c.IconsConverted,
+            IconsPlaceholder = c.IconsPlaceholder
         };
         page.Issues.AddRange(c.Issues);
         if (c.Translation is { } stats)
@@ -514,6 +530,9 @@ public sealed partial class PageGenerator
             if (node.Attributes.GetValueOrDefault("Visible") == "false") AddToModel(c, node, "Visible");
             if (spec?.Name == "WfListView") { c.ListViewIds.Add(node.Id); AddListViewModel(c, node); }
             if (spec?.Name == "WfTreeView") { c.TreeViewIds.Add(node.Id); AddTreeViewModel(c, node); }
+            // Items/selection behave like a combo box; the checked state of a CheckedListBox is its own model entry.
+            if (spec?.Name is "WfCheckedListBox" or "WfDomainUpDown" && c.ComboIds.Add(node.Id)) AddComboModel(c, node);
+            if (spec?.Name == "WfCheckedListBox") c.ModelSet(node.Id, "CheckedIndices", "[] as number[]");
         }
 
         var code = string.Join("\n", c.Unit.Page.Members.Where(m => m.Kind == MemberKind.Method && m.Body != null).Select(m => m.Body));
@@ -614,6 +633,9 @@ public sealed partial class PageGenerator
         c.ModelSet(node.Id, winFormsProp, initial);
     }
 
+    [GeneratedRegex(@"DateTime\(\s*(\d{1,4})\s*,\s*(\d{1,2})\s*,\s*(\d{1,2})")]
+    private static partial Regex DateLiteralRegex();
+
     [GeneratedRegex(@"\b(\w+)\s*\.\s*(Text|Enabled|Visible|Checked|Value|ReadOnly|SelectedIndex)\b")]
     private static partial Regex UsedPropertyRegex();
 
@@ -626,7 +648,7 @@ public sealed partial class PageGenerator
         foreach (var prop in spec.Props.Where(p => p.From.Length > 0))
         {
             if (prop.Name == "visible") continue; // handled by the Visible wrapper
-            if (prop.Name == "icon") { NoteImages(c); continue; }
+            if (prop.Name == "icon") { if (IconAttr(node, c) is { } iconAttr) attrs.Add(iconAttr); continue; }
 
             // A property that code reads/writes (or that is user-editable state) is bound to the model: vm.<id>.<prop>.
             var modelProp = prop.From.FirstOrDefault(f => c.ModelHas(node.Id, f));
@@ -649,6 +671,8 @@ public sealed partial class PageGenerator
         if (spec.Name == "WfDataGrid") AddGrid(node, c, attrs);
         if (spec.Name == "WfListView") AddListView(node, c, attrs);
         if (spec.Name == "WfTreeView") AddTreeView(node, c, attrs);
+        if (spec.Name == "WfScrollBar" && node.Effective().EndsWith("VScrollBar", StringComparison.Ordinal)) attrs.Add("orientation=\"vertical\"");
+        if (spec.Name == "WfDropDownButton" && node.Effective().EndsWith("SplitButton", StringComparison.Ordinal)) attrs.Add("split");
     }
 
     /// <summary>A tree view keeps its nodes and selected node in the model so `Nodes.Add`, `new TreeNode`, `SelectedNode` and `node.Nodes` translate onto them.</summary>
@@ -700,6 +724,36 @@ public sealed partial class PageGenerator
         if (node.Attributes.GetValueOrDefault("MultiSelect") == "false") attrs.Add("multiSelect={false}");
     }
 
+    /// <summary>A neutral square shown where the original had an image that could not be turned into a web file.</summary>
+    private const string PlaceholderIcon = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16'%3E%3Crect x='2' y='2' width='12' height='12' rx='2' fill='%23d0d0d0' stroke='%23808080'/%3E%3C/svg%3E";
+
+    /// <summary>
+    /// The `icon` of a menu item or toolbar button: the image the extractor kept (`Image.Data`) written as a web file under `public/icons` (ICO and BMP converted to PNG),
+    /// or a placeholder when the control had an image that could not be read (ImageList entry, unsupported format). No image at all: no icon.
+    /// </summary>
+    private string? IconAttr(ControlNodeIr node, Ctx c)
+    {
+        var a = node.Attributes;
+        if (a.TryGetValue("Image.Data", out var base64) && a.TryGetValue("Image.Format", out var format))
+        {
+            var web = IconConverter.ToWeb(System.Convert.FromBase64String(base64), format);
+            if (web is not null)
+            {
+                var path = $"icons/{c.Unit.Name}/{node.Id}.{web.Extension}";
+                c.Assets.Add(($"public/{path}", web.Data));
+                if (web.Converted) c.IconsConverted++; else c.IconsExtracted++;
+                return Attr("icon", "/" + path);
+            }
+        }
+        if (a.ContainsKey("Image") || a.ContainsKey("ImageIndex") || a.ContainsKey("ImageKey"))
+        {
+            c.IconsPlaceholder++;
+            c.Issue("icon-placeholder", $"{node.Id}: the image could not be read (ImageList entry, external file or unsupported format); a placeholder icon is shown");
+            return Attr("icon", PlaceholderIcon);
+        }
+        return null;
+    }
+
     private static void NoteImages(Ctx c)
     {
         if (c.ImageNoted) return;
@@ -714,6 +768,14 @@ public sealed partial class PageGenerator
             case "shortcut":
                 var keys = KeysRegex().Matches(raw).Select(m => m.Groups[1].Value).ToList();
                 return Attr("shortcut", keys.Count > 0 ? string.Join('+', keys) : raw);
+            case "displayStyle":
+                // ToolStripItemDisplayStyle.Image | Text | ImageAndText (None leaves the default)
+                return LastToken(raw) switch { "Image" => Attr("displayStyle", "image"), "Text" => Attr("displayStyle", "text"), "ImageAndText" => Attr("displayStyle", "imageAndText"), _ => null };
+            case "minDate":
+            case "maxDate":
+                // new System.DateTime(2000, 1, 1, 0, 0, 0, 0) -> "2000-01-01"
+                var dm = DateLiteralRegex().Match(raw);
+                return dm.Success ? Attr(prop.Name, $"{int.Parse(dm.Groups[1].Value):0000}-{int.Parse(dm.Groups[2].Value):00}-{int.Parse(dm.Groups[3].Value):00}") : null;
             case "orientation":
                 var o = LastToken(raw).ToLowerInvariant();
                 return o is "horizontal" or "vertical" ? Attr("orientation", o) : null;
@@ -757,7 +819,11 @@ public sealed partial class PageGenerator
             var header = col.Attributes.GetValueOrDefault("HeaderText") ?? col.Id;
             var format = col.Attributes.GetValueOrDefault("DefaultCellStyle.Format");
             var width = int.TryParse(col.Attributes.GetValueOrDefault("Width"), out var w) ? $", width: {w}" : "";
-            defs.Add($"  {{ field: {Str(field)}, header: {Str(header)}{width}{(format is null ? "" : $", format: {Str(format)}")} }},");
+            // Cells are editable in place only when the designer says so explicitly (ReadOnly = false on the grid or the column, not true on the column);
+            // the WinForms default (editable unless ReadOnly) would turn every migrated grid into an editor.
+            var columnReadOnly = col.Attributes.GetValueOrDefault("ReadOnly");
+            var editable = columnReadOnly == "false" || (columnReadOnly != "true" && node.Attributes.GetValueOrDefault("ReadOnly") == "false");
+            defs.Add($"  {{ field: {Str(field)}, header: {Str(header)}{width}{(format is null ? "" : $", format: {Str(format)}")}{(editable ? ", editable: true" : "")} }},");
             fields.Add(new GridField(field, header, col.TagName.EndsWith("CheckBoxColumn", StringComparison.Ordinal), format));
         }
 
@@ -787,6 +853,7 @@ public sealed partial class PageGenerator
             c.TopLevel.Add($"// TODO: columns of {node.Id} are created in code (not in the designer); define them here.");
             c.Issue("grid-no-columns", $"{node.Id} has no designer columns; rows are empty");
         }
+        if (defs.Any(d => d.Contains("editable: true", StringComparison.Ordinal))) c.EditableGrids.Add(node.Id);
         c.TopLevel.Add($"const {colsName}: WfGridColumn[] = [");
         c.TopLevel.AddRange(defs);
         c.TopLevel.Add("];");
@@ -837,7 +904,8 @@ public sealed partial class PageGenerator
         sb.AppendLine("  );");
         sb.AppendLine("}");
 
-        var page = new GeneratedPage { ComponentName = component, Source = sb.ToString(), LegacySource = "", Controls = Walk(root).Count(), NonVisual = c.NonVisual };
+        var page = new GeneratedPage { ComponentName = component, Source = sb.ToString(), LegacySource = "", Controls = Walk(root).Count(), NonVisual = c.NonVisual,
+            Assets = c.Assets, IconsExtracted = c.IconsExtracted, IconsConverted = c.IconsConverted, IconsPlaceholder = c.IconsPlaceholder };
         page.Issues.AddRange(c.Issues);
         return page;
     }
@@ -845,7 +913,7 @@ public sealed partial class PageGenerator
     /// <summary>Placeholders so a control is never an empty or blank box in the viewer: sample combo items, a visible name for unnamed labels and buttons.</summary>
     private static void PreviewDefaults(ControlNodeIr node, SpecControl spec, List<string> attrs)
     {
-        if (spec.Name is "WfComboBox" or "WfListBox" && !node.Attributes.ContainsKey("Items")) attrs.Add("items={[\"Item 1\", \"Item 2\"]}");
+        if (spec.Name is "WfComboBox" or "WfListBox" or "WfCheckedListBox" or "WfDomainUpDown" && !node.Attributes.ContainsKey("Items")) attrs.Add("items={[\"Item 1\", \"Item 2\"]}");
         if (spec.Name is "WfButton" or "WfLabel" && string.IsNullOrWhiteSpace(node.Attributes.GetValueOrDefault("Text"))) attrs.Add(Attr("text", $"[{node.Id}]"));
     }
 
@@ -905,6 +973,23 @@ public sealed partial class PageGenerator
                 attrs.Add(ev.Name == "selectionChange"
                     ? $"{ev.React}={{(sel) => {{ vm.{node.Id}.items.forEach((it, i) => {{ it.selected = sel.includes(i); }});{call} }}}}"
                     : $"{ev.React}={{(i, v) => {{ vm.{node.Id}.items[i].checked = v;{call} }}}}");
+                continue;
+            }
+
+            // DataGridView with editable columns: an edited cell is written to its row in the page model (so reads see it), then the CellEndEdit handler runs.
+            if (spec.Name == "WfDataGrid" && ev.Name == "cellEdit" && c.EditableGrids.Contains(node.Id) && !_preview)
+            {
+                c.UsesModel = true;
+                attrs.Add($"{ev.React}={{(e) => {{ e.row[e.field] = e.value;{(handlerName is null ? "" : $" {handlerName}();")} }}}}");
+                continue;
+            }
+
+            // CheckedListBox: the check state is written to the model (so CheckedItems / GetItemChecked read it), then the handler runs.
+            if (spec.Name == "WfCheckedListBox" && ev.Name == "itemCheck" && c.ComboIds.Contains(node.Id) && !_preview)
+            {
+                c.UsesModel = true;
+                c.Lib.Add("wfSetItemChecked");
+                attrs.Add($"{ev.React}={{(i, on) => {{ wfSetItemChecked(vm.{node.Id}.checkedIndices, i, on);{(handlerName is null ? "" : $" {handlerName}();")} }}}}");
                 continue;
             }
 
@@ -1100,13 +1185,14 @@ public sealed partial class PageGenerator
     // ------------------------------------------------------------------------------------------------ utils
 
     private static bool IsStateful(string specName) => specName is "WfTextBox" or "WfComboBox" or "WfCheckBox" or "WfRadioButton" or "WfDateTimePicker" or "WfNumericUpDown"
-        or "WfMaskedTextBox" or "WfRichTextBox" or "WfMonthCalendar" or "WfListBox";
+        or "WfMaskedTextBox" or "WfRichTextBox" or "WfMonthCalendar" or "WfListBox"
+        or "WfDomainUpDown" or "WfCheckedListBox" or "WfTrackBar" or "WfScrollBar";
 
     /// <summary>The WinForms property a stateful control keeps in the page model.</summary>
     private static string StatefulProp(string specName) => specName switch
     {
         "WfCheckBox" or "WfRadioButton" => "Checked",
-        "WfDateTimePicker" or "WfNumericUpDown" => "Value",
+        "WfDateTimePicker" or "WfNumericUpDown" or "WfTrackBar" or "WfScrollBar" => "Value",
         "WfMonthCalendar" => "SelectionStart",
         "WfTabs" => "SelectedIndex",
         _ => "Text"

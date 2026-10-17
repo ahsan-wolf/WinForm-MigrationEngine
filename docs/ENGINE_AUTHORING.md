@@ -56,7 +56,7 @@ Known limitations (carry into reports): handlers in a third partial file are not
 steps (not 2+ levels), ordered by call order; a handler name inside an inlined UserControl that equals a form method name
 would be attributed to the form; a custom base class stays as `RootControl.TagName` (e.g. `BaseForm`) rather than resolving to `Form`;
 `Controls.Add` order in designer code is reverse z-order, so child order is not visual order (generators order by TabIndex/Dock, Skill 4);
-non-string `.resx` resources (images, icons) and culture-specific `.resx` files are not read; ToolStrip items added through helper
+culture-specific `.resx` files, `ImageList` streams and external (`ResXFileRef`) resources are not read (controls using them get a placeholder icon); readable byte-array images are kept as `Image.Data` (base64) and `Image.Format` (png, gif, jpg, bmp, ico, svg), the form icon as `Icon.Data`; ToolStrip items added through helper
 methods or loops, and any layout computed at runtime, are not seen.
 
 ### Navigation extraction (found on the ECMNavigator pilot)
@@ -78,7 +78,7 @@ root control with `TriggerEvent = "Method:{name}"`. Not navigation: `MessageBox`
 - Support classes are pruned to those the generated pages reach (directly or through each other); classes deriving from controls/components are UI and are never support classes.
 
 ## Control fallbacks and Windows bypass (data-driven, project-independent)
-- **Fallback controls** (`ui-library/ui-spec/fallbacks.json`): a WinForms control (resolved type) with no component in `controls.json` is rendered by the closest component: DomainUpDown -> `WfTextBox`, CheckedListBox -> `WfListView` (flat), TrackBar/scroll bars -> `WfProgress`, drop-down toolbar buttons -> `WfToolbarButton`, anything else -> `WfPanel` (has children) or `WfLabel` (text or `[Type]`).
+- **Fallback controls** (`ui-library/ui-spec/fallbacks.json`): a WinForms control (resolved type) with no component in `controls.json` is rendered by the closest component: ToolStripTextBox -> `WfTextBox`, anything else -> `WfPanel` (has children) or `WfLabel` (text or `[Type]`).
   (DateTimePicker, RadioButton, NumericUpDown, TabControl/TabPage and LinkLabel are real components now: `WfDateTimePicker` with `kind` from `Format`/`CustomFormat`, `WfRadioButton` with a `group` = parent container id and exclusivity written into the page model, `WfNumericUpDown`, `WfTabs`/`WfTabPage` with `SelectedIndex` in the model when code uses it, `WfLinkLabel`.)
   `propertyAliases` / `eventAliases` rename members (`Value` -> `Text`, `ValueChanged` -> `TextChanged`) so code that reads `dt.Value` reads the replacement's state. The generator rewrites the node in memory (`ResolvedType` = the replacement's type, `Fallback.From`, `Fallback.Alias.*`),
   adds `/* FALLBACK: <Type> */` to the element and reports category `fallback-control`. Edit the file to change a mapping; no rebuild. When a real component is added to `ui-spec`, remove its fallback entry.

@@ -4,47 +4,6 @@
   "fallbacks": [
     {
       "winformsTypes": [
-        "System.Windows.Forms.DomainUpDown"
-      ],
-      "use": "WfTextBox",
-      "propertyAliases": {
-        "Value": "Text"
-      },
-      "eventAliases": {
-        "ValueChanged": "TextChanged"
-      },
-      "note": "free-text input"
-    },
-    {
-      "winformsTypes": [
-        "System.Windows.Forms.CheckedListBox"
-      ],
-      "use": "WfListView",
-      "eventAliases": {
-        "AfterSelect": "SelectedIndexChanged",
-        "SelectedValueChanged": "SelectedIndexChanged"
-      },
-      "note": "list or tree shown as a flat list"
-    },
-    {
-      "winformsTypes": [
-        "System.Windows.Forms.TrackBar",
-        "System.Windows.Forms.HScrollBar",
-        "System.Windows.Forms.VScrollBar"
-      ],
-      "use": "WfProgress",
-      "note": "slider shown as a progress bar"
-    },
-    {
-      "winformsTypes": [
-        "System.Windows.Forms.ToolStripDropDownButton",
-        "System.Windows.Forms.ToolStripSplitButton"
-      ],
-      "use": "WfToolbarButton",
-      "note": "drop-down shown as a plain toolbar button"
-    },
-    {
-      "winformsTypes": [
         "System.Windows.Forms.ToolStripTextBox"
       ],
       "use": "WfTextBox"

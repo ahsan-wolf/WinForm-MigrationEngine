@@ -61,7 +61,7 @@ Same schema as the Web Forms migrator (`PageIr`, schema 0.1.0), consumed from th
 - Designer facts without a property of their own live in dotted pseudo-attributes (`ParentSlot`, `TableLayout.*`, `DataBinding.*`, `Items`, `DefaultCellStyle.*`). Event wiring is `Attributes["OnClick"] = "btnSave_Click"`. Navigation reuses the web-shaped `NavigationIr` through `WinNavigation` (`Show|ShowDialog|Close|Hide|Exit`). Constructors are recorded as `.ctor` members. Fields and properties carry their initializer in `Body`.
 - Details and the table of constructs: `ENGINE_AUTHORING.md` and `CLAUDE.md` section 4.
 
-Known extractor limits: handlers in a third partial file, workflow steps deeper than one call level, runtime-created controls, non-string `.resx` resources, binary-only inputs (lossy).
+Known extractor limits: handlers in a third partial file, workflow steps deeper than one call level, runtime-created controls, `ImageList` streams and external `.resx` references (placeholder icons), binary-only inputs (lossy).
 
 ## 5. The React target in detail
 
