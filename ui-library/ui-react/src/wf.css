@@ -46,6 +46,14 @@ textarea.wf-textbox { height: auto; padding: var(--wf-space-1); }
 .wf-datagrid th { position: sticky; top: 0; background: var(--wf-color-surface); text-align: left; font-weight: 600; cursor: pointer; user-select: none; }
 .wf-datagrid th, .wf-datagrid td { padding: 3px var(--wf-space-2); border-bottom: 1px solid var(--wf-color-border); white-space: nowrap; }
 .wf-datagrid tbody tr:hover { background: var(--wf-color-hover); } .wf-datagrid .wf-row-selected, .wf-datagrid .wf-row-selected:hover { background: var(--wf-color-selected); }
+.wf-datagrid:focus-visible { outline: 1px dotted var(--wf-color-border); outline-offset: -1px; }
+.wf-datagrid th { position: sticky; }
+.wf-grid-resizer { position: absolute; top: 0; right: 0; width: 5px; height: 100%; cursor: col-resize; }
+.wf-datagrid th { position: sticky; } .wf-datagrid th > .wf-grid-resizer { z-index: 1; }
+.wf-grid-edit { width: 100%; box-sizing: border-box; font: inherit; padding: 0 2px; border: 1px solid var(--wf-color-accent, #316ac5); background: var(--wf-color-bg); color: inherit; }
+.wf-grid-pager { display: flex; gap: var(--wf-space-2); align-items: center; justify-content: flex-end; padding: 2px var(--wf-space-2); background: var(--wf-color-surface); border-top: 1px solid var(--wf-color-border); position: sticky; bottom: 0; }
+.wf-grid-pager button { border: 1px solid var(--wf-color-border); background: var(--wf-color-bg); color: inherit; cursor: pointer; border-radius: var(--wf-radius); }
+.wf-grid-pager button:disabled { opacity: .5; cursor: default; }
 .wf-grid-empty { color: var(--wf-color-muted); text-align: center; }
 
 .wf-dialog::backdrop { background: rgba(0, 0, 0, .35); }
@@ -100,6 +108,7 @@ textarea.wf-textbox { height: auto; padding: var(--wf-space-1); }
 .wf-tree-row:hover { background: var(--wf-color-hover); }
 .wf-tree-row:focus-visible { outline: 1px dotted var(--wf-color-border); }
 .wf-tree-selected, .wf-tree-selected:hover { background: var(--wf-color-accent, #316ac5); color: var(--wf-color-accent-text, #fff); }
+.wf-tree-icon { width: 16px; height: 16px; } .wf-tree-loading { padding-left: 1.4em; color: var(--wf-color-muted); font-style: italic; }
 .wf-tree-toggle { display: inline-block; width: 1em; text-align: center; cursor: pointer; }
 
 /* standard-control wave: checked list, up/down, range, drop-down button */

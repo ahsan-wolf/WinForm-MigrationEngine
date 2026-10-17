@@ -31,7 +31,7 @@ Generated pages import `Wf*` components only. Identical names, props and canonic
 | `RichTextBox` | `WfRichTextBox` | `value`, `readOnly` (plain text; formatting is not reproduced) | `onValueChange` |
 | `MonthCalendar` | `WfMonthCalendar` | `value` (from `SelectionStart`, ISO date) | `onValueChange` (DateChanged / DateSelected) |
 | `ListBox` | `WfListBox` | `items`, `value` (selected text; the page model also keeps `SelectedIndex` / `SelectedItem`, as for a combo box) | `onSelectionChange` |
-| `TreeView` | `WfTreeView` (+ helpers `wfTreeNode`, `wfSetExpanded`) | `nodes` (page model: text, name, tag, checked, expanded, nodes), `selectedNode`, `checkBoxes` | `onSelectionChange` (AfterSelect), `onNodeCheckedChange` (AfterCheck), `onNodeClick`, `onNodeDoubleClick` |
+| `TreeView` | `WfTreeView` (+ helpers `wfTreeNode`, `wfSetExpanded`) | `nodes` (page model: text, name, tag, checked, expanded, `icon`, `hasChildren`, nodes), `selectedNode`, `checkBoxes` | `onSelectionChange` (AfterSelect), `onNodeCheckedChange` (AfterCheck), `onNodeClick`, `onNodeDoubleClick`, `onNodeExpand` (BeforeExpand: lazy loading, may be async, shows "Loading…") |
 | `CheckedListBox` | `WfCheckedListBox` | `items`, `checkedIndices` (page model; `CheckedItems`, `GetItemChecked`, `SetItemChecked` translate), `value` | `onSelectionChange`, `onItemCheck` |
 | `DomainUpDown` | `WfDomainUpDown` | `items`, `value`, `readOnly` (up/down buttons and arrow keys step through the items) | `onSelectionChange` |
 | `TrackBar` | `WfTrackBar` | `value`, `min`, `max`, `step` (SmallChange), `orientation` (native range input) | `onValueChange` (Scroll / ValueChanged) |
@@ -40,7 +40,7 @@ Generated pages import `Wf*` components only. Identical names, props and canonic
 | `NumericUpDown` | `WfNumericUpDown` | `value`, `min`, `max`, `step`, `decimals`, `readOnly` | `onValueChange` |
 | `ProgressBar`, `ToolStripProgressBar` | `WfProgress` | `value`, `max` | — |
 | `PictureBox` | `WfPictureBox` | `src`, `fit` | `onClick` |
-| `DataGridView` (with its columns) | `WfDataGrid` | `rows`, `columns` (header, field, width, format), `selectionMode`, `readOnly` | `onRowSelect` (SelectionChanged), `onCellClick` (CellClick / CellContentClick / CellMouseClick) |
+| `DataGridView` (with its columns) | `WfDataGrid` | `rows`, `columns` (header, field, width, format, `editable`, `formatter`), `selectionMode`, `readOnly`, `rowKey`, `pageSize` (pager), `resizable` (drag column edges); header click sorts (numbers numerically); arrow keys move the selection; double-click or F2/Enter edits an `editable` cell (explicit `ReadOnly = false` in the designer; the grid never changes `rows`, the page writes the value back) | `onRowSelect` (SelectionChanged), `onCellClick` (CellClick / CellContentClick / CellMouseClick), `onCellEdit` (CellEndEdit) |
 | `ListView` (with `ColumnHeader`, `ListViewItem`) | `WfListView` (+ helpers `wfListItem`, `wfListItemFromArray`) | `columns`, `items`, `checkBoxes`, `multiSelect` | `onSelectionChange`, `onItemCheckedChange`, `onItemActivate`, `onClick`, `onDoubleClick`, `onKeyUp`, `onColumnClick` |
 
 Inputs are controlled when a change handler is passed and uncontrolled otherwise (the value is then only the starting value), so the visual-only viewer and app shell accept typing.

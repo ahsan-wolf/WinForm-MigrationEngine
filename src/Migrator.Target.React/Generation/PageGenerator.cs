@@ -115,6 +115,7 @@ public sealed partial class PageGenerator
         public HashSet<string> StatefulIds { get; } = new();
         public HashSet<string> ListViewIds { get; } = new();
         public HashSet<string> TreeViewIds { get; } = new();
+        public HashSet<string> EditableGrids { get; } = new();
         public HashSet<string> ComboIds { get; } = new();
 
         /// <summary>Control id -> id of its parent control (radio buttons of one container form a group).</summary>
@@ -818,7 +819,11 @@ public sealed partial class PageGenerator
             var header = col.Attributes.GetValueOrDefault("HeaderText") ?? col.Id;
             var format = col.Attributes.GetValueOrDefault("DefaultCellStyle.Format");
             var width = int.TryParse(col.Attributes.GetValueOrDefault("Width"), out var w) ? $", width: {w}" : "";
-            defs.Add($"  {{ field: {Str(field)}, header: {Str(header)}{width}{(format is null ? "" : $", format: {Str(format)}")} }},");
+            // Cells are editable in place only when the designer says so explicitly (ReadOnly = false on the grid or the column, not true on the column);
+            // the WinForms default (editable unless ReadOnly) would turn every migrated grid into an editor.
+            var columnReadOnly = col.Attributes.GetValueOrDefault("ReadOnly");
+            var editable = columnReadOnly == "false" || (columnReadOnly != "true" && node.Attributes.GetValueOrDefault("ReadOnly") == "false");
+            defs.Add($"  {{ field: {Str(field)}, header: {Str(header)}{width}{(format is null ? "" : $", format: {Str(format)}")}{(editable ? ", editable: true" : "")} }},");
             fields.Add(new GridField(field, header, col.TagName.EndsWith("CheckBoxColumn", StringComparison.Ordinal), format));
         }
 
@@ -848,6 +853,7 @@ public sealed partial class PageGenerator
             c.TopLevel.Add($"// TODO: columns of {node.Id} are created in code (not in the designer); define them here.");
             c.Issue("grid-no-columns", $"{node.Id} has no designer columns; rows are empty");
         }
+        if (defs.Any(d => d.Contains("editable: true", StringComparison.Ordinal))) c.EditableGrids.Add(node.Id);
         c.TopLevel.Add($"const {colsName}: WfGridColumn[] = [");
         c.TopLevel.AddRange(defs);
         c.TopLevel.Add("];");
@@ -967,6 +973,14 @@ public sealed partial class PageGenerator
                 attrs.Add(ev.Name == "selectionChange"
                     ? $"{ev.React}={{(sel) => {{ vm.{node.Id}.items.forEach((it, i) => {{ it.selected = sel.includes(i); }});{call} }}}}"
                     : $"{ev.React}={{(i, v) => {{ vm.{node.Id}.items[i].checked = v;{call} }}}}");
+                continue;
+            }
+
+            // DataGridView with editable columns: an edited cell is written to its row in the page model (so reads see it), then the CellEndEdit handler runs.
+            if (spec.Name == "WfDataGrid" && ev.Name == "cellEdit" && c.EditableGrids.Contains(node.Id) && !_preview)
+            {
+                c.UsesModel = true;
+                attrs.Add($"{ev.React}={{(e) => {{ e.row[e.field] = e.value;{(handlerName is null ? "" : $" {handlerName}();")} }}}}");
                 continue;
             }
 
