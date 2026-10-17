@@ -53,6 +53,9 @@ internal sealed partial class MethodTranslator
     /// <summary>Locals and parameters that hold a ListViewItem (declared as one, or initialised from a ListView collection).</summary>
     private readonly HashSet<string> _itemLocals = new(StringComparer.Ordinal);
 
+    /// <summary>Locals and parameters that hold a TreeNode (declared as one, or looped over a Nodes collection).</summary>
+    private readonly HashSet<string> _nodeLocals = new(StringComparer.Ordinal);
+
     /// <summary>Locals initialised from lv.Items / lv.SelectedItems / lv.CheckedItems (arrays of items).</summary>
     private readonly HashSet<string> _itemCollections = new(StringComparer.Ordinal);
 
@@ -100,6 +103,7 @@ internal sealed partial class MethodTranslator
         {
             _locals.Add(p.Name);
             if (p.Type == "ListViewItem") _itemLocals.Add(p.Name);
+            if (p.Type == "TreeNode") _nodeLocals.Add(p.Name);
         }
         CollectLocals(declaration);
 
@@ -129,6 +133,7 @@ internal sealed partial class MethodTranslator
                 _locals.Add(v.Identifier.ValueText);
                 if (v.Parent is VariableDeclarationSyntax vd && IsOpaqueType(vd.Type)) _opaqueLocals.Add(v.Identifier.ValueText);
                 if (v.Parent is VariableDeclarationSyntax { Type: IdentifierNameSyntax { Identifier.ValueText: "ListViewItem" } }) _itemLocals.Add(v.Identifier.ValueText);
+                if (v.Parent is VariableDeclarationSyntax { Type: IdentifierNameSyntax { Identifier.ValueText: "TreeNode" } }) _nodeLocals.Add(v.Identifier.ValueText);
             }
         }
         foreach (var a in root.DescendantNodes().OfType<AssignmentExpressionSyntax>())
@@ -145,6 +150,7 @@ internal sealed partial class MethodTranslator
             _locals.Add(f.Identifier.ValueText);
             if (IsOpaqueType(f.Type)) _opaqueLocals.Add(f.Identifier.ValueText);
             if (f.Type is IdentifierNameSyntax { Identifier.ValueText: "ListViewItem" }) _itemLocals.Add(f.Identifier.ValueText);
+            if (f.Type is IdentifierNameSyntax { Identifier.ValueText: "TreeNode" } || f.Type.IsVar && f.Expression is MemberAccessExpressionSyntax { Name.Identifier.ValueText: "Nodes" }) _nodeLocals.Add(f.Identifier.ValueText);
         }
         foreach (var c in root.DescendantNodes().OfType<CatchDeclarationSyntax>())
             if (c.Identifier.ValueText is { Length: > 0 } name) { _locals.Add(name); _catchVars.Add(name); }
@@ -572,6 +578,11 @@ internal sealed partial class MethodTranslator
             if (_scope.ListViews.Contains(controlId) && name is "Items" or "SelectedItems" or "CheckedItems" or "Columns" or "SelectedIndices")
                 return ListCollection(controlId, name);
             if (_scope.Combos.Contains(controlId) && ComboMember(controlId, name) is { } comboMember) return comboMember;
+            if (_scope.TreeViews.Contains(controlId) && name is "Nodes" or "SelectedNode")
+            {
+                _scope.Output.UsesViewModel = true;
+                return name == "Nodes" ? $"vm.{controlId}.nodes" : $"vm.{controlId}.selectedNode";
+            }
             if (name is "SelectionStart" or "SelectionEnd" && _scope.Calendars.Contains(controlId))
             {
                 _scope.Output.UsesViewModel = true;
@@ -625,6 +636,15 @@ internal sealed partial class MethodTranslator
         }
 
         if (OpaqueName(left) is { } opaque) throw new Untranslatable($"member access on '{opaque}', whose type has no browser equivalent");
+
+        // TreeNode members: node.Text, node.Tag, node.Nodes, node.Checked, ...
+        if (IsTreeNode(left))
+        {
+            if (TreeNodeProps.TryGetValue(name, out var treeProp)) return $"{Ex(left)}.{treeProp}";
+            if (VisualProps.Contains(name) || name is "ForeColor" or "BackColor" or "NodeFont" or "SelectedImageIndex" or "StateImageIndex" or "ImageKey" or "SelectedImageKey" or "ToolTipText")
+                throw new Dropped($"node.{name} is appearance-only");
+            throw new Untranslatable($"TreeNode member {name}");
+        }
 
         // ListViewItem members: item.Text, item.SubItems[1].Text, item.SubItems.Count, ...
         if (SubItemText(ma, out var subItem, out var subIndex))
@@ -833,6 +853,90 @@ internal sealed partial class MethodTranslator
         throw new Untranslatable("ListViewItem constructor overload");
     }
 
+    // ------------------------------------------------------------------------------------------------- TreeView
+
+    private static readonly Dictionary<string, string> TreeNodeProps = new(StringComparer.Ordinal)
+    {
+        ["Text"] = "text", ["Name"] = "name", ["Tag"] = "tag", ["Checked"] = "checked", ["Nodes"] = "nodes", ["IsExpanded"] = "expanded"
+    };
+
+    /// <summary>True when the expression is a TreeNode: a typed local, the tree's SelectedNode, an element of a Nodes collection, or the node a Nodes.Add call returns.</summary>
+    private bool IsTreeNode(ExpressionSyntax e) => e switch
+    {
+        IdentifierNameSyntax id => _nodeLocals.Contains(id.Identifier.ValueText) && !_poisoned.Contains(id.Identifier.ValueText),
+        ParenthesizedExpressionSyntax p => IsTreeNode(p.Expression),
+        ElementAccessExpressionSyntax el => IsNodesCollection(el.Expression),
+        MemberAccessExpressionSyntax { Name.Identifier.ValueText: "SelectedNode" } m => ControlOf(m.Expression) is { } id && _scope.TreeViews.Contains(id),
+        InvocationExpressionSyntax { Expression: MemberAccessExpressionSyntax { Name.Identifier.ValueText: "Add" } add } => IsNodesCollection(add.Expression),
+        _ => false
+    };
+
+    /// <summary>`tv.Nodes` on a tree of this page, or `node.Nodes` on a TreeNode.</summary>
+    private bool IsNodesCollection(ExpressionSyntax e) =>
+        e is MemberAccessExpressionSyntax { Name.Identifier.ValueText: "Nodes" } m && (ControlOf(m.Expression) is { } id && _scope.TreeViews.Contains(id) || IsTreeNode(m.Expression));
+
+    /// <summary>An argument of Nodes.Add / Insert: a node (new TreeNode, a local) or plain text that becomes a new node.</summary>
+    private string TreeNodeArgument(ExpressionSyntax arg) =>
+        IsTreeNode(arg) || arg is ObjectCreationExpressionSyntax { Type: IdentifierNameSyntax { Identifier.ValueText: "TreeNode" } }
+            ? Ex(arg)
+            : $"wfTreeNode({Ex(arg)})";
+
+    private string CreateTreeNode(ObjectCreationExpressionSyntax oc)
+    {
+        var args = oc.ArgumentList?.Arguments ?? default;
+        return args.Count switch
+        {
+            0 => "wfTreeNode()",
+            1 => $"wfTreeNode({Ex(args[0].Expression)})",
+            2 => $"wfTreeNode({Ex(args[0].Expression)}, {Ex(args[1].Expression)})",
+            _ => throw new Untranslatable("TreeNode constructor overload")
+        };
+    }
+
+    /// <summary>`Nodes.Add/AddRange/Insert/RemoveAt/Remove/Clear/Contains/IndexOf`, `ExpandAll/CollapseAll` on a tree, `Expand/Collapse/Toggle/ExpandAll/CollapseAll` on a node.</summary>
+    private string? TreeMethod(ExpressionSyntax receiver, string method, InvocationExpressionSyntax inv)
+    {
+        var args = inv.ArgumentList.Arguments;
+        if (IsNodesCollection(receiver))
+        {
+            var list = Ex(receiver);
+            switch (method, args.Count)
+            {
+                case ("Add", 1):
+                    var node = TreeNodeArgument(args[0].Expression);
+                    return ReferenceEquals(inv, _statementCall) ? $"{list}.push({node})" : $"{list}[{list}.push({node}) - 1]";
+                case ("AddRange", 1): return $"{list}.push(...({Ex(args[0].Expression)}))";
+                case ("Insert", 2): return $"{list}.splice({Ex(args[0].Expression)}, 0, {TreeNodeArgument(args[1].Expression)})";
+                case ("RemoveAt", 1): return $"{list}.splice({Ex(args[0].Expression)}, 1)";
+                case ("Remove", 1): return $"{list}.splice({list}.indexOf({Ex(args[0].Expression)}) >>> 0, 1)";
+                case ("Clear", 0): return $"{list}.splice(0)";
+                case ("Contains", 1): return $"{list}.includes({Ex(args[0].Expression)})";
+                case ("IndexOf", 1): return $"{list}.indexOf({Ex(args[0].Expression)})";
+            }
+            throw new Untranslatable($"call to Nodes.{method}(...) is not translated");
+        }
+
+        if (ControlOf(receiver) is { } id && _scope.TreeViews.Contains(id) && args.Count == 0 && method is "ExpandAll" or "CollapseAll")
+        {
+            _scope.Output.UsesViewModel = true;
+            return $"wfSetExpanded(vm.{id}.nodes, {(method == "ExpandAll" ? "true" : "false")})";
+        }
+        if (IsTreeNode(receiver) && args.Count == 0)
+        {
+            var node = Ex(receiver);
+            switch (method)
+            {
+                case "Expand": return $"({node}.expanded = true)";
+                case "Collapse": return $"({node}.expanded = false)";
+                case "Toggle": return $"({node}.expanded = !{node}.expanded)";
+                case "ExpandAll": return $"wfSetExpanded([{node}], true)";
+                case "CollapseAll": return $"wfSetExpanded([{node}], false)";
+                case "EnsureVisible": throw new Dropped("EnsureVisible() has no effect on the rendered tree");
+            }
+        }
+        return null;
+    }
+
     /// <summary>The control id when the expression is `ctl` or `this.ctl` and names a control of this page.</summary>
     private string? ControlOf(ExpressionSyntax e)
     {
@@ -1028,6 +1132,7 @@ internal sealed partial class MethodTranslator
         }
         if (type is "Dictionary" or "SortedDictionary" or "Hashtable" && args.Count == 0 && oc.Initializer is null) return "{}";
         if (type == "ListViewItem") return CreateListItem(oc);
+        if (type == "TreeNode") return CreateTreeNode(oc);
         if (_scope.Support.TryGetValue(type, out var supportNew) && !supportNew.IsEnum && !supportNew.Ir.IsStatic) return CreateSupport(supportNew, oc);
         if (type.EndsWith("Exception", StringComparison.Ordinal) || type == "Exception")
             return $"new Error({string.Join(", ", args.Take(1).Select(x => Ex(x.Expression)))})";
@@ -1131,6 +1236,7 @@ internal sealed partial class MethodTranslator
         if (typeName is not null) return StaticCall(typeName, method, inv, top);
 
         if (ListMethod(receiver, method, inv) is { } listCall) return listCall;
+        if (TreeMethod(receiver, method, inv) is { } treeCall) return treeCall;
         if (ControlOf(receiver) is not null && NoOpCalls.Contains(method)) throw new Dropped($"{method}() has no browser equivalent");
 
         // control.Method(...) is not translated (Select, Sort, ...)

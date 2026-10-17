@@ -52,7 +52,7 @@ Event naming (canonical → React / Angular / HTML): `click → onClick / (wfCli
 | `ErrorProvider` | `error` prop on inputs / `WfFieldError` | `message` | — |
 | `DataGridView` | `WfDataGrid` | `rows, columns[], selectionMode, sortable, pageSize, readOnly, allowAdd, allowDelete` | `rowSelect, cellClick, cellDoubleClick, cellEdit, rowAction, sort` |
 | ↳ columns | `WfGridColumn` types: `text, checkbox, combo, button, link, image` | `field, header, format, width, frozen, render` | — |
-| `TreeView` | `WfTreeView` | `nodes, checkboxes, lazy` | `select, expand, check` |
+| `TreeView` | `WfTreeView` | `nodes, selectedNode, checkBoxes` (lazy loading not yet) | `selectionChange, nodeCheckedChange, nodeClick, nodeDoubleClick` |
 | `ListView` | `WfListView` | `items, columns, checkBoxes, multiSelect, disabled` (icons/tiles/groups not yet) | `selectionChange, itemCheckedChange, itemActivate, click, doubleClick, keyUp, columnClick` |
 | `TabControl` / `TabPage` ✅ | `WfTabs` / `WfTabPage` | `selectedIndex` (controlled when code uses it) / `title` | `selectionChange` (`SelectedIndexChanged`) |
 | `SplitContainer` | `WfSplit` | `orientation, sizes` | `resize` |

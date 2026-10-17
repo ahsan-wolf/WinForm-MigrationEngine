@@ -85,3 +85,13 @@ textarea.wf-textbox { height: auto; padding: var(--wf-space-1); }
 .wf-calendar-day:hover:not(:disabled) { background: var(--wf-color-hover); }
 .wf-calendar-day[aria-selected="true"] { background: var(--wf-color-accent, #316ac5); color: var(--wf-color-accent-text, #fff); }
 .wf-calendar-today { border-color: var(--wf-color-border); font-weight: 700; }
+
+/* tree view */
+.wf-tree, .wf-tree ul { margin: 0; padding: 0; list-style: none; }
+.wf-tree { min-height: 6em; padding: var(--wf-space-1); border: 1px solid var(--wf-color-border); background: var(--wf-color-bg); color: var(--wf-color-text); overflow: auto; }
+.wf-tree ul { padding-left: 1.2em; }
+.wf-tree-row { display: flex; align-items: center; gap: var(--wf-space-1); padding: 1px var(--wf-space-1); cursor: default; white-space: nowrap; }
+.wf-tree-row:hover { background: var(--wf-color-hover); }
+.wf-tree-row:focus-visible { outline: 1px dotted var(--wf-color-border); }
+.wf-tree-selected, .wf-tree-selected:hover { background: var(--wf-color-accent, #316ac5); color: var(--wf-color-accent-text, #fff); }
+.wf-tree-toggle { display: inline-block; width: 1em; text-align: center; cursor: pointer; }
