@@ -399,7 +399,7 @@ Per target:
 | `new FormX().Show()` | `navigate('/x')` (router) | `router.navigate(['/x'])` | `location.href='x.html'` |
 | `new FormX().ShowDialog()` | `await openModal(<X/>)` returning result | `dialog.open(XComponent).afterClosed()` | Bootstrap modal + callback |
 | `this.Close()` (from main/page form) | `navigate(-1)` / `/` | `location.back()` | `history.back()` |
-| `this.Close()` (from dialog) | `onClose(result)` | `dialogRef.close(result)` | hide modal + resolve |
+| `this.Close()` (from dialog) | `dialog.close(result)` | `dialogRef.close(result)` | hide modal + resolve |
 | `this.Hide()` | `setVisible(false)` | `*ngIf` | `.hide()` |
 | `Application.Exit()` | navigate to `/goodbye` (or no-op + TODO) | same | same |
 | `Application.Run(new MainForm())` | `/` route = main form | default route | `index.html` |
@@ -663,7 +663,7 @@ Generators read these from `ControlNodeIr.Attributes` / `PageIr` (never from the
 | Unrecognized designer statement | `project.ir.json` `Shared.Unsupported` | goes to `MIGRATION_REPORT.md`; never dropped |
 
 ### 18.3a React target (`Migrator.Target.React`) - as built
-Reads the IR folder (including `support.ir.json`) + `ui-spec`; pages import only `@wfm/ui-react`. Dialogs: `ShowDialog` -> `dialog.show(close => <XPage onClose={close}/>)`, `Close/Hide` -> `onClose?.()`. Layout: Dock/Location -> top chrome, free rows (clustered by Y), left/fill/right band, bottom chrome. External binary dependencies: `migrate --contract` emits `src/services/<assembly>/` (types, fixtures, mock service); secret-looking members are omitted. Methods: `--translate rules` (deterministic C# -> TS, statement-level fallback, `--compile-gate` demotes anything `tsc` rejects); without it handler bodies stay commented C#. Project classes -> `src/support/index.ts`. Conventions and the translator extension steps: `docs/ENGINE_AUTHORING.md`; how to run: `docs/USER_GUIDE.md`.
+Reads the IR folder (including `support.ir.json`) + `ui-spec`; pages import only `@wfm/ui-react`. Dialogs: `ShowDialog` -> `dialog.show(() => <XPage />)`, `Close/Hide` -> `dialog.close()`. Layout: Dock/Location -> top chrome, free rows (clustered by Y), left/fill/right band, bottom chrome. External binary dependencies: `migrate --contract` emits `src/services/<assembly>/` (types, fixtures, mock service); secret-looking members are omitted. Methods: `--translate rules` (deterministic C# -> TS, statement-level fallback, `--compile-gate` demotes anything `tsc` rejects); without it handler bodies stay commented C#. Project classes -> `src/support/index.ts`. Conventions and the translator extension steps: `docs/ENGINE_AUTHORING.md`; how to run: `docs/USER_GUIDE.md`.
 
 ### 18.2b Optional source-engine capabilities (as built)
 | Interface | Purpose | WinForms |

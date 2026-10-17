@@ -271,7 +271,7 @@
 
     { "name": "WfDialog", "winformsTypes": [], "service": "useWfDialog",
       "props": [], "events": [],
-      "a11y": "Provided as a service: alert(message), confirm(message) -> Promise<boolean>, show(render) -> Promise<result>. Replaces MessageBox and ShowDialog (DialogResult).",
+      "a11y": "Provided as a service: alert(message), confirm(message) -> Promise<boolean>, message(text, { buttons, icon, title }) -> Promise<DialogResult name>, show(render) -> Promise<result>, close(result?) closes the topmost dialog (this.Close() / DialogResult). Replaces MessageBox and ShowDialog. Popups are native <dialog> elements with a title-bar close button.",
       "example": "const dialog = useWfDialog(); if (await dialog.confirm('Delete?')) { … }" },
     { "name": "useWfModel", "winformsTypes": [], "service": "useWfModel",
       "props": [], "events": [],

@@ -19,6 +19,8 @@ export interface WfDialogService {
   message(message: string, options?: WfMessageOptions): Promise<WfDialogResult>;
   /** Form.ShowDialog(): resolves with whatever the content passes to `close` (DialogResult), or undefined when dismissed. */
   show<T = void>(render: Render<T>, options?: { title?: string }): Promise<T | undefined>;
+  /** this.Close() / DialogResult: closes the topmost dialog and resolves its `show` promise with `result`. Without an open dialog it calls the provider's `onRootClose` (if any). */
+  close(result?: unknown): void;
 }
 
 interface Entry { key: number; title?: string; render: Render<unknown>; resolve: (value: unknown) => void }
@@ -37,9 +39,18 @@ const GLYPH: Record<WfMessageIcon, string> = { info: 'i', warning: '!', error: '
 
 const DialogContext = createContext<WfDialogService | null>(null);
 
-export function WfDialogProvider({ children }: { children?: ReactNode }) {
+export interface WfDialogProviderProps {
+  children?: ReactNode;
+  /** Called by `dialog.close()` when no dialog is open: the page is the app's own page (a standalone form), so closing it means leaving it. */
+  onRootClose?: () => void;
+}
+
+export function WfDialogProvider({ children, onRootClose }: WfDialogProviderProps) {
   const [stack, setStack] = useState<Entry[]>([]);
   const counter = useRef(0);
+  const stackRef = useRef<Entry[]>([]);
+  const rootClose = useRef(onRootClose);
+  useEffect(() => { stackRef.current = stack; rootClose.current = onRootClose; });
 
   const close = useCallback((key: number, value?: unknown) => {
     setStack(s => {
@@ -68,13 +79,20 @@ export function WfDialogProvider({ children }: { children?: ReactNode }) {
       ), { title: options.title }).then(r => r ?? DISMISS[set]);
     };
 
+    const closeTop = (result?: unknown) => {
+      const top = stackRef.current.at(-1);
+      if (!top) { rootClose.current?.(); return; }
+      close(top.key, result);
+    };
+
     return {
       show,
       message,
+      close: closeTop,
       alert: (text, title, icon) => message(text, { title, icon }).then(() => undefined),
       confirm: (text, title, icon) => message(text, { title, icon, buttons: 'yesNo' }).then(r => r === 'Yes'),
     };
-  }, []);
+  }, [close]);
 
   return (
     <DialogContext.Provider value={service}>
@@ -102,7 +120,10 @@ function DialogFrame({ entry, onClose }: { entry: Entry; onClose: (value?: unkno
 
   return (
     <dialog ref={ref} role="dialog" aria-modal="true" aria-label={entry.title ?? 'Dialog'} className="wf-dialog">
-      {entry.title && <header className="wf-dialog-title">{entry.title}</header>}
+      <header className="wf-dialog-title">
+        <span>{entry.title ?? ''}</span>
+        <button type="button" className="wf-dialog-x" aria-label="Close" title="Close" onClick={() => onClose()}>×</button>
+      </header>
       {entry.render(onClose)}
     </dialog>
   );

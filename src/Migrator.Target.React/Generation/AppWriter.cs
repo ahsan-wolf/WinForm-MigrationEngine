@@ -123,7 +123,7 @@ public static class AppWriter
             // Development launcher: `?page=<Name>` opens one generated page on its own (with mock data), `?page=` lists them all.
             // Forms the entry form opens through ShowDialog() are normally reached from it, but those whose constructor arguments
             // are not translated yet (see MIGRATION_REPORT.md) cannot be reached that way.
-            type PageProps = { onClose?: (result?: unknown) => void };
+            type PageProps = object;
             const loaders = import.meta.glob('./pages/*.tsx') as Record<string, () => Promise<Record<string, unknown>>>;
             const pages = Object.entries(loaders).map(([path, load]) => {
               const name = path.slice('./pages/'.length, -'.tsx'.length);
@@ -150,13 +150,13 @@ public static class AppWriter
             }
 
             const app = selected ? (
-              <Suspense fallback={null}><selected.Page onClose={goHome} /></Suspense>
+              <Suspense fallback={null}><selected.Page /></Suspense>
             ) : requested !== null ? <Index /> : <{{entryComponent}} />;
 
             // The entry form is the app shell; every ShowDialog() target opens through the dialog service.
             createRoot(document.getElementById('root')!).render(
               <StrictMode>
-                <WfDialogProvider><Boundary>{app}</Boundary></WfDialogProvider>
+                <WfDialogProvider onRootClose={goHome}><Boundary>{app}</Boundary></WfDialogProvider>
               </StrictMode>,
             );
             """, files);
