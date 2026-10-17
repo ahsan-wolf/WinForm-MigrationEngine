@@ -91,7 +91,7 @@ A title bar names the project, a status bar shows the unit count and the selecte
 ```bash
 cd "<output folder>/react-appshell" && npm install && npm run dev
 ```
-Colours and fonts are CSS variables at the top of `src/appshell.css` (system-style defaults; they follow the UI library tokens when present), so a project can restyle the shell without touching the pages. Use `--preview` instead for the plainer developer viewer.
+Colours and fonts are CSS variables at the top of `src/appshell.css` (system-style defaults; they follow the UI library tokens when present), so a project can restyle the shell without touching the pages. **Dialogs:** a button or menu item that opens a form in the original (`ShowDialog`) opens that form's visual-only page as a popup, and Close / OK / Cancel buttons, the title-bar ✕ and Escape close it, so the original window flow can be walked through. This is the only behaviour wired in the shell: nothing else runs, and the plain `--preview` viewer has no popups. Use `--preview` instead for the plainer developer viewer.
 
 ## 6. Reading the results
 

@@ -145,7 +145,7 @@ public sealed class ReactAppGenerator
         var taken = new NameScope(Array.Empty<string>());
         foreach (var name in ir.Units.Keys.OrderBy(n => n, StringComparer.Ordinal)) components[name] = taken.Unique(Naming.Component(name, ir.Units[name].IsUserControl));
 
-        var generator = new PageGenerator(spec, ir.Units, components, new HashSet<string>(ir.Units.Keys), translation: null, preview: true);
+        var generator = new PageGenerator(spec, ir.Units, components, new HashSet<string>(ir.Units.Keys), translation: null, preview: true, previewNavigation: appShell);
         var viewerUnits = new List<ViewerUnit>();
         foreach (var (name, unit) in ir.Units.OrderBy(u => u.Key, StringComparer.Ordinal))
         {
