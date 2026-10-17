@@ -1120,7 +1120,7 @@ internal sealed partial class MethodTranslator
         if (a.Left is IdentifierNameSyntax { Identifier.ValueText: "DialogResult" } || a.Left is MemberAccessExpressionSyntax { Name.Identifier.ValueText: "DialogResult", Expression: ThisExpressionSyntax })
         {
             _pendingResult = a.Right is MemberAccessExpressionSyntax rm ? rm.Name.Identifier.ValueText : null;
-            throw new Dropped("DialogResult is passed to onClose(result)");
+            throw new Dropped("DialogResult is passed to dialog.close(result)");
         }
         if (a.Left is MemberAccessExpressionSyntax { Name.Identifier.ValueText: "Current", Expression: IdentifierNameSyntax { Identifier.ValueText: "Cursor" } })
             throw new Dropped("cursor");
@@ -1315,10 +1315,10 @@ internal sealed partial class MethodTranslator
     private string CloseCall()
     {
         if (_scope.IsModule) throw new Untranslatable("closing the form from a non-form class");
-        _scope.Output.UsesOnClose = true;
+        _scope.Output.UsesDialog = true;
         var result = _pendingResult is null ? "" : Str(_pendingResult);
         _pendingResult = null;
-        return $"onClose?.({result})";
+        return $"dialog.close({result})";
     }
 
     private string CallOwn(string name, InvocationExpressionSyntax inv, bool top)
@@ -1370,7 +1370,7 @@ internal sealed partial class MethodTranslator
         _scope.Output.PageImports.Add(component);
         if (hasArgs) _after.Add($"// TODO: constructor arguments of {formType} are not passed to {component}");
         var title = Str(_scope.Units[formType].Title);
-        return Await($"dialog.show<unknown>((close) => <{component} onClose={{close}} />, {{ title: {title} }})", top);
+        return Await($"dialog.show<unknown>(() => <{component} />, {{ title: {title} }})", top);
     }
 
     private string StaticCall(string type, string method, InvocationExpressionSyntax inv, bool top)

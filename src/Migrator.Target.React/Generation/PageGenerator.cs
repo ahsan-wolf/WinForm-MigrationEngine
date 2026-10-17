@@ -230,23 +230,21 @@ public sealed partial class PageGenerator
         // Only props that seed a field are destructured (an unused binding fails lint); all stay in the interface.
         var usedProps = !usesFields ? new List<CtorProp>()
             : ctorProps.Where(p => c.Translation!.FieldInitials.Values.Any(v => v == p.Local)).ToList();
-        if (ctorProps.Count == 0)
-            sb.AppendLine($"export interface {component}Props {{ onClose?: (result?: unknown) => void }}");
-        else
+        // A dialog closes itself with dialog.close(), so a page takes props only for the constructor arguments of the original form.
+        if (ctorProps.Count > 0)
         {
             sb.AppendLine($"export interface {component}Props {{");
-            sb.AppendLine("  onClose?: (result?: unknown) => void;");
             foreach (var p in ctorProps) sb.AppendLine($"  /** Constructor argument of the original form. */ {Prop(p.Key)}?: {p.Type};");
             sb.AppendLine("}");
         }
         sb.AppendLine();
         var bindings = new List<string>();
-        if (c.UsesOnClose) bindings.Add("onClose");
         foreach (var p in usedProps)
             bindings.Add((p.Key == p.Local ? p.Key : $"{p.Key}: {p.Local}") + (p.Default is null ? "" : $" = {p.Default}"));
         if (usedProps.Any(p => p.Default?.Contains("fixtures.") == true))
             sb.AppendLine("// MOCK — constructor-argument defaults are fixture rows so the page opens on its own; the opener passes the real values");
-        sb.AppendLine(bindings.Count > 0 ? $"export function {component}({{ {string.Join(", ", bindings)} }}: {component}Props) {{" : $"export function {component}(_props: {component}Props) {{");
+        sb.AppendLine(bindings.Count > 0 ? $"export function {component}({{ {string.Join(", ", bindings)} }}: {component}Props) {{"
+            : ctorProps.Count > 0 ? $"export function {component}(_props: {component}Props) {{" : $"export function {component}() {{");
         foreach (var note in c.Translation?.CtorNotes ?? new List<string>())
             sb.AppendLine($"  // TODO: constructor logic not translated: {note}");
         if (c.UsesDialog) sb.AppendLine("  const dialog = useWfDialog();");
@@ -956,9 +954,9 @@ public sealed partial class PageGenerator
             // Button.DialogResult: clicking closes the dialog with that result (after the Click handler ran), with or without a handler.
             if (spec.Name == "WfButton" && ev.Name == "click" && ButtonDialogResult(node) is { } closeWith)
             {
-                c.UsesOnClose = true;
+                c.UsesDialog = true;
                 var isAsync = handlerMember is not null && c.Translation?.ByMember.TryGetValue(handlerMember, out var mt) == true && mt.IsAsync;
-                var close = $"onClose?.({Str(closeWith)});";
+                var close = $"dialog.close({Str(closeWith)});";
                 attrs.Add(handlerName is null ? $"{ev.React}={{() => {{ {close} }}}}"
                     : isAsync ? $"{ev.React}={{async () => {{ await {handlerName}(); {close} }}}}"
                     : $"{ev.React}={{() => {{ {handlerName}(); {close} }}}}");
@@ -1105,17 +1103,17 @@ public sealed partial class PageGenerator
 
         var add = new List<string>();
         var shows = sites.Where(x => x.TargetType is "Show" or "ShowDialog").Select(x => x.Target).Distinct().ToList();
-        if (shows.Count > 0 && _generated.Contains(shows[0]) && _components.TryGetValue(shows[0], out var comp) && !Regex.IsMatch(text, $@"dialog\.show<[^>]*>\(\(close\) => <{Regex.Escape(comp)}\b"))
+        if (shows.Count > 0 && _generated.Contains(shows[0]) && _components.TryGetValue(shows[0], out var comp) && !Regex.IsMatch(text, $@"dialog\.show<[^>]*>\(\([^)]*\) => <{Regex.Escape(comp)}\b"))
         {
             c.PageImports[comp] = comp;
             add.Add($"// MOCK — {shows[0]} is opened here without the original condition and arguments (the code that decided this was not translated); replace with real implementation");
-            add.Add($"await dialog.show<unknown>((close) => <{comp} onClose={{close}} />, {{ title: {Str(_units[shows[0]].Title)} }});");
+            add.Add($"await dialog.show<unknown>(() => <{comp} />, {{ title: {Str(_units[shows[0]].Title)} }});");
             c.Issue("nav-mock-open", $"{handler.ControlId}.{handler.Event} opens {shows[0]}: wired without its original condition and arguments");
         }
-        if (sites.Any(x => x.TargetType is "Close" or "Hide") && !Regex.IsMatch(text, @"(?<![\w.])onClose\b"))
+        if (sites.Any(x => x.TargetType is "Close" or "Hide") && !Regex.IsMatch(text, @"\bdialog\.close\b"))
         {
             add.Add("// MOCK — the original closes the form here, but the code that decided this was not translated; replace with real implementation");
-            add.Add("onClose?.();");
+            add.Add("dialog.close();");
             c.Issue("nav-mock-close", $"{handler.ControlId}.{handler.Event} closes the form: wired without its original condition");
         }
         if (add.Count == 0) return t.Lines;
@@ -1177,7 +1175,7 @@ public sealed partial class PageGenerator
                     c.PageImports[comp] = comp;
                     c.UsesDialog = true;
                     isAsync = true;
-                    body.Add($"await dialog.show<unknown>((close) => <{comp} onClose={{close}} />, {{ title: {Str(_units[target].Title)} }});");
+                    body.Add($"await dialog.show<unknown>(() => <{comp} />, {{ title: {Str(_units[target].Title)} }});");
                 }
                 else
                 {
@@ -1196,8 +1194,8 @@ public sealed partial class PageGenerator
             }
             else if (sites.Any(s => s.TargetType is "Close" or "Hide"))
             {
-                c.UsesOnClose = true;
-                body.Add("onClose?.();");
+                c.UsesDialog = true;
+                body.Add("dialog.close();");
             }
             else if (sites.Any(s => s.TargetType == "Exit"))
             {

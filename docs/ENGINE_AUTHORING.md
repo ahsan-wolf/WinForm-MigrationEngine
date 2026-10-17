@@ -138,7 +138,7 @@ Generated pages import only `@wfm/ui-react`.
 | Scope | entry form (default: startup form) + forms reachable by `Show/ShowDialog` within `--depth` hops (default 1; `all` = everything reachable) |
 | Layout | Dock/Location facts -> top chrome, free rows (clustered by Y, ordered by X), left/fill/right band, bottom chrome (`wfm-*` flex classes). No pixels. MenuStrip/ToolStrip default to top, StatusStrip to bottom |
 | State | One **model per page**: `const vm = useWfModel({ txtSearch: { text: "", enabled: true }, ... })` (declared only when referenced). Holds user-editable inputs (TextBox/ComboBox/CheckBox), hidden controls (`visible`), grid `rows`, and every Text/Enabled/Visible/Checked/Value/ReadOnly the code-behind reads or writes (`btnSave.Enabled = false`, `this.Text = ...`). JSX binds `text={vm.lbl.text}`, `disabled={!vm.btn.enabled}`, `{vm.pnl.visible && ...}`. The model is a deep proxy: reads are immediate, writes re-render once, so translated WinForms code maps 1:1 (no stale closures, no setters). The generated eslint config turns `react-hooks/immutability` off on purpose; do not enable the React Compiler on generated code |
-| Navigation | `ShowDialog` -> `await dialog.show(close => <XPage onClose={close}/>)`; `Close/Hide` -> `onClose?.()`; several targets in one handler -> first wired + TODO; target outside scope -> alert + TODO |
+| Navigation | `ShowDialog` -> `await dialog.show(() => <XPage />, { title })`; `Close/Hide` -> `dialog.close()`; several targets in one handler -> first wired + TODO; target outside scope -> alert + TODO |
 | Handlers | Not translated by default: each keeps its original C# as comments + TODO and the full code-behind is in `src/legacy/*.cs.txt`. With `--translate rules` every method of the page is translated (see below) |
 | Not rendered | non-visual components (ImageList, ToolTip, BindingSource, Timer, file dialogs, ...) are listed in the report |
 | Unsupported | no spec entry -> `WfUnsupported` + TODO + report entry; inlined user controls render as a panel |
@@ -173,7 +173,7 @@ The filter is deliberately over-inclusive; the report lists everything it remove
 Deterministic C# -> TypeScript for **every method of a generated page** (not only wired handlers: most handlers are one-line delegations and the logic is in helpers),
 using Roslyn on the IR's method bodies. No LLM. Conventions (so the output is 1:1 with the C#): control properties are `vm.<id>.<prop>` (text, enabled, visible,
 checked, value, readOnly), form fields are `f.<name>` (initial values from their C# initializers, recorded in `MemberIr.Body` for fields/properties), `MessageBox.Show` is
-`await dialog.alert/confirm`, `ShowDialog()` is `await dialog.show(...)`, `Close()` is `onClose?.(result)`, contract facade calls are `await <instance>.<Facade>.<Method>(...)`
+`await dialog.alert/confirm`, `ShowDialog()` is `await dialog.show(...)`, `Close()` is `dialog.close(result)`, contract facade calls are `await <instance>.<Facade>.<Method>(...)`
 (credentials parameters already stripped), `main.WriteErrorLog(MethodBase.GetCurrentMethod(), ex)` is `console.error(...)`, `DateTime` is an ISO string, `string.Format` becomes a template literal (or
 `formatString` for a non-literal format).
 
@@ -203,7 +203,7 @@ checked, value, readOnly), form fields are `f.<name>` (initial values from their
 - **GroupBox** maps to `WfGroupBox` (fieldset + legend). The launcher shows a page's render error instead of a blank screen.
 - **Dev launcher:** the generated `main.tsx` opens the entry form by default; `?page=<Name>` (e.g. `?page=SearchResults`) renders one generated page on its own with mock data and `?page=` lists all pages. Needed for forms
   whose opener passes constructor arguments (not translated yet), which the entry form cannot reach.
-- **Button.DialogResult:** clicking a button whose designer sets `DialogResult` runs its Click handler then `onClose(result)`, as WinForms closes the dialog (not part of translation; applies in every mode).
+- **Button.DialogResult:** clicking a button whose designer sets `DialogResult` runs its Click handler then `dialog.close(result)`, as WinForms closes the dialog (not part of translation; applies in every mode).
 
 Pilot numbers (ECMNavigator, 17 forms, 706 methods): 375 complete (53%), 209 partial, 122 not translated (81 demoted by the gate); plus 33 project classes with 157 members (56 complete); `tsc` 0 errors, build and lint clean. What blocks the rest, from the report:
 **grid and container members** (`dgv.Rows`, `pnl.Controls`), `ref`/`out` arguments (`TryParse`), `string.Format` with specifiers, event subscriptions in code, constructors of WinForms types. Everything is listed per method in `MIGRATION_REPORT.md`.
