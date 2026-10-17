@@ -61,7 +61,7 @@ internal static class SupportTranslator
         var uiImports = new List<string>();
         if (Regex.IsMatch(code, @"\bWfListItem\b")) uiImports.Add("type WfListItem");
         if (Regex.IsMatch(code, @"\bWfTreeNode\b")) uiImports.Add("type WfTreeNode");
-        foreach (var helper in new[] { "wfListItem", "wfListItemFromArray", "wfTreeNode", "wfSetExpanded" }) if (Regex.IsMatch(code, $@"\b{helper}\(")) uiImports.Add(helper);
+        foreach (var helper in new[] { "wfListItem", "wfListItemFromArray", "wfTreeNode", "wfSetExpanded", "wfSetItemChecked" }) if (Regex.IsMatch(code, $@"\b{helper}\(")) uiImports.Add(helper);
         if (uiImports.Count > 0) header.Add($"import {{ {string.Join(", ", uiImports)} }} from '@wfm/ui-react';");
         header.Add("");
 

@@ -95,3 +95,22 @@ textarea.wf-textbox { height: auto; padding: var(--wf-space-1); }
 .wf-tree-row:focus-visible { outline: 1px dotted var(--wf-color-border); }
 .wf-tree-selected, .wf-tree-selected:hover { background: var(--wf-color-accent, #316ac5); color: var(--wf-color-accent-text, #fff); }
 .wf-tree-toggle { display: inline-block; width: 1em; text-align: center; cursor: pointer; }
+
+/* standard-control wave: checked list, up/down, range, drop-down button */
+.wf-checkedlist { min-height: 6em; overflow: auto; border: 1px solid var(--wf-color-border); background: var(--wf-color-bg); color: var(--wf-color-text); padding: var(--wf-space-1); }
+.wf-checkedlist-row { display: flex; align-items: center; gap: var(--wf-space-1); padding: 1px var(--wf-space-1); cursor: default; }
+.wf-checkedlist-row:hover { background: var(--wf-color-hover); }
+.wf-checkedlist-selected, .wf-checkedlist-selected:hover { background: var(--wf-color-accent, #316ac5); color: var(--wf-color-accent-text, #fff); }
+.wf-updown { display: inline-flex; align-items: stretch; }
+.wf-updown > input { border-right: 0; border-radius: var(--wf-radius) 0 0 var(--wf-radius); min-width: 6em; }
+.wf-updown-buttons { display: flex; flex-direction: column; }
+.wf-updown-buttons button { flex: 1 1 0; padding: 0 4px; line-height: 1; font-size: .7em; border: 1px solid var(--wf-color-border); background: var(--wf-color-surface); color: inherit; cursor: pointer; }
+.wf-updown-buttons button:first-child { border-radius: 0 var(--wf-radius) 0 0; } .wf-updown-buttons button:last-child { border-top: 0; border-radius: 0 0 var(--wf-radius) 0; }
+.wf-range { accent-color: var(--wf-color-accent, #316ac5); }
+.wf-range-horizontal { width: 10em; }
+.wf-range-vertical { writing-mode: vertical-lr; direction: rtl; height: 10em; width: auto; }
+.wf-scrollbar { width: 100%; }
+.wf-dropdown { position: relative; display: inline-flex; }
+.wf-dropdown > .wf-toolbar-button + .wf-dropdown-toggle { min-width: 0; padding: 0 3px; border-left: 0; }
+.wf-dropdown-arrow { font-size: .8em; margin-left: 2px; }
+.wf-dropdown > .wf-menu { top: 100%; left: 0; z-index: var(--wf-z-menu, 10); }

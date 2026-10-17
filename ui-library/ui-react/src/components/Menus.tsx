@@ -87,6 +87,53 @@ export function WfToolbarButton({ text, tooltip, icon, disabled, onClick, id }: 
   );
 }
 
+export interface WfDropDownButtonProps {
+  text?: string; tooltip?: string; icon?: string; disabled?: boolean; id?: string;
+  /** Split button: the main part clicks, a separate arrow opens the menu. Without it the whole button opens the menu. */
+  split?: boolean;
+  onClick?: () => void; children?: ReactNode;
+}
+/** Toolbar button with a drop-down menu of WfMenuItem children (ToolStripDropDownButton / ToolStripSplitButton). */
+export function WfDropDownButton({ text, tooltip, icon, disabled, id, split, onClick, children }: WfDropDownButtonProps) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const label = parseMnemonic(text).label;
+
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) setOpen(false); };
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', close);
+    document.addEventListener('keydown', esc);
+    return () => { document.removeEventListener('mousedown', close); document.removeEventListener('keydown', esc); };
+  }, [open]);
+
+  const face = (
+    <>
+      {icon ? <img src={icon} alt="" /> : <span aria-hidden="true">{(label || tooltip || '·').slice(0, 1)}</span>}
+      {label && <span className="wf-toolbar-text">{label}</span>}
+    </>
+  );
+  return (
+    <div ref={ref} className="wf-dropdown">
+      <button type="button" id={id} className="wf-toolbar-button" title={tooltip ?? label} aria-label={tooltip ?? (label || undefined)} disabled={disabled}
+              aria-haspopup={split ? undefined : 'menu'} aria-expanded={split ? undefined : open}
+              onClick={() => { onClick?.(); if (!split) setOpen(o => !o); }}>
+        {face}{!split && <span className="wf-dropdown-arrow" aria-hidden="true">▾</span>}
+      </button>
+      {split && (
+        <button type="button" className="wf-toolbar-button wf-dropdown-toggle" aria-label="Show menu" aria-haspopup="menu" aria-expanded={open} disabled={disabled}
+                onClick={() => setOpen(o => !o)}><span aria-hidden="true">▾</span></button>
+      )}
+      {open && (
+        <DepthContext.Provider value={1}>
+          <div role="menu" className="wf-menu" onClick={() => setOpen(false)}>{children}</div>
+        </DepthContext.Provider>
+      )}
+    </div>
+  );
+}
+
 export interface WfContextMenuProps { menu: ReactNode; children?: ReactNode; className?: string }
 /** Wraps its target; right-click opens `menu` (WfMenuItem children) at the pointer. */
 export function WfContextMenu({ menu, children, className }: WfContextMenuProps) {

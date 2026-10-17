@@ -7,6 +7,7 @@ export * from './components/Inputs';
 export * from './components/Tabs';
 export * from './components/TextAndLists';
 export * from './components/TreeView';
+export * from './components/Standard';
 export * from './components/Containers';
 export * from './components/Menus';
 export * from './components/DataGrid';

@@ -51,7 +51,8 @@ public sealed partial class PageGenerator
     {
         ("WfTextBox", "valueChange"), ("WfComboBox", "selectionChange"), ("WfCheckBox", "checkedChange"), ("WfRadioButton", "checkedChange"),
         ("WfDateTimePicker", "valueChange"), ("WfNumericUpDown", "valueChange"), ("WfTabs", "selectionChange"),
-        ("WfMaskedTextBox", "valueChange"), ("WfRichTextBox", "valueChange"), ("WfMonthCalendar", "valueChange"), ("WfListBox", "selectionChange")
+        ("WfMaskedTextBox", "valueChange"), ("WfRichTextBox", "valueChange"), ("WfMonthCalendar", "valueChange"), ("WfListBox", "selectionChange"),
+        ("WfDomainUpDown", "selectionChange"), ("WfCheckedListBox", "selectionChange"), ("WfTrackBar", "valueChange"), ("WfScrollBar", "valueChange")
     };
 
     private static readonly JsonSerializerOptions JsonOut = new() { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
@@ -182,7 +183,7 @@ public sealed partial class PageGenerator
             tr.UsesFormat = Regex.IsMatch(text, @"\bformatString\(");
             foreach (var helper in new[] { "wfListItem", "wfListItemFromArray" }) if (Regex.IsMatch(text, $@"\b{helper}\(")) c.Lib.Add(helper);
             if (Regex.IsMatch(text + "\n" + (usesFields ? fieldText : ""), @"\bWfListItem\b")) c.LibTypes.Add("WfListItem");
-            foreach (var helper in new[] { "wfTreeNode", "wfSetExpanded" }) if (Regex.IsMatch(text, $@"\b{helper}\(")) c.Lib.Add(helper);
+            foreach (var helper in new[] { "wfTreeNode", "wfSetExpanded", "wfSetItemChecked" }) if (Regex.IsMatch(text, $@"\b{helper}\(")) c.Lib.Add(helper);
             if (Regex.IsMatch(text + "\n" + (usesFields ? fieldText : ""), @"\bWfTreeNode\b")) c.LibTypes.Add("WfTreeNode");
         }
 
@@ -514,6 +515,9 @@ public sealed partial class PageGenerator
             if (node.Attributes.GetValueOrDefault("Visible") == "false") AddToModel(c, node, "Visible");
             if (spec?.Name == "WfListView") { c.ListViewIds.Add(node.Id); AddListViewModel(c, node); }
             if (spec?.Name == "WfTreeView") { c.TreeViewIds.Add(node.Id); AddTreeViewModel(c, node); }
+            // Items/selection behave like a combo box; the checked state of a CheckedListBox is its own model entry.
+            if (spec?.Name is "WfCheckedListBox" or "WfDomainUpDown" && c.ComboIds.Add(node.Id)) AddComboModel(c, node);
+            if (spec?.Name == "WfCheckedListBox") c.ModelSet(node.Id, "CheckedIndices", "[] as number[]");
         }
 
         var code = string.Join("\n", c.Unit.Page.Members.Where(m => m.Kind == MemberKind.Method && m.Body != null).Select(m => m.Body));
@@ -649,6 +653,8 @@ public sealed partial class PageGenerator
         if (spec.Name == "WfDataGrid") AddGrid(node, c, attrs);
         if (spec.Name == "WfListView") AddListView(node, c, attrs);
         if (spec.Name == "WfTreeView") AddTreeView(node, c, attrs);
+        if (spec.Name == "WfScrollBar" && node.Effective().EndsWith("VScrollBar", StringComparison.Ordinal)) attrs.Add("orientation=\"vertical\"");
+        if (spec.Name == "WfDropDownButton" && node.Effective().EndsWith("SplitButton", StringComparison.Ordinal)) attrs.Add("split");
     }
 
     /// <summary>A tree view keeps its nodes and selected node in the model so `Nodes.Add`, `new TreeNode`, `SelectedNode` and `node.Nodes` translate onto them.</summary>
@@ -845,7 +851,7 @@ public sealed partial class PageGenerator
     /// <summary>Placeholders so a control is never an empty or blank box in the viewer: sample combo items, a visible name for unnamed labels and buttons.</summary>
     private static void PreviewDefaults(ControlNodeIr node, SpecControl spec, List<string> attrs)
     {
-        if (spec.Name is "WfComboBox" or "WfListBox" && !node.Attributes.ContainsKey("Items")) attrs.Add("items={[\"Item 1\", \"Item 2\"]}");
+        if (spec.Name is "WfComboBox" or "WfListBox" or "WfCheckedListBox" or "WfDomainUpDown" && !node.Attributes.ContainsKey("Items")) attrs.Add("items={[\"Item 1\", \"Item 2\"]}");
         if (spec.Name is "WfButton" or "WfLabel" && string.IsNullOrWhiteSpace(node.Attributes.GetValueOrDefault("Text"))) attrs.Add(Attr("text", $"[{node.Id}]"));
     }
 
@@ -905,6 +911,15 @@ public sealed partial class PageGenerator
                 attrs.Add(ev.Name == "selectionChange"
                     ? $"{ev.React}={{(sel) => {{ vm.{node.Id}.items.forEach((it, i) => {{ it.selected = sel.includes(i); }});{call} }}}}"
                     : $"{ev.React}={{(i, v) => {{ vm.{node.Id}.items[i].checked = v;{call} }}}}");
+                continue;
+            }
+
+            // CheckedListBox: the check state is written to the model (so CheckedItems / GetItemChecked read it), then the handler runs.
+            if (spec.Name == "WfCheckedListBox" && ev.Name == "itemCheck" && c.ComboIds.Contains(node.Id) && !_preview)
+            {
+                c.UsesModel = true;
+                c.Lib.Add("wfSetItemChecked");
+                attrs.Add($"{ev.React}={{(i, on) => {{ wfSetItemChecked(vm.{node.Id}.checkedIndices, i, on);{(handlerName is null ? "" : $" {handlerName}();")} }}}}");
                 continue;
             }
 
@@ -1100,13 +1115,14 @@ public sealed partial class PageGenerator
     // ------------------------------------------------------------------------------------------------ utils
 
     private static bool IsStateful(string specName) => specName is "WfTextBox" or "WfComboBox" or "WfCheckBox" or "WfRadioButton" or "WfDateTimePicker" or "WfNumericUpDown"
-        or "WfMaskedTextBox" or "WfRichTextBox" or "WfMonthCalendar" or "WfListBox";
+        or "WfMaskedTextBox" or "WfRichTextBox" or "WfMonthCalendar" or "WfListBox"
+        or "WfDomainUpDown" or "WfCheckedListBox" or "WfTrackBar" or "WfScrollBar";
 
     /// <summary>The WinForms property a stateful control keeps in the page model.</summary>
     private static string StatefulProp(string specName) => specName switch
     {
         "WfCheckBox" or "WfRadioButton" => "Checked",
-        "WfDateTimePicker" or "WfNumericUpDown" => "Value",
+        "WfDateTimePicker" or "WfNumericUpDown" or "WfTrackBar" or "WfScrollBar" => "Value",
         "WfMonthCalendar" => "SelectionStart",
         "WfTabs" => "SelectedIndex",
         _ => "Text"

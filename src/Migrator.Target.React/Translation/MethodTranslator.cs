@@ -578,6 +578,11 @@ internal sealed partial class MethodTranslator
             if (_scope.ListViews.Contains(controlId) && name is "Items" or "SelectedItems" or "CheckedItems" or "Columns" or "SelectedIndices")
                 return ListCollection(controlId, name);
             if (_scope.Combos.Contains(controlId) && ComboMember(controlId, name) is { } comboMember) return comboMember;
+            if (_scope.CheckedLists.Contains(controlId) && name is "CheckedIndices" or "CheckedItems")
+            {
+                _scope.Output.UsesViewModel = true;
+                return name == "CheckedIndices" ? $"vm.{controlId}.checkedIndices" : $"vm.{controlId}.checkedIndices.map((i) => vm.{controlId}.items[i])";
+            }
             if (_scope.TreeViews.Contains(controlId) && name is "Nodes" or "SelectedNode")
             {
                 _scope.Output.UsesViewModel = true;
@@ -851,6 +856,20 @@ internal sealed partial class MethodTranslator
         if (args.Count == 1) return isArray ? $"wfListItemFromArray({Ex(first)})" : $"wfListItem({Ex(first)})";
         if (args.Count == 2 && !isArray && args[1].Expression is LiteralExpressionSyntax { Token.Value: string }) return $"wfListItem({Ex(first)}, [], {Ex(args[1].Expression)})";
         throw new Untranslatable("ListViewItem constructor overload");
+    }
+
+    /// <summary>`clb.GetItemChecked(i)` / `clb.SetItemChecked(i, on)` over the model's checked indices.</summary>
+    private string? CheckedListMethod(ExpressionSyntax receiver, string method, InvocationExpressionSyntax inv)
+    {
+        if (ControlOf(receiver) is not { } id || !_scope.CheckedLists.Contains(id)) return null;
+        var args = inv.ArgumentList.Arguments;
+        _scope.Output.UsesViewModel = true;
+        return (method, args.Count) switch
+        {
+            ("GetItemChecked", 1) => $"vm.{id}.checkedIndices.includes({Ex(args[0].Expression)})",
+            ("SetItemChecked", 2) => $"wfSetItemChecked(vm.{id}.checkedIndices, {Ex(args[0].Expression)}, {Ex(args[1].Expression)})",
+            _ => null
+        };
     }
 
     // ------------------------------------------------------------------------------------------------- TreeView
@@ -1237,6 +1256,7 @@ internal sealed partial class MethodTranslator
 
         if (ListMethod(receiver, method, inv) is { } listCall) return listCall;
         if (TreeMethod(receiver, method, inv) is { } treeCall) return treeCall;
+        if (CheckedListMethod(receiver, method, inv) is { } checkedCall) return checkedCall;
         if (ControlOf(receiver) is not null && NoOpCalls.Contains(method)) throw new Dropped($"{method}() has no browser equivalent");
 
         // control.Method(...) is not translated (Select, Sort, ...)

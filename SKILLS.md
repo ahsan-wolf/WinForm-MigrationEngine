@@ -41,13 +41,13 @@ Event naming (canonical → React / Angular / HTML): `click → onClick / (wfCli
 | `CheckBox` | `WfCheckBox` | `checked, indeterminate, text` | `checkedChange` |
 | `RadioButton` ✅ | `WfRadioButton` | `text, checked, group` (= parent container id; radio buttons of one container are exclusive) | `checkedChange` |
 | `ComboBox` | `WfComboBox` | `items, displayMember, valueMember, value, editable` | `selectionChange` |
-| `ListBox` | `WfListBox` | `items, value` (single selection; `CheckedListBox` is still a `WfListView` stand-in) | `selectionChange` |
+| `ListBox` | `WfListBox` | `items, value` (single selection) | `selectionChange` |
 | `NumericUpDown` ✅ | `WfNumericUpDown` | `value, min, max, step, decimals, readOnly` | `valueChange` |
 | `DateTimePicker` ✅ | `WfDateTimePicker` | `value` (ISO text), `kind` (date \| datetime \| time, from `Format`/`CustomFormat`) | `valueChange` |
 | `MonthCalendar` | `WfMonthCalendar` | `value` (ISO date from `SelectionStart`) | `valueChange` |
 | `PictureBox` | `WfPictureBox` | `src, alt, fit(contain\|fill\|none\|cover)` | `click` |
 | `ProgressBar` | `WfProgress` | `value, max, indeterminate` | — |
-| `TrackBar` | `WfSlider` | `value, min, max, step` | `valueChange` |
+| `TrackBar` | `WfTrackBar` | `value, min, max, step, orientation` | `valueChange` |
 | `ToolTip` | `WfTooltip` (wrapper/directive) | `text` | — |
 | `ErrorProvider` | `error` prop on inputs / `WfFieldError` | `message` | — |
 | `DataGridView` | `WfDataGrid` | `rows, columns[], selectionMode, sortable, pageSize, readOnly, allowAdd, allowDelete` | `rowSelect, cellClick, cellDoubleClick, cellEdit, rowAction, sort` |
