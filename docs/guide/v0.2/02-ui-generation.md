@@ -28,7 +28,7 @@
 - **Popups:** `ShowDialog` → `await dialog.show(() => <XPage />, { title })`; `Close()` → `dialog.close()`; DialogResult buttons → `dialog.close("OK")`; `MessageBox.Show` → `dialog.alert` / `confirm` / `message` (YesNoCancel, RetryCancel, AbortRetryIgnore return the DialogResult name, icons become badges). Every popup has a title-bar ✕ and closes on Escape. When translation lost the statement that opened or closed a form, the handler still opens or closes it, marked `// MOCK` and reported (`nav-mock-open`, `nav-mock-close`).
 - **Icons:** `Image.Data` is written to `public/icons/<unit>/<control>.png`; ICO and BMP are converted to PNG in managed code (no Windows API, largest frame up to 32 px); unreadable images (ImageList entries) get a placeholder and a report entry. Menu items show an icon column; toolbar buttons show the image (text becomes the tooltip) unless `DisplayStyle` says otherwise.
 - **Grids:** columns are editable only for an explicit `ReadOnly = false` (WinForms default would turn every migrated grid into an editor); edits are written back to the page model.
-- **Constructor arguments** become optional props with fixture defaults (`// MOCK`); `?page=<Name>` opens a page on its own.
+- **Constructor arguments** become optional props with fixture defaults (`// MOCK`); `/<page-name>` (for example `/search-results`) opens a page on its own and `/pages` lists them; the app uses History API routes with a relative `<base>`.
 - **Contracts:** `--contract` turns a backend assembly's public API into typed mock services; secret-looking members are omitted and listed as SERVER-ONLY.
 
 ## 2.4 Translation (`--translate rules`)

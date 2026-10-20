@@ -6,7 +6,7 @@ Converts legacy **.NET WinForms** applications into a **minimum working React + 
 dotnet build WinFormsMigrator.sln
 cd ui-library/ui-react && npm ci && npm run build && cd ../..
 dotnet run --project src/Migrator.Cli -- migrate --source "<winforms project>" --out "<output outside this repo>" --translate rules --compile-gate --depth all
-cd "<output>/react-app" && npm install && npm run dev      # ?page=<Name> opens any generated page, ?page= lists them
+cd "<output>/react-app" && npm install && npm run dev      # /<page-name> opens any generated page, /pages lists them
 ```
 
 Output is a starting point, not a finished product: data is mock, translated logic is unverified, and every TODO/MOCK marker is listed in `MIGRATION_REPORT.md`.

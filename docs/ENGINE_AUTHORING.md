@@ -47,7 +47,7 @@ Later facets read earlier ones from the `PageIr` only (event wiring is read back
 | `toolTip.SetToolTip(ctrl, "text")` | `ToolTip` on the control |
 | `resources.ApplyResources(...)` + sibling `.resx` | `Text`, `ToolTip`, `ToolTipText`, `HeaderText`, `PlaceholderText` merged when not set in code (code wins); geometry, binary and `>>` metadata entries ignored; a malformed `.resx` is skipped, not fatal |
 
-Dotted/pseudo attribute keys (`ParentSlot`, `TableLayout.*`, `DataBinding.*`, `DefaultCellStyle.*`, `Wired.<Event>`, `Image.Data` / `Image.Format`) cannot collide with C# property names. `Wired.<Event> = "code"` marks event wiring that came from a subscription in the code-behind (see `WinFormsCodeWiringExtractor`: method groups, `new EventHandler(m)`, lambdas and anonymous methods, the last two as synthetic handler members `<ctl>_<Event>_lambda<n>`); designer wiring wins when both exist, and subscriptions on controls that are not in the tree are left alone.
+Dotted/pseudo attribute keys (`ParentSlot`, `TableLayout.*`, `DataBinding.*`, `DefaultCellStyle.*`, `Wired.<Event>`, `Image.Data` / `Image.Format`, `Images.Keys` / `Images.Data` / `Images.Size`) cannot collide with C# property names. `Wired.<Event> = "code"` marks event wiring that came from a subscription in the code-behind (see `WinFormsCodeWiringExtractor`: method groups, `new EventHandler(m)`, lambdas and anonymous methods, the last two as synthetic handler members `<ctl>_<Event>_lambda<n>`); designer wiring wins when both exist, and subscriptions on controls that are not in the tree are left alone.
 Anything else in `InitializeComponent` goes to `project.ir.json` `Shared.Unsupported` as `"{Unit}: {statement}"` (via the optional
 `IUnsupportedReporter`; capped at 50 per unit) — never silently dropped. Partially understood statements are reported too, e.g.
 non-literal table coordinates (`Controls.Add(btn, dynCol, 1)` keeps the literal row and reports the rest).
@@ -56,7 +56,7 @@ Known limitations (carry into reports): handlers in a third partial file are not
 steps (not 2+ levels), ordered by call order; a handler name inside an inlined UserControl that equals a form method name
 would be attributed to the form; a custom base class stays as `RootControl.TagName` (e.g. `BaseForm`) rather than resolving to `Form`;
 `Controls.Add` order in designer code is reverse z-order, so child order is not visual order (generators order by TabIndex/Dock, Skill 4);
-culture-specific `.resx` files, `ImageList` streams and external (`ResXFileRef`) resources are not read (controls using them get a placeholder icon); readable byte-array images are kept as `Image.Data` (base64) and `Image.Format` (png, gif, jpg, bmp, ico, svg), the form icon as `Icon.Data`; ToolStrip items added through helper
+culture-specific `.resx` files and external (`ResXFileRef`) resources are not read (controls using them get a placeholder icon); an `ImageList`'s `ImageStream` is decoded by `ImageListDecoder` (signature `MSFt` + run-length pairs -> native image-list stream -> strip DIB and mask, 1/4/8/24/32 bpp) into `Images.Data` (JSON array of base64 32-bit BMP), `Images.Keys` (from `Images.SetKeyName`) and `Images.Size`; the project's `Resources.resx` is not read yet; readable byte-array images are kept as `Image.Data` (base64) and `Image.Format` (png, gif, jpg, bmp, ico, svg), the form icon as `Icon.Data`; ToolStrip items added through helper
 methods or loops, and any layout computed at runtime, are not seen.
 
 ### Navigation extraction (found on the ECMNavigator pilot)
@@ -202,7 +202,7 @@ checked, value, readOnly), form fields are `f.<name>` (initial values from their
   not wired yet (constructor arguments at `new Form(...)` call sites are still a TODO in the caller).
 - **Sample rows:** a ListView whose rows/columns the translated code never writes gets 3 `// MOCK` sample rows (and sample columns when the designer has none) so it is visible.
 - **GroupBox** maps to `WfGroupBox` (fieldset + legend). The launcher shows a page's render error instead of a blank screen.
-- **Dev launcher:** the generated `main.tsx` opens the entry form by default; `?page=<Name>` (e.g. `?page=SearchResults`) renders one generated page on its own with mock data and `?page=` lists all pages. Needed for forms
+- **Dev launcher:** the generated `main.tsx` opens the entry form by default; `/<page-name>` (e.g. `/search-results`, kebab-case of the component name without `Page`) renders one generated page on its own with mock data and `/pages` lists all pages (generated `src/lib/router.ts`, History API; old `?page=<Name>` links are rewritten to routes). Needed for forms
   whose opener passes constructor arguments (not translated yet), which the entry form cannot reach.
 - **Button.DialogResult:** clicking a button whose designer sets `DialogResult` runs its Click handler then `dialog.close(result)`, as WinForms closes the dialog (not part of translation; applies in every mode).
 

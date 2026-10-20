@@ -17,6 +17,10 @@ Reconstructed from the merged slices (PR numbers refer to the repository's pull 
 - Event wiring from code-behind subscriptions (`WinFormsCodeWiringExtractor`, `source: 'code'`) and `Path.*` helpers in the generated `lib/csharp.ts`.
 
 - Grid rows model: `Rows.Add/Clear/RemoveAt/Remove/Count`, `Cells[k].Value`, `SelectedRows`, `CurrentRow`, `Columns.Add` over `vm.<grid>.{columns,rows,selected}` with `wfGrid*` helpers; a ListView that no code or event uses is rendered as a grid.
+- Tab pages: `TabPages.Add/Insert/Remove/RemoveAt/Clear/Contains/IndexOf/Count`, `TabCount`, `SelectedTab` (compare, assign, `.Name`/`.Text`) over `vm.<tab>.selectedIndex` and `vm.<page>.visible`; `WfTabPage` gets `visible`, `disabled` and `icon`.
+- Controls added in code: `panel.Controls.Add(new UserControl(args))`, `Clear`, `RemoveAt`, `Count` over `vm.<panel>.controls` rendered by the new `WfDynamicHost`; constructor arguments become the component's props; such user controls join the generated scope; a user control's `Load` runs once on mount (`WfPanel` `onLoad`).
+- ImageList: the `ImageStream` resource is decoded in managed code (`ImageListDecoder`) to one image per entry, written as `public/images/<unit>/<list>/<key>.png`; `keys`/`urls` in the page model with `Images.Add/Count/Clear/RemoveAt/RemoveByKey/ContainsKey/IndexOfKey/SetKeyName` and `il.Images[k]`; `ImageKey`/`ImageIndex` on tab pages, toolbar and menu items (at generation time) and on tree nodes and list items (`imageList` prop of `WfTreeView` / `WfListView`). IR pseudo-attributes `Images.Keys` / `Images.Data` / `Images.Size` (additive).
+- Routes: standard History API paths (`/`, `/<page-name>`, `/pages`) from a generated `src/lib/router.ts`; `<base href>` + Vite `base: './'` make asset URLs and links relative (icons are now `icons/…`, not `/icons/…`).
 
 ## 0.1 (10–13 Oct)
 

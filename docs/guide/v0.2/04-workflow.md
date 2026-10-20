@@ -25,7 +25,7 @@ Only engines listed in `engines.json` load. On Windows, paths containing `&` or 
 | 4 | Backend survey (if the app has a service layer) | `migrator backend --source <lib> --source <svc> --wsdl <dir> --out <out>/backend` | read `BACKEND_ANALYSIS.md`: services, proxies, thin vs logic, Windows hits, static state |
 | 5 | Backend contract (if a client DLL exists) | `migrator contract --assembly <dll> --out <out>/contracts` | `contract.json`, `data-access.json` |
 | 6 | Functional app | `migrator migrate --source <src> --out <out> --translate rules --compile-gate --depth all [--units all] [--contract <contract.json>]` | console counts; `tsc` errors 0 |
-| 7 | Verify generated app | `npm run build`, `npm run lint`, `npm run dev`, then `?page=<Name>` for each page | build passes, lint 0, pages render |
+| 7 | Verify generated app | `npm run build`, `npm run lint`, `npm run dev`, then `/<page-name>` for each page (`/pages` lists them) | build passes, lint 0, pages render |
 | 8 | Read the report | `MIGRATION_REPORT.md` | top reasons; fix at the right layer (below) |
 | 9 | Repeat 6–8 | | `tsc` and lint stay at 0 |
 | 10 | Review | TODO / MOCK / BYPASSED / FALLBACK items with people who know the application | |

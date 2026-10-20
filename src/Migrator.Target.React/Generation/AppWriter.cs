@@ -41,6 +41,8 @@ public static class AppWriter
                 <meta charset="UTF-8" />
                 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
                 <title>{{appName}}</title>
+                <!-- Relative URLs (icons/…, images/…, route links) resolve against the app base, so the app runs at the site root or under a sub-path. -->
+                <base href="%BASE_URL%" />
               </head>
               <body>
                 <div id="root"></div>
@@ -73,7 +75,9 @@ public static class AppWriter
             import { defineConfig } from 'vite';
             import react from '@vitejs/plugin-react';
 
+            // A relative base: built assets and the <base href> in index.html work wherever the app is hosted (a host must serve index.html for unknown paths).
             export default defineConfig({
+              base: './',
               plugins: [react()],
               resolve: { dedupe: ['react', 'react-dom'] },
             });
@@ -119,18 +123,19 @@ public static class AppWriter
             import '@wfm/ui-react/styles.css';
             import './app.css';
             import { {{entryComponent}} } from './pages/{{entryComponent}}';
+            import { navigate, routeFor, routeUrl, usePath } from './lib/router';
 
-            // Development launcher: `?page=<Name>` opens one generated page on its own (with mock data), `?page=` lists them all.
+            // One route per generated page: `/` is the entry form, `/<page-name>` opens any other page on its own (with mock data), `/pages` lists them all.
             // Forms the entry form opens through ShowDialog() are normally reached from it, but those whose constructor arguments
-            // are not translated yet (see MIGRATION_REPORT.md) cannot be reached that way.
+            // are not translated yet (see MIGRATION_REPORT.md) cannot be reached that way. Old `?page=<Name>` links are rewritten to routes.
             type PageProps = object;
             const loaders = import.meta.glob(['./pages/*.tsx', '!./pages/*.code.tsx']) as Record<string, () => Promise<Record<string, unknown>>>;
             const pages = Object.entries(loaders).map(([path, load]) => {
               const name = path.slice('./pages/'.length, -'.tsx'.length);
-              return { name, Page: lazy(async () => ({ default: (await load())[name] as ComponentType<PageProps> })) };
+              return { name, route: routeFor(name), Page: lazy(async () => ({ default: (await load())[name] as ComponentType<PageProps> })) };
             });
-            const requested = new URLSearchParams(window.location.search).get('page');
-            const selected = requested === null ? undefined : pages.find((p) => p.name === requested || p.name === requested + 'Page');
+            const legacy = new URLSearchParams(window.location.search).get('page');
+            if (legacy !== null) navigate(pages.find((p) => p.name === legacy || p.name === legacy + 'Page')?.route ?? 'pages', true);
 
             // A page that throws while rendering shows its error instead of a blank screen.
             class Boundary extends Component<{ children: ReactNode }, { error: Error | null }> {
@@ -139,26 +144,73 @@ public static class AppWriter
               render() { return this.state.error ? <pre role="alert">{String(this.state.error.stack ?? this.state.error)}</pre> : this.props.children; }
             }
 
-            const goHome = () => { window.location.search = ''; };
+            const goHome = () => navigate('');
 
             function Index() {
               return (
                 <ul>
-                  {pages.map((p) => <li key={p.name}><a href={`?page=${p.name}`}>{p.name}</a></li>)}
+                  {pages.map((p) => <li key={p.name}><a href={routeUrl(p.route)} onClick={(e) => { e.preventDefault(); navigate(p.route); } }>{p.name}</a></li>)}
                 </ul>
               );
             }
 
-            const app = selected ? (
-              <Suspense fallback={null}><selected.Page /></Suspense>
-            ) : requested !== null ? <Index /> : <{{entryComponent}} />;
+            function App() {
+              const path = usePath();
+              const selected = pages.find((p) => p.route === path);
+              const view = path === '' ? <{{entryComponent}} /> : path === 'pages' ? <Index /> : selected ? <Suspense fallback={null}><selected.Page /></Suspense> : <Index />;
+              return <Boundary key={path}>{view}</Boundary>;
+            }
 
             // The entry form is the app shell; every ShowDialog() target opens through the dialog service.
             createRoot(document.getElementById('root')!).render(
               <StrictMode>
-                <WfDialogProvider onRootClose={goHome}><Boundary>{app}</Boundary></WfDialogProvider>
+                <WfDialogProvider onRootClose={goHome}><App /></WfDialogProvider>
               </StrictMode>,
             );
+            """, files);
+
+        // Routes on the History API and the URL API, no router package: a route is a path relative to the document base.
+        Put(appDir, "src/lib/router.ts", """
+            import { useSyncExternalStore } from 'react';
+
+            // The app base as a path ('/' at the site root, '/app/' under a sub-path), from the <base href> in index.html. Read once at start-up,
+            // when the URL is the one the user opened, so later navigation cannot move it.
+            const base = new URL(document.baseURI).pathname.replace(/\/?$/, '/');
+
+            /** The route of the current URL relative to the base, without slashes ('' is the entry form). */
+            export function currentRoute(): string {
+              const path = decodeURIComponent(window.location.pathname);
+              const rest = path.startsWith(base) ? path.slice(base.length) : path.replace(/^\//, '');
+              return rest.replace(/\/+$/, '').replace(/^index\.html$/, '');
+            }
+
+            /** The URL (path on this origin) of a route, for links. */
+            export function routeUrl(route: string): string {
+              return base + encodeURI(route);
+            }
+
+            /** Opens a route without reloading the page (`replace` overwrites the current history entry). */
+            export function navigate(route: string, replace = false): void {
+              const url = routeUrl(route);
+              if (replace) window.history.replaceState(null, '', url);
+              else window.history.pushState(null, '', url);
+              window.dispatchEvent(new window.Event('popstate'));
+            }
+
+            /** The route of a generated page: `NavigatorPage` -> `navigator`, `SearchResultsPage` -> `search-results`. */
+            export function routeFor(componentName: string): string {
+              return componentName.replace(/Page$/, '').replace(/([a-z0-9])([A-Z])/g, '$1-$2').replace(/([A-Z]+)([A-Z][a-z])/g, '$1-$2').toLowerCase();
+            }
+
+            const subscribe = (listener: () => void) => {
+              window.addEventListener('popstate', listener);
+              return () => window.removeEventListener('popstate', listener);
+            };
+
+            /** The current route; the component re-renders when it changes (navigate(), back and forward). */
+            export function usePath(): string {
+              return useSyncExternalStore(subscribe, currentRoute);
+            }
             """, files);
 
         // Runtime helpers for translated C# (string.Format with a non-literal format string).

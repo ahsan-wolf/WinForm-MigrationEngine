@@ -821,7 +821,7 @@ public sealed partial class PageGenerator
                     var path = $"images/{c.Unit.Name}/{node.Id}/{ImageFileName(key, i, taken)}.png";
                     c.Assets.Add(($"public/{path}", web.Data));
                     c.IconsConverted++;
-                    url = "/" + path;
+                    url = path;
                 }
                 else
                 {
@@ -950,7 +950,7 @@ public sealed partial class PageGenerator
                 var path = $"icons/{c.Unit.Name}/{node.Id}.{web.Extension}";
                 c.Assets.Add(($"public/{path}", web.Data));
                 if (web.Converted) c.IconsConverted++; else c.IconsExtracted++;
-                return Attr("icon", "/" + path);
+                return Attr("icon", path);
             }
         }
         if (ImageListIcon(node, c) is { } listIcon) return Attr("icon", listIcon);
