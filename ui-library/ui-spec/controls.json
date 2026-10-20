@@ -1,5 +1,5 @@
 {
-  "specVersion": "0.1.0",
+  "specVersion": "0.2.0",
   "note": "Framework-neutral control contract. Every ui-library package implements these names, props and canonical events. Generators read this file as data: `winformsTypes` picks the component, `props[].from` maps WinForms properties, `events[].from` maps WinForms events, `childOf`/`slot` place designer children. Additive changes only; a breaking change needs a major bump and a note in docs/.",
   "transforms": {
     "mnemonic": "Text 'E&xit' -> text 'Exit' + accessKey 'x' (the library renders the underline)",

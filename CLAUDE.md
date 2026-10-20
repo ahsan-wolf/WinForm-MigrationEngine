@@ -254,7 +254,7 @@ The controls live in a **separate, UI-independent library** under `ui-library/`.
 | `@wfm/ui-angular` | Angular 17+ standalone components/directives implementing the spec |
 | `@wfm/ui-html` | HTML/CSS + vanilla JS web-friendly components; jQuery adapter (`$.fn.wfDataGrid`, …) |
 
-**As built:** `ui-spec` 0.1.0 (`controls.json` + `tokens.css`) and `@wfm/ui-react` 0.1.0 exist, with 22 components (form, menus, toolbar, status bar, panel, group box, split, inputs, grid, list view, dialog service, `useWfModel`; see `ui-library/README.md`). `ui-angular` and `ui-html` are not started. Generators read `controls.json` as data (`winformsTypes`, `props[].from/transform`, `events[].from`).
+**As built:** `ui-spec` 0.2.0 (`controls.json` + `fallbacks.json` + `tokens.css`) and `@wfm/ui-react` 0.2.0 exist, with 40 spec entries (36 map WinForms controls; native HTML only, no third-party dependency) plus the dialog service (`dialog.show()` / `dialog.close()`), `useWfModel` and `WfUnsupported`; see `ui-library/README.md` and `docs/UI_CONTROL_MAPPING.md`. `ui-angular` and `ui-html` are not started. Generators read `controls.json` as data (`winformsTypes`, `props[].from/transform`, `events[].from`).
 
 Hard rules:
 1. **Library-first generation.** Generated pages import `Wf*` components only. They never import AG Grid / DataTables / Material / jstree etc. directly — those are the library's private implementation detail (peer deps).
