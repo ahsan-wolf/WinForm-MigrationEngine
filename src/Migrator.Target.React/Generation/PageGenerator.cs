@@ -128,6 +128,9 @@ public sealed partial class PageGenerator
         public HashSet<string> StatefulIds { get; } = new();
         public HashSet<string> ListViewIds { get; } = new();
         public HashSet<string> TreeViewIds { get; } = new();
+        /// <summary>ListViews that nothing in the code or the events touches: rendered as a grid with the designer columns and sample rows.</summary>
+        public HashSet<string> ListGrids { get; } = new();
+        public Dictionary<string, bool> VisualLists { get; } = new();
         public HashSet<string> EditableGrids { get; } = new();
         public HashSet<string> ComboIds { get; } = new();
 
@@ -389,6 +392,12 @@ public sealed partial class PageGenerator
         }
 
         var spec = isRoot ? RootSpec(node) : _spec.Find(node.Effective());
+        if (!isRoot && spec?.Name == "WfListView" && IsVisualOnlyList(node, c) && _spec.Find("System.Windows.Forms.DataGridView") is { } gridSpec)
+        {
+            spec = gridSpec;
+            c.ListGrids.Add(node.Id);
+            c.Issue("listview-as-grid", $"{node.Id}: a ListView that no code or event uses is rendered as a grid with its designer columns and sample rows");
+        }
         if (spec is null) return RenderFallback(node, c, type);
 
         c.Lib.Add(spec.Name);
@@ -594,7 +603,7 @@ public sealed partial class PageGenerator
                 AddToModel(c, node, StatefulProp(spec.Name));
             }
             if (node.Attributes.GetValueOrDefault("Visible") == "false") AddToModel(c, node, "Visible");
-            if (spec?.Name == "WfListView") { c.ListViewIds.Add(node.Id); AddListViewModel(c, node); }
+            if (spec?.Name == "WfListView" && !IsVisualOnlyList(node, c)) { c.ListViewIds.Add(node.Id); AddListViewModel(c, node); }
             if (spec?.Name == "WfTreeView") { c.TreeViewIds.Add(node.Id); AddTreeViewModel(c, node); }
             // Items/selection behave like a combo box; the checked state of a CheckedListBox is its own model entry.
             if (spec?.Name is "WfCheckedListBox" or "WfDomainUpDown" && c.ComboIds.Add(node.Id)) AddComboModel(c, node);
@@ -874,6 +883,19 @@ public sealed partial class PageGenerator
     private sealed record GridField(string Field, string Header, bool Checkbox, string? Format);
 
     /// <summary>Column definitions of a grid from its designer column children; with <paramref name="placeholders"/> and no designer columns, three generic ones.</summary>
+    /// <summary>
+    /// A ListView that is "missing" in the view: no handler is wired to it and no method of the form mentions it, so translated code can neither fill nor read it.
+    /// It is shown as a grid (designer columns, three sample rows) instead of an empty list.
+    /// </summary>
+    private bool IsVisualOnlyList(ControlNodeIr node, Ctx c)
+    {
+        if (c.VisualLists.TryGetValue(node.Id, out var known)) return known;
+        var wired = _spec.Find(node.Effective())?.Events.Any(ev => node.Attributes.ContainsKey("On" + ev.From)) == true;
+        var mention = new Regex($@"(?<![\w.]){Regex.Escape(node.Id)}\b");
+        var used = c.Unit.Page.Members.Any(m => m.Body is { } body && mention.IsMatch(body));
+        return c.VisualLists[node.Id] = !wired && !used;
+    }
+
     private static (List<string> Defs, List<GridField> Fields, int DesignerColumns) GridColumns(ControlNodeIr node, bool placeholders)
     {
         var cols = node.Children.Where(ch => ch.Attributes.GetValueOrDefault("ParentSlot") == "Columns").ToList();
@@ -882,7 +904,7 @@ public sealed partial class PageGenerator
         foreach (var col in cols)
         {
             var field = col.Attributes.GetValueOrDefault("DataPropertyName") is { Length: > 0 } dp ? dp : col.Attributes.GetValueOrDefault("Name") ?? col.Id;
-            var header = col.Attributes.GetValueOrDefault("HeaderText") ?? col.Id;
+            var header = col.Attributes.GetValueOrDefault("HeaderText") ?? col.Attributes.GetValueOrDefault("Text") ?? col.Id;
             var format = col.Attributes.GetValueOrDefault("DefaultCellStyle.Format");
             var width = int.TryParse(col.Attributes.GetValueOrDefault("Width"), out var w) ? $", width: {w}" : "";
             // Cells are editable in place only when the designer says so explicitly (ReadOnly = false on the grid or the column, not true on the column);
@@ -912,9 +934,9 @@ public sealed partial class PageGenerator
         c.LibTypes.Add("WfGridColumn");
         var baseName = Naming.StateName(node.Id);
         var colsName = c.Names.Unique(baseName + "Columns");
-        var (defs, fields, designerColumns) = GridColumns(node, placeholders: _preview);
+        var (defs, fields, designerColumns) = GridColumns(node, placeholders: _preview || c.ListGrids.Contains(node.Id));
 
-        if (designerColumns == 0 && !_preview)
+        if (designerColumns == 0 && !_preview && !c.ListGrids.Contains(node.Id))
         {
             c.TopLevel.Add($"// TODO: columns of {node.Id} are created in code (not in the designer); define them here.");
             c.Issue("grid-no-columns", $"{node.Id} has no designer columns; rows are empty");
