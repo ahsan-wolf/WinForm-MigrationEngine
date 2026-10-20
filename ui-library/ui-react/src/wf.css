@@ -86,6 +86,7 @@ textarea.wf-textbox { height: auto; padding: var(--wf-space-1); }
 .wf-tablist { display: flex; gap: 2px; border-bottom: 1px solid var(--wf-color-border); }
 .wf-tab { padding: 3px var(--wf-space-2); border: 1px solid var(--wf-color-border); border-bottom: 0; background: var(--wf-color-surface); color: inherit; font: inherit; cursor: pointer; border-radius: 3px 3px 0 0; }
 .wf-tab:hover:not(:disabled) { background: var(--wf-color-hover); } .wf-tab:disabled { opacity: .5; cursor: default; }
+.wf-tab-icon { width: 16px; height: 16px; margin-right: 4px; vertical-align: text-bottom; }
 .wf-tab-active { background: var(--wf-color-bg); font-weight: 600; position: relative; top: 1px; }
 .wf-tabpanel { padding: var(--wf-space-2); border: 1px solid var(--wf-color-border); border-top: 0; background: var(--wf-color-bg); min-height: 3em; }
 .wf-tabpanel[hidden] { display: none; }
@@ -133,3 +134,4 @@ textarea.wf-textbox { height: auto; padding: var(--wf-space-1); }
 .wf-dropdown > .wf-toolbar-button + .wf-dropdown-toggle { min-width: 0; padding: 0 3px; border-left: 0; }
 .wf-dropdown-arrow { font-size: .8em; margin-left: 2px; }
 .wf-dropdown > .wf-menu { top: 100%; left: 0; z-index: var(--wf-z-menu, 10); }
+.wf-dynamic { display: flex; flex-direction: column; gap: var(--wf-gap, 4px); }
