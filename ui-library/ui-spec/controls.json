@@ -50,7 +50,8 @@
 
     { "name": "WfPanel", "winformsTypes": ["System.Windows.Forms.Panel", "System.Windows.Forms.FlowLayoutPanel"], "container": true,
       "props": [ { "name": "visible", "type": "boolean", "from": ["Visible"], "transform": "bool" } ],
-      "events": [], "a11y": "Plain region; hidden panels are not rendered.", "example": "<WfPanel visible>…</WfPanel>" },
+      "events": [ { "name": "load", "from": "Load", "react": "onLoad", "note": "Only a user control (the root of a generated control) has a Load event; it runs once when the control is shown." } ],
+      "a11y": "Plain region; hidden panels are not rendered.", "example": "<WfPanel visible>…</WfPanel>" },
     { "name": "WfGroupBox", "winformsTypes": ["System.Windows.Forms.GroupBox"], "container": true,
       "props": [
         { "name": "title", "type": "string", "from": ["Text"] },

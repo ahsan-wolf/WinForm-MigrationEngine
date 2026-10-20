@@ -361,7 +361,10 @@ public sealed class ReactAppGenerator
         return $"{method}#{LineDemotion.ToOriginal(current, already)}";
     }
 
-    /// <summary>Breadth-first over Show/ShowDialog navigation, bounded by depth (null = all reachable).</summary>
+    /// <summary>
+    /// Breadth-first over Show/ShowDialog navigation, bounded by depth (null = all reachable). A user control a page creates in code
+    /// (`panel.Controls.Add(new X(...))`) is part of that page, so it joins the scope at the page's own depth.
+    /// </summary>
     private static Dictionary<string, int> Reachable(IrFolder ir, string entry, int? maxDepth)
     {
         var scope = new Dictionary<string, int>(StringComparer.Ordinal) { [entry] = 0 };
@@ -370,6 +373,8 @@ public sealed class ReactAppGenerator
         while (queue.Count > 0)
         {
             var current = queue.Dequeue();
+            foreach (var created in CreatedUserControls(ir, ir.Units[current]))
+                if (scope.TryAdd(created, scope[current])) queue.Enqueue(created);
             if (maxDepth is { } limit && scope[current] >= limit) continue;
             foreach (var nav in ir.Units[current].Page.Navigations.Where(n => n.TargetType is "Show" or "ShowDialog"))
                 if (ir.Units.ContainsKey(nav.Target) && scope.TryAdd(nav.Target, scope[current] + 1))
@@ -377,6 +382,11 @@ public sealed class ReactAppGenerator
         }
         return scope;
     }
+
+    private static IEnumerable<string> CreatedUserControls(IrFolder ir, UnitIr unit) =>
+        System.Text.RegularExpressions.Regex.Matches(Translation.ContainerUsage.CodeOf(unit), @"\bnew\s+(\w+)\s*\(")
+            .Select(m => m.Groups[1].Value).Distinct(StringComparer.Ordinal)
+            .Where(n => ir.Units.TryGetValue(n, out var u) && u.IsUserControl);
 
     private static string Report(IrFolder ir, string entry, GenerationOptions options, SpecCatalog spec,
         List<(string Unit, int Depth, GeneratedPage Page)> pages, GenerationResult result, List<string> outOfScope, List<ContractEmitResult> contracts, bool translate, GateSummary gate, SupportModule? supportModule, List<string> serverBound)

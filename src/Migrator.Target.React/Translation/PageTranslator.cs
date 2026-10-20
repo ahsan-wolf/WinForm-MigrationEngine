@@ -70,6 +70,13 @@ public static class PageTranslator
             }
         }
 
+        foreach (var (tab, pages) in ContainerUsage.TabPages(root))
+        {
+            scope.TabPages[tab] = pages;
+            foreach (var page in pages) scope.TabPageParent[page] = tab;
+        }
+        foreach (var host in ContainerUsage.Hosts(unit)) scope.DynamicHosts.Add(host);
+
         foreach (var m in unit.Page.Members.Where(m => m.Kind is MemberKind.Field or MemberKind.Property))
             scope.Fields.TryAdd(m.Name, m);
 

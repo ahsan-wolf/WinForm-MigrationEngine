@@ -564,6 +564,10 @@ internal sealed partial class MethodTranslator
         var name = ma.Name.Identifier.ValueText;
         var left = ma.Expression;
 
+        if (TabCount(ma) is { } tabCount) return tabCount;
+        if (HostCount(ma) is { } hostCount) return hostCount;
+        if (SelectedTabMember(left, name) is { } selectedTab) return selectedTab;
+
         // DataGridView cells and rows: row.Cells[k].Value, row.Selected, row.Index
         if (CellOf(ma, out var cellGrid, out var cellRow, out var cellKey)) { _scope.Output.UsesViewModel = true; return $"wfGridCell(vm.{cellGrid}, {cellRow}, {cellKey})"; }
         if (GridOfRow(left) is { } rowOwner && name is "Selected" or "Index")
@@ -1145,6 +1149,7 @@ internal sealed partial class MethodTranslator
         if (b.IsKind(SyntaxKind.AsExpression)) return Ex(b.Left);
         if (b.IsKind(SyntaxKind.IsExpression)) throw new Untranslatable("type test (is)");
 
+        if (op is "==" or "!=" && TryTabCompare(b, out var tabCompare)) return tabCompare;
         if (op is "==" or "!=" && TryDialogCompare(b, out var dialog)) return dialog;
 
         var left = Ex(b.Left);
@@ -1211,6 +1216,8 @@ internal sealed partial class MethodTranslator
             _scope.Output.UsesViewModel = true;
             return $"wfGridSetCell(vm.{setGrid}, {setRow}, {setKey}, {Ex(a.Right)})";
         }
+
+        if (TryTabAssign(a, out var tabAssign)) return tabAssign;
 
         // Event subscription in code: the source engine records it as wiring (`Wired.<Event> = "code"`), so the markup binds the handler.
         if (a.IsKind(SyntaxKind.AddAssignmentExpression) && a.Left is MemberAccessExpressionSyntax { Name.Identifier.ValueText: var wiredEvent } wiredLeft
@@ -1385,6 +1392,8 @@ internal sealed partial class MethodTranslator
         if (ListMethod(receiver, method, inv) is { } listCall) return listCall;
         if (TreeMethod(receiver, method, inv) is { } treeCall) return treeCall;
         if (GridMethod(receiver, method, inv) is { } gridCall) return gridCall;
+        if (TabPagesMethod(receiver, method, inv) is { } tabCall) return tabCall;
+        if (HostMethod(receiver, method, inv) is { } hostCall) return hostCall;
         if (CheckedListMethod(receiver, method, inv) is { } checkedCall) return checkedCall;
         if (ControlOf(receiver) is not null && NoOpCalls.Contains(method)) throw new Dropped($"{method}() has no browser equivalent");
 

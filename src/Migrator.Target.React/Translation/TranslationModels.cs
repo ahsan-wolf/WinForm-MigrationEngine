@@ -109,6 +109,13 @@ public sealed class PageScope
     /// <summary>Controls of type TabControl: `SelectedIndex` is `vm.<id>.selectedIndex`.</summary>
     public HashSet<string> TabControls { get; } = new(StringComparer.Ordinal);
 
+    /// <summary>Tab control id -> ids of its pages in designer order, and page id -> its tab control (pages are fixed at design time; Add/Remove show and hide them).</summary>
+    public Dictionary<string, List<string>> TabPages { get; } = new(StringComparer.Ordinal);
+    public Dictionary<string, string> TabPageParent { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>Containers the code adds user controls to (`panel.Controls.Add(new X(...))`): their `controls` list lives in the model.</summary>
+    public HashSet<string> DynamicHosts { get; } = new(StringComparer.Ordinal);
+
     /// <summary>`controlId.Event` keys whose wiring came from code-behind subscriptions (IR marker `Wired.Event = "code"`): the markup binds them.</summary>
     public HashSet<string> CodeWired { get; } = new(StringComparer.Ordinal);
 
