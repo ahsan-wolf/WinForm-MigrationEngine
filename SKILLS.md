@@ -54,7 +54,7 @@ Event naming (canonical → React / Angular / HTML): `click → onClick / (wfCli
 | ↳ columns | `WfGridColumn` types: `text, checkbox, combo, button, link, image` | `field, header, format, width, frozen, render` | — |
 | `TreeView` | `WfTreeView` | `nodes, selectedNode, checkBoxes` (lazy loading not yet) | `selectionChange, nodeCheckedChange, nodeClick, nodeDoubleClick` |
 | `ListView` | `WfListView` | `items, columns, checkBoxes, multiSelect, disabled` (icons/tiles/groups not yet) | `selectionChange, itemCheckedChange, itemActivate, click, doubleClick, keyUp, columnClick` |
-| `TabControl` / `TabPage` ✅ | `WfTabs` / `WfTabPage` | `selectedIndex` (controlled when code uses it) / `title` | `selectionChange` (`SelectedIndexChanged`) |
+| `TabControl` / `TabPage` ✅ | `WfTabs` / `WfTabPage` | `selectedIndex` (controlled when code uses it) / `title`, `disabled`, `visible` (hides the tab, keeps the index), `icon`; code that uses `TabPages.Add/Remove/Insert/Clear/Count`, `TabCount` or `SelectedTab` drives `vm.<tab>.selectedIndex` and `vm.<page>.visible` | `selectionChange` (`SelectedIndexChanged`) |
 | `SplitContainer` | `WfSplit` | `orientation, sizes` | `resize` |
 | `Panel` | `WfPanel` | `visible, scroll` | — |
 | `GroupBox` | `WfGroupBox` | `title` | — |
@@ -389,7 +389,7 @@ Per target:
 | `Invoke` / `BeginInvoke` (UI thread marshaling) | remove (single-threaded) | remove | remove |
 | `Control.CheckForIllegalCrossThreadCalls` | remove | remove | remove |
 | `Thread.Sleep` | `await new Promise(r=>setTimeout(r,ms))` | same | same |
-| `ImageList` | icon map / sprite | `mat-icon` registry | CSS sprite |
+| `ImageList` ✅ (React) | not a control: an image resource list. The source engine decodes `ImageStream` (`Images.Data`, `Images.Keys`); the target writes `public/images/<unit>/<list>/<key>.png` and keeps `vm.<il>.keys` / `.urls` (`wfImageList*` helpers: `Images.Add`, `Count`, `ContainsKey`, `IndexOfKey`, `RemoveAt`, `Clear`); `WfTreeView` / `WfListView` take `imageList`; `ImageKey` / `ImageIndex` become `icon` paths | `mat-icon` registry | CSS sprite |
 | `FileSystemWatcher`, `SerialPort`, `Registry`, `Process`, P/Invoke, COM ⛔ | server-side API — TODO | same | same |
 
 ---
@@ -655,7 +655,7 @@ Generators read these from `ControlNodeIr.Attributes` / `PageIr` (never from the
 
 | Source construct | IR location | Generator use |
 |---|---|---|
-| `Controls/Items/DropDownItems/TabPages/Columns/Panel1/Panel2 .Add` | child nodes; `ParentSlot` attr | menus → `WfMenuBar`, tabs → `WfTabs`, split → `WfSplit`, grid columns → `WfGridColumn` |
+| `Controls/Items/DropDownItems/TabPages/Columns/Panel1/Panel2 .Add` | child nodes; `ParentSlot` attr | menus → `WfMenuBar`, tabs → `WfTabs`, split → `WfSplit`, grid columns → `WfGridColumn`. Code that adds `new UserControl(args)` to a panel (`panel.Controls.Add`, `Clear`, `RemoveAt`, `Count`) fills `vm.<panel>.controls`, rendered by `WfDynamicHost` (`wfDynamicControl(Component, props)`; constructor arguments are the props) |
 | `TableLayoutPanel` cell/span/styles | child `TableLayout.*`; table `ColumnStyles`/`RowStyles` (+ `layout` facet `TableDefinition`) | `WfTableLayout` columns/rows/cells (Skill 3.4) |
 | `Items.AddRange(new object[]{...})` | `Items` JSON array | `WfComboBox`/`WfListBox` `items` |
 | `DataBindings.Add(new Binding("Text", bs, "Name"))` | `DataBinding.Text = bs.Name` | controlled input bound to record field (Skill 7) |

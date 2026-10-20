@@ -76,7 +76,7 @@ Known extractor limits: handlers in a third partial file, workflow steps deeper 
 - **Lists**: `WfListView` columns from `ColumnHeader` children; code-created lists get clearly marked sample rows.
 - **App shell** (`--appshell`): the same visual-only pages in a WinForms-style host window: hyperlink navigation on the left, the selected unit in a form-style frame on the right (USER_GUIDE 5.2).
 - **Component viewer** (`--preview`): a separate generated app with a visual-only page for every form and user control and a sidebar shell that loads the selected one; no logic of any kind (see USER_GUIDE 5.1, ENGINE_AUTHORING).
-- **Dev launcher** in `main.tsx`: `?page=<Name>` / `?page=`; render errors shown, not blank.
+- **Dev launcher** in `main.tsx`: History API routes from the generated `src/lib/router.ts`: `/` entry form, `/<page-name>` one page, `/pages` the list (`?page=<Name>` is rewritten); render errors shown, not blank.
 - **Contracts**: `src/services/<assembly>/{types,fixtures,service}.ts`; secret-looking members omitted/stripped (SERVER-ONLY list in the report).
 
 ### 5.2 Translation (rules)

@@ -9,6 +9,9 @@ internal static partial class ResxReader
     /// <summary>Largest image kept per resource (bytes); bigger ones are left out and the control gets a placeholder icon.</summary>
     public const int MaxImageBytes = 256 * 1024;
 
+    /// <summary>Largest ImageList stream decoded (bytes, still compressed).</summary>
+    public const int MaxImageStreamBytes = 2 * 1024 * 1024;
+
     /// <summary>Only string-valued properties that carry user-visible text are merged; geometry and binary resources are not.</summary>
     public static readonly string[] MergedProperties = { "Text", "ToolTip", "ToolTipText", "HeaderText", "PlaceholderText" };
 
@@ -69,6 +72,35 @@ internal static partial class ResxReader
             // A malformed .resx must not fail the form.
         }
         return images;
+    }
+
+    /// <summary>The BinaryFormatter ImageList streams of a .resx (`imageList1.ImageStream`): name -> the serialized bytes. Decoded by <see cref="ImageListDecoder"/>.</summary>
+    public static Dictionary<string, byte[]> ParseImageStreams(string? resxXml)
+    {
+        var streams = new Dictionary<string, byte[]>(StringComparer.Ordinal);
+        if (string.IsNullOrWhiteSpace(resxXml) || !resxXml.Contains("ImageStream", StringComparison.Ordinal)) return streams;
+        try
+        {
+            foreach (var data in XDocument.Parse(resxXml).Root?.Elements("data") ?? Enumerable.Empty<XElement>())
+            {
+                var name = (string?)data.Attribute("name");
+                if (name is null || !name.EndsWith(".ImageStream", StringComparison.Ordinal) || ((string?)data.Attribute("mimetype") ?? "").Contains("binary.base64", StringComparison.Ordinal) is false) continue;
+                try
+                {
+                    var bytes = Convert.FromBase64String(((string?)data.Element("value") ?? "").Trim());
+                    if (bytes.Length > 0 && bytes.Length <= MaxImageStreamBytes) streams[name] = bytes;
+                }
+                catch (FormatException)
+                {
+                    // not base64: nothing to decode
+                }
+            }
+        }
+        catch (System.Xml.XmlException)
+        {
+            // A malformed .resx must not fail the form.
+        }
+        return streams;
     }
 
     /// <summary>The file format of image bytes from their signature: png, gif, jpg, bmp, ico, svg or unknown.</summary>

@@ -37,7 +37,7 @@ internal sealed partial class MethodTranslator
 
     private static readonly Dictionary<string, string> ListItemProps = new(StringComparer.Ordinal)
     {
-        ["Text"] = "text", ["Checked"] = "checked", ["Selected"] = "selected", ["Tag"] = "tag", ["Name"] = "name", ["ImageKey"] = "imageKey"
+        ["Text"] = "text", ["Checked"] = "checked", ["Selected"] = "selected", ["Tag"] = "tag", ["Name"] = "name", ["ImageKey"] = "imageKey", ["ImageIndex"] = "imageIndex"
     };
 
     private static readonly JsonSerializerOptions JsonOut = new() { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
@@ -507,6 +507,9 @@ internal sealed partial class MethodTranslator
             case PrefixUnaryExpressionSyntax pu: return pu.OperatorToken.Text + Ex(pu.Operand);
             case PostfixUnaryExpressionSyntax po: return Ex(po.Operand) + po.OperatorToken.Text;
             case ConditionalExpressionSyntax c: return $"{Ex(c.Condition)} ? {Ex(c.WhenTrue)} : {Ex(c.WhenFalse)}";
+            case ElementAccessExpressionSyntax { ArgumentList.Arguments: { Count: 1 } imageArgs } images when ImageListOf(images.Expression) is { } imageList:
+                _scope.Output.UsesViewModel = true;
+                return $"(wfImageListUrl(vm.{imageList}, {Ex(imageArgs[0].Expression)}) ?? '')";
             case ElementAccessExpressionSyntax el: return $"{Ex(el.Expression)}[{string.Join(", ", el.ArgumentList.Arguments.Select(a2 => Ex(a2.Expression)))}]";
             case CastExpressionSyntax cast: return Cast(cast);
             case InterpolatedStringExpressionSyntax interp: return Interpolated(interp);
@@ -563,6 +566,11 @@ internal sealed partial class MethodTranslator
     {
         var name = ma.Name.Identifier.ValueText;
         var left = ma.Expression;
+
+        if (ImageListMember(ma) is { } imageListMember) return imageListMember;
+        if (TabCount(ma) is { } tabCount) return tabCount;
+        if (HostCount(ma) is { } hostCount) return hostCount;
+        if (SelectedTabMember(left, name) is { } selectedTab) return selectedTab;
 
         // DataGridView cells and rows: row.Cells[k].Value, row.Selected, row.Index
         if (CellOf(ma, out var cellGrid, out var cellRow, out var cellKey)) { _scope.Output.UsesViewModel = true; return $"wfGridCell(vm.{cellGrid}, {cellRow}, {cellKey})"; }
@@ -970,7 +978,8 @@ internal sealed partial class MethodTranslator
 
     private static readonly Dictionary<string, string> TreeNodeProps = new(StringComparer.Ordinal)
     {
-        ["Text"] = "text", ["Name"] = "name", ["Tag"] = "tag", ["Checked"] = "checked", ["Nodes"] = "nodes", ["IsExpanded"] = "expanded"
+        ["Text"] = "text", ["Name"] = "name", ["Tag"] = "tag", ["Checked"] = "checked", ["Nodes"] = "nodes", ["IsExpanded"] = "expanded",
+        ["ImageKey"] = "imageKey", ["ImageIndex"] = "imageIndex"
     };
 
     /// <summary>True when the expression is a TreeNode: a typed local, the tree's SelectedNode, an element of a Nodes collection, or the node a Nodes.Add call returns.</summary>
@@ -1145,6 +1154,7 @@ internal sealed partial class MethodTranslator
         if (b.IsKind(SyntaxKind.AsExpression)) return Ex(b.Left);
         if (b.IsKind(SyntaxKind.IsExpression)) throw new Untranslatable("type test (is)");
 
+        if (op is "==" or "!=" && TryTabCompare(b, out var tabCompare)) return tabCompare;
         if (op is "==" or "!=" && TryDialogCompare(b, out var dialog)) return dialog;
 
         var left = Ex(b.Left);
@@ -1210,6 +1220,18 @@ internal sealed partial class MethodTranslator
         {
             _scope.Output.UsesViewModel = true;
             return $"wfGridSetCell(vm.{setGrid}, {setRow}, {setKey}, {Ex(a.Right)})";
+        }
+
+        if (TryTabAssign(a, out var tabAssign)) return tabAssign;
+
+        // node.ImageKey / item.ImageIndex = x: the image comes from the control's image list; a computed key (a call on an unresolvable helper) is appearance only.
+        if (a.IsKind(SyntaxKind.SimpleAssignmentExpression) && a.Left is MemberAccessExpressionSyntax { Name.Identifier.ValueText: "ImageKey" or "ImageIndex" } imageLeft
+            && (IsTreeNode(imageLeft.Expression) || IsListItem(imageLeft.Expression)))
+        {
+            string imageValue;
+            try { imageValue = Ex(a.Right); }
+            catch (Untranslatable) { throw new Dropped($"{imageLeft.Name.Identifier.ValueText} is appearance-only (the image is chosen by a computed key)"); }
+            return $"{Ex(imageLeft.Expression)}.{(imageLeft.Name.Identifier.ValueText == "ImageKey" ? "imageKey" : "imageIndex")} = {imageValue}";
         }
 
         // Event subscription in code: the source engine records it as wiring (`Wired.<Event> = "code"`), so the markup binds the handler.
@@ -1385,6 +1407,9 @@ internal sealed partial class MethodTranslator
         if (ListMethod(receiver, method, inv) is { } listCall) return listCall;
         if (TreeMethod(receiver, method, inv) is { } treeCall) return treeCall;
         if (GridMethod(receiver, method, inv) is { } gridCall) return gridCall;
+        if (ImageListMethod(receiver, method, inv) is { } imageCall) return imageCall;
+        if (TabPagesMethod(receiver, method, inv) is { } tabCall) return tabCall;
+        if (HostMethod(receiver, method, inv) is { } hostCall) return hostCall;
         if (CheckedListMethod(receiver, method, inv) is { } checkedCall) return checkedCall;
         if (ControlOf(receiver) is not null && NoOpCalls.Contains(method)) throw new Dropped($"{method}() has no browser equivalent");
 

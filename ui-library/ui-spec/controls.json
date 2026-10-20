@@ -50,7 +50,8 @@
 
     { "name": "WfPanel", "winformsTypes": ["System.Windows.Forms.Panel", "System.Windows.Forms.FlowLayoutPanel"], "container": true,
       "props": [ { "name": "visible", "type": "boolean", "from": ["Visible"], "transform": "bool" } ],
-      "events": [], "a11y": "Plain region; hidden panels are not rendered.", "example": "<WfPanel visible>…</WfPanel>" },
+      "events": [ { "name": "load", "from": "Load", "react": "onLoad", "note": "Only a user control (the root of a generated control) has a Load event; it runs once when the control is shown." } ],
+      "a11y": "Plain region; hidden panels are not rendered.", "example": "<WfPanel visible>…</WfPanel>" },
     { "name": "WfGroupBox", "winformsTypes": ["System.Windows.Forms.GroupBox"], "container": true,
       "props": [
         { "name": "title", "type": "string", "from": ["Text"] },
@@ -134,8 +135,14 @@
       "events": [ { "name": "selectionChange", "from": "SelectedIndexChanged", "react": "onSelectionChange" } ],
       "a11y": "tablist/tab/tabpanel roles; arrow keys, Home/End move between tabs; every page stays mounted.", "example": "<WfTabs><WfTabPage title=\"General\">…</WfTabPage></WfTabs>" },
     { "name": "WfTabPage", "winformsTypes": ["System.Windows.Forms.TabPage"], "container": true,
-      "props": [ { "name": "title", "type": "string", "from": ["Text"] } ],
+      "props": [ { "name": "title", "type": "string", "from": ["Text"] },
+                 { "name": "disabled", "type": "boolean", "from": ["Enabled"], "transform": "invert" },
+                 { "name": "visible", "type": "boolean", "from": ["Visible"], "transform": "bool", "note": "false hides the page's tab; the page keeps its index (TabPages.Remove / Add toggle it)." },
+                 { "name": "icon", "type": "string", "from": ["Image", "ImageKey", "ImageIndex"], "note": "Image-resource path shown before the title." } ],
       "events": [], "a11y": "tabpanel content of a WfTabs.", "example": "<WfTabPage title=\"General\">…</WfTabPage>" },
+    { "name": "WfDynamicHost", "winformsTypes": [],
+      "props": [ { "name": "controls", "type": "WfDynamicControl[]", "note": "Controls added to a container in code (panel.Controls.Add(new SomeControl(args))); build entries with wfDynamicControl(Component, props)." } ],
+      "events": [], "a11y": "Plain region listing the controls in order.", "example": "<WfDynamicHost controls={vm.pnlHost.controls} />" },
     { "name": "WfProgress", "winformsTypes": ["System.Windows.Forms.ProgressBar", "System.Windows.Forms.ToolStripProgressBar"],
       "props": [ { "name": "value", "type": "number", "from": ["Value"], "transform": "int" },
                  { "name": "max", "type": "number", "from": ["Maximum"], "transform": "int" } ],
@@ -167,6 +174,7 @@
         { "name": "columns", "type": "WfListColumn[]", "note": "Built from child ColumnHeader nodes (Text -> header, Width -> width); kept in the page model so code can Columns.Add/Clear." },
         { "name": "items", "type": "WfListItem[]", "note": "Page model: vm.<id>.items. Each item: text, subItems[], checked, selected, tag. SelectedItems is a filter over `selected`." },
         { "name": "checkBoxes", "type": "boolean", "from": ["CheckBoxes"], "transform": "bool" },
+        { "name": "imageList", "type": "WfImageList", "note": "Image resources by key or index (WinForms SmallImageList); an item's imageKey / imageIndex picks the image shown before its text. Wired by the generator when the designer sets SmallImageList." },
         { "name": "multiSelect", "type": "boolean", "note": "Defaults to true (WinForms default); the generator passes false only when the designer sets MultiSelect=false." },
         { "name": "disabled", "type": "boolean", "from": ["Enabled"], "transform": "invert" } ],
       "events": [
@@ -211,6 +219,7 @@
       "props": [
         { "name": "nodes", "type": "WfTreeNode[]", "note": "Page model: vm.<id>.nodes. Each node: text, name, tag, checked, expanded, nodes[]. Nodes.Add / new TreeNode / node.Nodes translate onto this array." },
         { "name": "selectedNode", "type": "WfTreeNode | null", "note": "Page model: vm.<id>.selectedNode (WinForms SelectedNode)." },
+        { "name": "imageList", "type": "WfImageList", "note": "Image resources by key or index (WinForms ImageList); a node's imageKey / imageIndex picks the image shown before its text (an explicit icon wins). Wired by the generator when the designer sets ImageList." },
         { "name": "checkBoxes", "type": "boolean", "from": ["CheckBoxes"], "transform": "bool" },
         { "name": "disabled", "type": "boolean", "from": ["Enabled"], "transform": "invert" } ],
       "events": [

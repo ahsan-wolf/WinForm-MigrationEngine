@@ -55,6 +55,7 @@ public static class PageTranslator
             scope.Controls.Add(node.Id);
             if (node.Effective() == "System.Windows.Forms.ListView") scope.ListViews.Add(node.Id);
             if (node.Effective() == "System.Windows.Forms.TabControl") scope.TabControls.Add(node.Id);
+            if (node.Effective() == ContainerUsage.ImageListType) scope.ImageLists.Add(node.Id);
             if (node.Effective() is "System.Windows.Forms.ComboBox" or "System.Windows.Forms.ToolStripComboBox" or "System.Windows.Forms.ListBox"
                 or "System.Windows.Forms.CheckedListBox" or "System.Windows.Forms.DomainUpDown") scope.Combos.Add(node.Id);
             if (node.Effective() == "System.Windows.Forms.CheckedListBox") scope.CheckedLists.Add(node.Id);
@@ -69,6 +70,13 @@ public static class PageTranslator
                 map[key["Fallback.Alias.".Length..]] = value;
             }
         }
+
+        foreach (var (tab, pages) in ContainerUsage.TabPages(root))
+        {
+            scope.TabPages[tab] = pages;
+            foreach (var page in pages) scope.TabPageParent[page] = tab;
+        }
+        foreach (var host in ContainerUsage.Hosts(unit)) scope.DynamicHosts.Add(host);
 
         foreach (var m in unit.Page.Members.Where(m => m.Kind is MemberKind.Field or MemberKind.Property))
             scope.Fields.TryAdd(m.Name, m);

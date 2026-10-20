@@ -138,7 +138,7 @@ npm run dev       # development server
 npm run build     # production build (must pass)
 npm run lint      # must report 0 problems
 ```
-**Dev launcher.** `http://localhost:5173/` opens the entry form. `?page=<Name>` (for example `?page=SearchResults`) opens one generated page on its own with mock data; `?page=` lists all pages. A page that throws while rendering shows its error text instead of a blank screen. Dialogs that the original opened with constructor arguments take them as optional props and fall back to fixture data, so they work standalone.
+**Dev launcher.** `http://localhost:5173/` opens the entry form. `/<page-name>` (for example `http://localhost:5173/search-results`, the kebab-case component name without `Page`) opens one generated page on its own with mock data; `/pages` lists all pages. Routes are standard History API paths relative to the app base (`<base href>`, Vite `base: './'`), so the app also runs under a sub-path; a production host must serve `index.html` for unknown paths. Old `?page=<Name>` links are rewritten to routes. A page that throws while rendering shows its error text instead of a blank screen. Dialogs that the original opened with constructor arguments take them as optional props and fall back to fixture data, so they work standalone.
 
 What to click through: the menu and toolbar, each dialog from the entry form, lists and grids (their rows are mock data), `Close`/`OK`/`Cancel` buttons, and the pages in the launcher index.
 
@@ -171,9 +171,9 @@ What to click through: the menu and toolbar, each dialog from the entry form, li
 | `Cannot find @wfm/ui-react` or blank styles | Build the library first: `cd ui-library/ui-react && npm ci && npm run build` |
 | `npm run` fails on a path containing `&` or spaces | The generated scripts call `node ./node_modules/<tool>/bin/...` for that reason; do not replace them with `.bin` shims |
 | Compile gate does nothing | Dependencies are not installed: pass `--compile-gate` (installs) or run `npm install` first |
-| Page is blank in the browser | Hard refresh; open `?page=<Name>` to see the render error; check the console |
+| Page is blank in the browser | Hard refresh; open `/<page-name>` to see the render error; check the console |
 | Two copies of React / hooks error | The generated Vite config dedupes React; re-generate rather than editing it |
-| `?page=X` does nothing | Name must match a markup file in `src/pages` (`X.tsx` or `XPage.tsx`; the `.code.tsx` files are not pages); use `?page=` to list |
+| `/x` shows the page list | The route is the kebab-case name of a markup file in `src/pages` without `Page` (`SearchResultsPage.tsx` is `/search-results`; the `.code.tsx` files are not pages); open `/pages` to list them |
 | Tool output differs between runs | It should not: the generators are deterministic. Compare IR first (`ir` step), then the translator version |
 
 ## 12. Git workflow (when changing the tool itself)

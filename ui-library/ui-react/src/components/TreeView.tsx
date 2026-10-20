@@ -1,4 +1,5 @@
 import { useRef, useState, type KeyboardEvent } from 'react';
+import { wfImageListUrl, type WfImageList } from './ImageList';
 
 const cls = (base: string, extra?: string): string => (extra ? `${base} ${extra}` : base);
 
@@ -11,8 +12,11 @@ export interface WfTreeNode {
   tag?: unknown;
   checked?: boolean;
   expanded?: boolean;
-  /** A web path, URL or data URI shown before the text. */
+  /** A web path, URL or data URI shown before the text. Wins over `imageKey` / `imageIndex`. */
   icon?: string;
+  /** TreeNode.ImageKey / ImageIndex: the image in the tree's `imageList` shown before the text. */
+  imageKey?: string;
+  imageIndex?: number;
   /** The node has children that are not loaded yet; expanding it calls `onNodeExpand` so the page can fill `nodes` (WinForms lazy loading in BeforeExpand). */
   hasChildren?: boolean;
   nodes: WfTreeNode[];
@@ -40,6 +44,8 @@ export interface WfTreeViewProps {
   nodes?: WfTreeNode[];
   /** Controlled selection (WinForms `SelectedNode`); omit for an uncontrolled tree. */
   selectedNode?: WfTreeNode | null;
+  /** Where `imageKey` / `imageIndex` of the nodes are looked up (WinForms TreeView.ImageList). */
+  imageList?: WfImageList;
   checkBoxes?: boolean;
   disabled?: boolean;
   id?: string; className?: string; tooltip?: string;
@@ -52,7 +58,7 @@ export interface WfTreeViewProps {
 }
 
 /** Hierarchical tree (TreeView): expand/collapse, single selection, optional check boxes, arrow-key navigation. */
-export function WfTreeView({ nodes = [], selectedNode, checkBoxes, disabled, id, className, tooltip, onSelectionChange, onNodeCheckedChange, onNodeClick, onNodeDoubleClick, onNodeExpand }: WfTreeViewProps) {
+export function WfTreeView({ nodes = [], selectedNode, imageList, checkBoxes, disabled, id, className, tooltip, onSelectionChange, onNodeCheckedChange, onNodeClick, onNodeDoubleClick, onNodeExpand }: WfTreeViewProps) {
   const [local, setLocal] = useState<WfTreeNode | null>(null);
   const [, refresh] = useState(0);
   const [loading, setLoading] = useState<ReadonlySet<WfTreeNode>>(new Set());
@@ -93,7 +99,7 @@ export function WfTreeView({ nodes = [], selectedNode, checkBoxes, disabled, id,
           <span className="wf-tree-toggle" aria-hidden onClick={e => { e.stopPropagation(); if (hasChildren && !disabled) toggle(node); }}>{hasChildren ? (node.expanded ? '▾' : '▸') : ''}</span>
           {checkBoxes && <input type="checkbox" tabIndex={-1} disabled={disabled} checked={!!node.checked} onClick={e => e.stopPropagation()}
                                 onChange={e => { node.checked = e.target.checked; refresh(n => n + 1); onNodeCheckedChange?.(node, e.target.checked); }} />}
-          {node.icon && <img src={node.icon} alt="" className="wf-tree-icon" />}
+          {(node.icon ?? wfImageListUrl(imageList, node.imageKey ?? node.imageIndex)) && <img src={node.icon ?? wfImageListUrl(imageList, node.imageKey ?? node.imageIndex)} alt="" className="wf-tree-icon" />}
           <span className="wf-tree-text">{node.text}</span>
         </div>
         {hasChildren && node.expanded && <ul role="group">{loading.has(node) ? <li className="wf-tree-loading" role="none">Loading…</li> : render(node.nodes)}</ul>}

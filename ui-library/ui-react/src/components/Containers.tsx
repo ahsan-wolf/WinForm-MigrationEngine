@@ -24,8 +24,11 @@ export function WfForm({ title, acceptButtonId, cancelButtonId, onLoad, id, clas
   );
 }
 
-export interface WfPanelProps { visible?: boolean; scroll?: boolean; id?: string; className?: string; children?: ReactNode }
-export function WfPanel({ visible = true, scroll, id, className, children }: WfPanelProps) {
+export interface WfPanelProps { visible?: boolean; scroll?: boolean; onLoad?: () => void; id?: string; className?: string; children?: ReactNode }
+/** Plain region. `onLoad` (a user control's Load event) runs once when the panel first mounts. */
+export function WfPanel({ visible = true, scroll, onLoad, id, className, children }: WfPanelProps) {
+  useEffect(() => { onLoad?.(); // eslint-disable-next-line react-hooks/exhaustive-deps -- UserControl.Load runs once on mount
+  }, []);
   if (!visible) return null;
   return <div id={id} className={cls(`wf-panel${scroll ? ' wf-panel-scroll' : ''}`, className)}>{children}</div>;
 }
