@@ -115,7 +115,7 @@ Colours and fonts are CSS variables at the top of `src/appshell.css` (system-sty
 | `<WfUnsupported .../>` | A control that could not even be given a fallback (rare) |
 
 ### 6.3 What the generated app looks like
-- `src/pages/<Form>Page.tsx` — one component per form. Controls are `Wf*` components; control properties live in `vm` (`vm.txtSearch.text`) and form fields in `f`, both from `useWfModel` (reads are immediate, writes re-render once, so translated WinForms code maps one to one).
+- `src/pages/<Form>Page.tsx` + `src/pages/<Form>Page.code.tsx` — **two files per form, like the WinForms original**: the `.tsx` holds only the markup (the "Designer": `Wf*` controls bound by name), the `.code.tsx` is the **code-behind**, a hook `use<Form>PageCode()` with the model, handlers and translated methods, plus an exported `wiring` table (`control`, `event`, `handler`, `method`, `source`) that lists every event wiring of the original form for tracing. Control properties live in `vm` (`vm.txtSearch.text`) and form fields in `f`, both from `useWfModel` (reads are immediate, writes re-render once, so translated WinForms code maps one to one).
 - `src/support/index.ts` — the app's own classes (`main`, `Preferences`, enums, data classes), called as in the original.
 - `src/services/<assembly>/` — typed mock service when a contract was given.
 - `src/legacy/*.cs.txt` — the original code-behind of every generated form, so nothing is lost.
@@ -171,7 +171,7 @@ What to click through: the menu and toolbar, each dialog from the entry form, li
 | Compile gate does nothing | Dependencies are not installed: pass `--compile-gate` (installs) or run `npm install` first |
 | Page is blank in the browser | Hard refresh; open `?page=<Name>` to see the render error; check the console |
 | Two copies of React / hooks error | The generated Vite config dedupes React; re-generate rather than editing it |
-| `?page=X` does nothing | Name must match a file in `src/pages` (with or without the `Page` suffix); use `?page=` to list |
+| `?page=X` does nothing | Name must match a markup file in `src/pages` (`X.tsx` or `XPage.tsx`; the `.code.tsx` files are not pages); use `?page=` to list |
 | Tool output differs between runs | It should not: the generators are deterministic. Compare IR first (`ir` step), then the translator version |
 
 ## 12. Git workflow (when changing the tool itself)

@@ -303,6 +303,7 @@ Never silently drop code: untranslatable code stays as a commented original C# b
 - **Code style:** TypeScript strict, no `any` without TODO; React function components + hooks; Angular standalone + `signal()` + typed reactive forms + `inject()`; jQuery IIFE module per page.
 - **Layout:** never copy `Location`/`Size`; derive flex/grid from tree + Dock/Anchor/TabIndex (Skill 4).
 - **Semantic labels** drive button variant, icons and comments.
+- **Code-behind (React target):** every form/user control is generated as two files like the WinForms original: `XPage.tsx` (markup only, the Designer) and `XPage.code.tsx` (code-behind: hook `useXPageCode` with model, handlers, translated methods, and the exported `wiring` table `{ control, event, handler, method, source }`). The compile gate maps errors to methods through the code-behind file; the launcher/viewer list markup files only.
 
 ---
 
