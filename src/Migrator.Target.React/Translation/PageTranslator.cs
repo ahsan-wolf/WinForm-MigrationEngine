@@ -60,6 +60,7 @@ public static class PageTranslator
             if (node.Effective() == "System.Windows.Forms.CheckedListBox") scope.CheckedLists.Add(node.Id);
             foreach (var (key, value) in node.Attributes)
                 if (key.StartsWith("Wired.", StringComparison.Ordinal) && value == "code") scope.CodeWired.Add($"{node.Id}.{key[6..]}");
+            if (node.Effective() == "System.Windows.Forms.DataGridView") scope.Grids.Add(node.Id);
             if (node.Effective() == "System.Windows.Forms.TreeView") scope.TreeViews.Add(node.Id);
             if (node.Effective() == "System.Windows.Forms.MonthCalendar") scope.Calendars.Add(node.Id);
             foreach (var (key, value) in node.Attributes.Where(a => a.Key.StartsWith("Fallback.Alias.", StringComparison.Ordinal)))

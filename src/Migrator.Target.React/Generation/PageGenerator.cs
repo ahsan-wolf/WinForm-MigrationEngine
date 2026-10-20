@@ -128,6 +128,8 @@ public sealed partial class PageGenerator
         public HashSet<string> StatefulIds { get; } = new();
         public HashSet<string> ListViewIds { get; } = new();
         public HashSet<string> TreeViewIds { get; } = new();
+        /// <summary>Grids the code-behind mentions: their columns, rows and selection live in the model (`vm.<id>.columns`, `.rows`, `.selected`).</summary>
+        public HashSet<string> GridIds { get; } = new();
         /// <summary>ListViews that nothing in the code or the events touches: rendered as a grid with the designer columns and sample rows.</summary>
         public HashSet<string> ListGrids { get; } = new();
         public Dictionary<string, bool> VisualLists { get; } = new();
@@ -185,6 +187,7 @@ public sealed partial class PageGenerator
         var handlerCode = BuildFunctions(c, jsx);
         SeedListViewSamples(c, handlerCode);
         SeedTreeViewSamples(c, handlerCode);
+        SeedGridSamples(c, handlerCode);
         var usesFields = false;
         string? serviceImport = null;
         List<string> typeImports = new();
@@ -210,7 +213,7 @@ public sealed partial class PageGenerator
             tr.UsesFormat = Regex.IsMatch(text, @"\bformatString\(");
             foreach (var helper in new[] { "wfListItem", "wfListItemFromArray" }) if (Regex.IsMatch(text, $@"\b{helper}\(")) c.Lib.Add(helper);
             if (Regex.IsMatch(text + "\n" + (usesFields ? fieldText : ""), @"\bWfListItem\b")) c.LibTypes.Add("WfListItem");
-            foreach (var helper in new[] { "wfTreeNode", "wfSetExpanded", "wfSetItemChecked" }) if (Regex.IsMatch(text, $@"\b{helper}\(")) c.Lib.Add(helper);
+            foreach (var helper in new[] { "wfTreeNode", "wfSetExpanded", "wfSetItemChecked", "wfGridAddColumn", "wfGridAddRow", "wfGridClearRows", "wfGridRemoveRow", "wfGridCell", "wfGridSetCell" }) if (Regex.IsMatch(text, $@"\b{helper}\(")) c.Lib.Add(helper);
             if (Regex.IsMatch(text + "\n" + (usesFields ? fieldText : ""), @"\bWfTreeNode\b")) c.LibTypes.Add("WfTreeNode");
         }
 
@@ -936,7 +939,7 @@ public sealed partial class PageGenerator
         var colsName = c.Names.Unique(baseName + "Columns");
         var (defs, fields, designerColumns) = GridColumns(node, placeholders: _preview || c.ListGrids.Contains(node.Id));
 
-        if (designerColumns == 0 && !_preview && !c.ListGrids.Contains(node.Id))
+        if (designerColumns == 0 && !_preview && !c.ListGrids.Contains(node.Id) && !IsGridUsedInCode(node, c))
         {
             c.TopLevel.Add($"// TODO: columns of {node.Id} are created in code (not in the designer); define them here.");
             c.Issue("grid-no-columns", $"{node.Id} has no designer columns; rows are empty");
@@ -956,11 +959,56 @@ public sealed partial class PageGenerator
             return;
         }
 
+        c.UsesModel = true;
+        if (IsGridUsedInCode(node, c))
+        {
+            // The code reads or fills this grid (Rows.Add, Cells[k].Value, SelectedRows, Columns.Add): columns, rows and selection are model entries.
+            c.GridIds.Add(node.Id);
+            c.ModelSet(node.Id, "Columns", $"{colsName}.map((col) => ({{ ...col }})) as WfGridColumn[]");
+            c.ModelSet(node.Id, "Rows", "[] as Record<string, unknown>[]");
+            c.ModelSet(node.Id, "Selected", "[] as Record<string, unknown>[]");
+            attrs.Add($"rows={{vm.{node.Id}.rows}}");
+            attrs.Add($"columns={{vm.{node.Id}.columns}}");
+            return;
+        }
+
         c.ModelComments.Add($"// MOCK — {node.Id} rows are fake sample data; replace with real implementation (inferred — check against backend contract)");
         c.ModelSet(node.Id, "Rows", $"{JsonSerializer.Serialize(rows, JsonOut)} as Record<string, unknown>[]");
-        c.UsesModel = true;
         attrs.Add($"rows={{vm.{node.Id}.rows}}");
         attrs.Add($"columns={{{colsName}}}");
+    }
+
+    /// <summary>A grid that some method of the form mentions: translated code can then add rows, read cells or use the selection.</summary>
+    private static bool IsGridUsedInCode(ControlNodeIr node, Ctx c)
+    {
+        var mention = new Regex($@"(?<![\w.]){Regex.Escape(node.Id)}\b");
+        return c.Unit.Page.Members.Any(m => m.Body is { } body && mention.IsMatch(body));
+    }
+
+    /// <summary>A model-backed grid that translated code never fills gets three marked sample rows (and placeholder columns when it has none and code adds none).</summary>
+    private static void SeedGridSamples(Ctx c, List<string> handlerCode)
+    {
+        if (c.GridIds.Count == 0) return;
+        var code = string.Join("\n", handlerCode.Where(l => !l.TrimStart().StartsWith("//", StringComparison.Ordinal)));
+        foreach (var id in c.GridIds)
+        {
+            var key = Regex.Escape(id);
+            var writesRows = Regex.IsMatch(code, $@"\bwfGridAddRow\(vm\.{key}\b|\bvm\.{key}\.rows(\.(push|splice)\b|\s*=[^=])");
+            var writesColumns = Regex.IsMatch(code, $@"\bwfGridAddColumn\(vm\.{key}\b|\bvm\.{key}\.columns(\.(push|splice)\b|\s*=[^=])");
+            if (writesRows) continue;
+
+            var model = c.Model[id];
+            var fields = Regex.Matches(model["columns"], @"field: ""([^""]+)""").Select(m => m.Groups[1].Value).ToList();
+            if (fields.Count == 0 && !writesColumns)
+            {
+                model["columns"] = "[" + string.Join(", ", Enumerable.Range(1, 3).Select(i => $"{{ field: 'column{i}', header: 'Column {i}' }}")) + "] as WfGridColumn[]";
+                fields = Enumerable.Range(1, 3).Select(i => $"column{i}").ToList();
+            }
+            if (fields.Count == 0) continue;
+            var rows = Enumerable.Range(1, 3).Select(r => fields.ToDictionary(f => f, f => (object)$"{f} {r}")).ToList();
+            model["rows"] = $"{JsonSerializer.Serialize(rows, JsonOut)} as Record<string, unknown>[]";
+            c.ModelComments.Add($"// MOCK — {id} rows are fake sample data: the original fills it in code that is not translated; replace with real implementation");
+        }
     }
 
     // ---------------------------------------------------------------------------------------------- preview (visual-only pages)
@@ -1097,6 +1145,14 @@ public sealed partial class PageGenerator
                 attrs.Add(ev.Name == "selectionChange"
                     ? $"{ev.React}={{(sel) => {{ vm.{node.Id}.items.forEach((it, i) => {{ it.selected = sel.includes(i); }});{call} }}}}"
                     : $"{ev.React}={{(i, v) => {{ vm.{node.Id}.items[i].checked = v;{call} }}}}");
+                continue;
+            }
+
+            // A grid the code uses keeps its selected rows in the model, so SelectedRows / CurrentRow read the selection that is on screen.
+            if (spec.Name == "WfDataGrid" && ev.Name == "rowSelect" && c.GridIds.Contains(node.Id) && !_preview)
+            {
+                c.UsesModel = true;
+                attrs.Add($"{ev.React}={{(rows) => {{ vm.{node.Id}.selected = rows;{(handlerName is null ? "" : $" {handlerName}();")} }}}}");
                 continue;
             }
 

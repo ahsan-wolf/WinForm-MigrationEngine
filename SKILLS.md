@@ -174,8 +174,8 @@ Event naming (canonical → React / Angular / HTML): `click → onClick / (wfCli
 | `AllowUserToOrderColumns` / `AllowUserToResizeColumns` | grid lib option | grid lib option | DataTables `colReorder/colResize` |
 | `SelectionMode=FullRowSelect` | `selectedRow` state, row click | `selection = new SelectionModel()` | `.on('click','tr')` toggles `.table-active` |
 | `MultiSelect` | `Set<id>` state | `SelectionModel(true)` | multi-class toggle |
-| `SelectedRows[0]` / `CurrentRow` | `selectedRow` | `selectedRow()` | stored object |
-| `Rows.Add / Rows.Remove / Rows.Clear` | immutable array ops | `signal.update()` | DataTables `row.add/remove/clear().draw()` |
+| `SelectedRows[0]` / `CurrentRow` | **as built (React):** `vm.<grid>.selected[0]` (the selection is written back to the model by `onRowSelect`) | `selectedRow()` | stored object |
+| `Rows.Add / Rows.Remove / Rows.Clear` | **as built (React):** `wfGridAddRow(vm.g, [..])` / `wfGridRemoveRow` / `wfGridClearRows` over the model rows; `Columns.Add(name, header)` → `wfGridAddColumn`; `Rows[i].Cells[k].Value` → `wfGridCell(vm.g, row, k)` (k: index, field or header), assignment → `wfGridSetCell` | `signal.update()` | DataTables `row.add/remove/clear().draw()` |
 | `Sort(column, direction)` / header click | table lib sort state | `matSort` | DataTables `order` |
 | Paging (manual) | `slice` / table lib | `mat-paginator` | DataTables paging |
 | `Frozen` columns | CSS `position: sticky` | `sticky` column | CSS sticky |

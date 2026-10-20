@@ -42,7 +42,7 @@ public static partial class Naming
         return char.ToLowerInvariant(p[0]) + p[1..];
     }
 
-    /// <summary>frmNavigator -> NavigatorPage; ucCustomField -> CustomFieldControl.</summary>
+    /// <summary>frmOrders -> OrdersPage; ucFieldEditor -> FieldEditorControl.</summary>
     public static string Component(string unitName, bool userControl) => Pascal(StripPrefix(unitName)) + (userControl ? "Control" : "Page");
 
     public static string StateName(string controlId) => Camel(StripPrefix(controlId));

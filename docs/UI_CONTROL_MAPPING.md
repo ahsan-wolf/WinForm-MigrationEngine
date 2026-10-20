@@ -47,6 +47,8 @@ Inputs are controlled when a change handler is passed and uncontrolled otherwise
 
 ## 2. Services and helpers (not visual)
 
+`wfGrid*` helpers (`wfGridAddColumn`, `wfGridAddRow`, `wfGridClearRows`, `wfGridRemoveRow`, `wfGridCell`, `wfGridSetCell`) are the counterparts of the DataGridView members WinForms code uses. A grid that any method of the form mentions keeps its columns, rows and selection in the page model (`vm.<id>.columns`, `.rows`, `.selected`): `Columns.Add`, `Rows.Add`, `Rows.Count`, `Rows[i].Cells[k].Value` (index, field name or header), `foreach (DataGridViewRow r in grid.Rows)`, `SelectedRows`, `CurrentRow`, `Rows.Clear`, `RemoveAt` and `Remove` translate onto it; column indexes may be set at run time (`idx = grid.Columns.Count; grid.Columns.Add(...)`). Grids the code never mentions keep the static columns and marked sample rows.
+
 | Piece | Role |
 |---|---|
 | `WfDialogProvider` + `useWfDialog` | Modal popups on the native `<dialog>` element (top layer, focus containment, Escape): `alert`, `confirm` (Yes/No and OK/Cancel give a boolean), `message(text, { buttons, icon, title })` (YesNoCancel, RetryCancel, AbortRetryIgnore give the DialogResult name; Escape answers the cancelling button), `show(render)` for `ShowDialog` forms and `close(result?)` for `this.Close()` / `DialogResult` (closes the topmost dialog and resolves its `show` promise; with no dialog open it calls the provider's `onRootClose`). Every popup has a title-bar ✕ (answers like Escape), so a form without its own Close button can still be closed. `MessageBoxIcon` becomes an `info` / `warning` / `error` / `question` badge |

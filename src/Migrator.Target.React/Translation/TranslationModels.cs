@@ -115,6 +115,9 @@ public sealed class PageScope
     /// <summary>Controls of type CheckedListBox: `CheckedIndices` / `CheckedItems` / `GetItemChecked` / `SetItemChecked` use `vm.<id>.checkedIndices`.</summary>
     public HashSet<string> CheckedLists { get; } = new(StringComparer.Ordinal);
 
+    /// <summary>Controls of type DataGridView: `Rows` / `SelectedRows` / `Columns` / `CurrentRow` and `Cells[k].Value` use the grid model (`vm.<id>.rows`, `.selected`, `.columns`).</summary>
+    public HashSet<string> Grids { get; } = new(StringComparer.Ordinal);
+
     /// <summary>Controls of type TreeView: `Nodes` / `SelectedNode` live in the page model (`vm.&lt;id&gt;.nodes`, `.selectedNode`).</summary>
     public HashSet<string> TreeViews { get; } = new(StringComparer.Ordinal);
 
