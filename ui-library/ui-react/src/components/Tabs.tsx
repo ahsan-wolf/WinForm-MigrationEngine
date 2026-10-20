@@ -9,7 +9,10 @@ export function WfTabPage({ children }: WfTabPageProps) {
 }
 
 export interface WfTabsProps {
-  /** Controlled selection; omit for an uncontrolled control that starts on the first page. */
+  /**
+   * The selected page. Controlled when `onSelectionChange` is also passed (the parent keeps the index); without a change handler it is only the starting page and
+   * the tabs switch on their own (a designer-set SelectedIndex must not freeze the control). Omit for an uncontrolled control that starts on the first page.
+   */
   selectedIndex?: number;
   onSelectionChange?: (index: number) => void;
   id?: string; className?: string; children?: ReactNode;
@@ -18,8 +21,9 @@ export interface WfTabsProps {
 export function WfTabs({ selectedIndex, onSelectionChange, id, className, children }: WfTabsProps) {
   const base = useId();
   const pages = Children.toArray(children).filter(isValidElement) as ReactElement<WfTabPageProps>[];
-  const [inner, setInner] = useState(0);
-  const active = Math.min(Math.max(selectedIndex ?? inner, 0), Math.max(pages.length - 1, 0));
+  const [inner, setInner] = useState(selectedIndex ?? 0);
+  const controlled = selectedIndex !== undefined && onSelectionChange !== undefined;
+  const active = Math.min(Math.max(controlled ? selectedIndex : inner, 0), Math.max(pages.length - 1, 0));
 
   const select = (index: number) => {
     if (pages[index]?.props.disabled) return;
