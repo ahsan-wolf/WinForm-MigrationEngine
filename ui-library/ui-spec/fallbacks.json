@@ -1,5 +1,5 @@
 {
-  "specVersion": "0.1.0",
+  "specVersion": "0.2.0",
   "note": "When a WinForms control has no component in controls.json, the generator renders the closest available library component instead of a placeholder. Data only: edit or extend without rebuilding. `use` is a component name from controls.json; propertyAliases / eventAliases rename WinForms members to the ones that component's spec reads (code that uses `dt.Value` then reads the text box state).",
   "fallbacks": [
     {

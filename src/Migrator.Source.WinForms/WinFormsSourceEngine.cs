@@ -12,7 +12,7 @@ public sealed class WinFormsSourceEngine : IProjectAwareSourceEngine, IIrProject
 {
     public string Id => "winforms";
     public string Technology => "WinForms";
-    public Version Version { get; } = new(0, 1, 0);
+    public Version Version { get; } = new(0, 2, 0);
     public Version SchemaVersion { get; } = Version.Parse(IrSchema.Version);
 
     public IProjectAnalyzer Analyzer { get; } = new WinFormsProjectAnalyzer();

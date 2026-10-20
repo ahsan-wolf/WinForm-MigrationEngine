@@ -4,8 +4,8 @@ Independent of the migration engine and of any IR (CLAUDE.md §5). Generated app
 
 | Package | Role | Status |
 |---|---|---|
-| `ui-spec` (`@wfm/ui-spec`) | `controls.json` (names, WinForms types, prop/event mapping, a11y, example) + `tokens.css` | 0.1.0 — MVP set |
-| `ui-react` (`@wfm/ui-react`) | React 18 + TS implementation of the spec | 0.1.0 — MVP set |
+| `ui-spec` (`@wfm/ui-spec`) | `controls.json` (names, WinForms types, prop/event mapping, a11y, example) + `tokens.css` | 0.2.0 |
+| `ui-react` (`@wfm/ui-react`) | React 18 + TS implementation of the spec | 0.2.0 |
 | `ui-angular`, `ui-html` | later (P2 continues) | not started |
 
 MVP control set = what the pilot startup form needs: `WfForm`, `WfMenuBar`/`WfMenuItem`/`WfSeparator`, `WfToolbar`/`WfToolbarButton`, `WfStatusBar`,

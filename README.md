@@ -21,7 +21,7 @@ Output is a starting point, not a finished product: data is mock, translated log
 | [CLAUDE.md](CLAUDE.md) | Rules, contracts, markers, git workflow (read first when changing the tool) |
 | [docs/PILOT_FINDINGS.md](docs/PILOT_FINDINGS.md) | The first real application run (ECMNavigator) |
 | [docs/UI_CONTROL_MAPPING.md](docs/UI_CONTROL_MAPPING.md) | Which React component represents which WinForms control (and the stand-ins) |
-| [docs/guide/LATEST.md](docs/guide/LATEST.md) | Complete versioned guide: UI generation, backend, workflow, project independence |
+| [docs/guide/LATEST.md](docs/guide/LATEST.md) | Complete versioned guide (v0.2): UI generation, backend, workflow, project independence, decisions, roadmap |
 | [ui-library/README.md](ui-library/README.md) | The UI library and `ui-spec` |
 
 Requirements: .NET SDK 10, Node.js with npm, and a sibling checkout of the shared IR repository (see `build/IrReference.props`). Never commit backend DLLs, derived contracts or generated output from a customer application (`local-inputs/` and `local-outputs/` are git-ignored).
