@@ -16,6 +16,8 @@ Reconstructed from the merged slices (PR numbers refer to the repository's pull 
 - #38 `WfTabs` is controlled only when a change handler is passed (a designer-set `SelectedIndex` no longer freezes the tabs).
 - Event wiring from code-behind subscriptions (`WinFormsCodeWiringExtractor`, `source: 'code'`) and `Path.*` helpers in the generated `lib/csharp.ts`.
 
+- Grid rows model: `Rows.Add/Clear/RemoveAt/Remove/Count`, `Cells[k].Value`, `SelectedRows`, `CurrentRow`, `Columns.Add` over `vm.<grid>.{columns,rows,selected}` with `wfGrid*` helpers; a ListView that no code or event uses is rendered as a grid.
+
 ## 0.1 (10–13 Oct)
 
 ## Foundation (10 Oct)

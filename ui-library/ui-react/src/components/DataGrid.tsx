@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from 'react';
+import { useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from 'react';
 
 export interface WfGridColumn {
   field: string; header: string; width?: number; format?: 'date' | 'number' | string;
@@ -62,11 +62,9 @@ export function WfDataGrid({
   // The cell being edited, readable from event handlers that run after it was closed (a removed input may still fire blur).
   const activeEdit = useRef<{ key: unknown; col: number } | null>(null);
 
-  const order = useMemo(() => {
-    const idx = rows.map((_, i) => i);
-    if (!sort) return idx;
-    return idx.sort((a, b) => compare(rows[a][sort.field], rows[b][sort.field]) * sort.dir);
-  }, [rows, sort]);
+  // Recomputed on every render: the page model mutates `rows` in place (push, splice), so the array's identity does not change when its contents do.
+  const order = rows.map((_, i) => i);
+  if (sort) order.sort((a, b) => compare(rows[a][sort.field], rows[b][sort.field]) * sort.dir);
 
   const paged = !!pageSize && pageSize > 0;
   const pageCount = paged ? Math.max(1, Math.ceil(order.length / pageSize)) : 1;

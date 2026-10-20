@@ -255,7 +255,7 @@ public static partial class ServiceEmitter
     private static string EnumFirst(TsType t, IReadOnlyDictionary<string, TypeContract> types) =>
         t.ContractType is { } full && types.TryGetValue(full, out var e) && e.EnumMembers.Count > 0 ? $"'{e.EnumMembers[0].Name}'" : "\"\"";
 
-    /// <summary>ECMLibrary -> ecmLibrary (lower the leading acronym, keep the last capital for the next word).</summary>
+    /// <summary>VendorApi -> vendorApi (lower the leading acronym, keep the last capital for the next word).</summary>
     private static string LowerLeadingWord(string ident)
     {
         var run = 0;

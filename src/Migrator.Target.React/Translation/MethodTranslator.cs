@@ -53,6 +53,9 @@ internal sealed partial class MethodTranslator
     /// <summary>Locals and parameters that hold a ListViewItem (declared as one, or initialised from a ListView collection).</summary>
     private readonly HashSet<string> _itemLocals = new(StringComparer.Ordinal);
 
+    /// <summary>Locals that hold a DataGridViewRow -> the id of the grid the row belongs to (`foreach (DataGridViewRow r in grid.Rows)`, `var r = grid.CurrentRow`).</summary>
+    private readonly Dictionary<string, string> _rowLocals = new(StringComparer.Ordinal);
+
     /// <summary>Locals and parameters that hold a TreeNode (declared as one, or looped over a Nodes collection).</summary>
     private readonly HashSet<string> _nodeLocals = new(StringComparer.Ordinal);
 
@@ -131,7 +134,11 @@ internal sealed partial class MethodTranslator
             else
             {
                 _locals.Add(v.Identifier.ValueText);
-                if (v.Parent is VariableDeclarationSyntax vd && IsOpaqueType(vd.Type)) _opaqueLocals.Add(v.Identifier.ValueText);
+                if (v.Parent is VariableDeclarationSyntax vd)
+                {
+                    if (v.Initializer?.Value is { } rowInit && (vd.Type.IsVar || vd.Type.ToString() == "DataGridViewRow") && GridOfRow(rowInit) is { } rowGrid) _rowLocals[v.Identifier.ValueText] = rowGrid;
+                    else if (IsOpaqueType(vd.Type)) _opaqueLocals.Add(v.Identifier.ValueText);
+                }
                 if (v.Parent is VariableDeclarationSyntax { Type: IdentifierNameSyntax { Identifier.ValueText: "ListViewItem" } }) _itemLocals.Add(v.Identifier.ValueText);
                 if (v.Parent is VariableDeclarationSyntax { Type: IdentifierNameSyntax { Identifier.ValueText: "TreeNode" } }) _nodeLocals.Add(v.Identifier.ValueText);
             }
@@ -148,7 +155,8 @@ internal sealed partial class MethodTranslator
         foreach (var f in root.DescendantNodes().OfType<ForEachStatementSyntax>())
         {
             _locals.Add(f.Identifier.ValueText);
-            if (IsOpaqueType(f.Type)) _opaqueLocals.Add(f.Identifier.ValueText);
+            if ((f.Type.IsVar || f.Type.ToString() == "DataGridViewRow") && RowsCollectionGrid(f.Expression) is { } loopGrid) _rowLocals[f.Identifier.ValueText] = loopGrid;
+            else if (IsOpaqueType(f.Type)) _opaqueLocals.Add(f.Identifier.ValueText);
             if (f.Type is IdentifierNameSyntax { Identifier.ValueText: "ListViewItem" }) _itemLocals.Add(f.Identifier.ValueText);
             if (f.Type is IdentifierNameSyntax { Identifier.ValueText: "TreeNode" } || f.Type.IsVar && f.Expression is MemberAccessExpressionSyntax { Name.Identifier.ValueText: "Nodes" }) _nodeLocals.Add(f.Identifier.ValueText);
         }
@@ -556,6 +564,14 @@ internal sealed partial class MethodTranslator
         var name = ma.Name.Identifier.ValueText;
         var left = ma.Expression;
 
+        // DataGridView cells and rows: row.Cells[k].Value, row.Selected, row.Index
+        if (CellOf(ma, out var cellGrid, out var cellRow, out var cellKey)) { _scope.Output.UsesViewModel = true; return $"wfGridCell(vm.{cellGrid}, {cellRow}, {cellKey})"; }
+        if (GridOfRow(left) is { } rowOwner && name is "Selected" or "Index")
+        {
+            _scope.Output.UsesViewModel = true;
+            return name == "Selected" ? $"vm.{rowOwner}.selected.includes({Ex(left)})" : $"vm.{rowOwner}.rows.indexOf({Ex(left)})";
+        }
+
         // this.X -> X
         if (left is ThisExpressionSyntax)
         {
@@ -587,6 +603,17 @@ internal sealed partial class MethodTranslator
             {
                 _scope.Output.UsesViewModel = true;
                 return name == "CheckedIndices" ? $"vm.{controlId}.checkedIndices" : $"vm.{controlId}.checkedIndices.map((i) => vm.{controlId}.items[i])";
+            }
+            if (_scope.Grids.Contains(controlId) && name is "Rows" or "SelectedRows" or "Columns" or "CurrentRow")
+            {
+                _scope.Output.UsesViewModel = true;
+                return name switch
+                {
+                    "Rows" => $"vm.{controlId}.rows",
+                    "SelectedRows" => $"vm.{controlId}.selected",
+                    "Columns" => $"vm.{controlId}.columns",
+                    _ => $"(vm.{controlId}.selected[0] ?? null)"
+                };
             }
             if (_scope.TreeViews.Contains(controlId) && name is "Nodes" or "SelectedNode")
             {
@@ -877,6 +904,68 @@ internal sealed partial class MethodTranslator
         };
     }
 
+    // ------------------------------------------------------------------------------------------------- DataGridView rows
+
+    private string? GridControl(ExpressionSyntax e) => ControlOf(e) is { } id && _scope.Grids.Contains(id) ? id : null;
+
+    /// <summary>`grid.Rows` or `grid.SelectedRows`: the grid id.</summary>
+    private string? RowsCollectionGrid(ExpressionSyntax e) => e is MemberAccessExpressionSyntax { Name.Identifier.ValueText: "Rows" or "SelectedRows" } m ? GridControl(m.Expression) : null;
+
+    /// <summary>The grid a row expression belongs to: a row local, `grid.CurrentRow`, `grid.Rows[i]`, `grid.SelectedRows[i]`.</summary>
+    private string? GridOfRow(ExpressionSyntax e) => e switch
+    {
+        ParenthesizedExpressionSyntax p => GridOfRow(p.Expression),
+        IdentifierNameSyntax id when _rowLocals.TryGetValue(id.Identifier.ValueText, out var g) && !_poisoned.Contains(id.Identifier.ValueText) => g,
+        MemberAccessExpressionSyntax { Name.Identifier.ValueText: "CurrentRow" } m => GridControl(m.Expression),
+        ElementAccessExpressionSyntax { Expression: var rows } => RowsCollectionGrid(rows),
+        _ => null
+    };
+
+    /// <summary>`row.Cells[key].Value` (also EditedFormattedValue / FormattedValue): the grid, the row expression and the key (a column index, or a column name).</summary>
+    private bool CellOf(MemberAccessExpressionSyntax ma, out string grid, out string row, out string key)
+    {
+        grid = row = key = "";
+        if (ma.Name.Identifier.ValueText is not ("Value" or "EditedFormattedValue" or "FormattedValue")
+            || ma.Expression is not ElementAccessExpressionSyntax { Expression: MemberAccessExpressionSyntax { Name.Identifier.ValueText: "Cells" } cells, ArgumentList.Arguments: { Count: 1 } keyArgs }
+            || GridOfRow(cells.Expression) is not { } owner) return false;
+        grid = owner;
+        row = Ex(cells.Expression);
+        key = Ex(keyArgs[0].Expression);
+        return true;
+    }
+
+    /// <summary>`grid.Rows.Add / Clear / RemoveAt / Remove` and `grid.Columns.Add / Clear` over the grid model.</summary>
+    private string? GridMethod(ExpressionSyntax receiver, string method, InvocationExpressionSyntax inv)
+    {
+        if (receiver is not MemberAccessExpressionSyntax { Name.Identifier.ValueText: "Rows" or "Columns" } collection || GridControl(collection.Expression) is not { } id) return null;
+        var isRows = collection.Name.Identifier.ValueText == "Rows";
+        var args = inv.ArgumentList.Arguments;
+        _scope.Output.UsesViewModel = true;
+        string Arg(int i) => Ex(args[i].Expression);
+
+        if (isRows)
+        {
+            switch (method, args.Count)
+            {
+                case ("Add", 0): return $"wfGridAddRow(vm.{id})";
+                case ("Add", 1) when args[0].Expression is ArrayCreationExpressionSyntax or ImplicitArrayCreationExpressionSyntax: return $"wfGridAddRow(vm.{id}, {Arg(0)})";
+                case ("Add", >= 1): return $"wfGridAddRow(vm.{id}, [{string.Join(", ", args.Select(x => Ex(x.Expression)))}])";
+                case ("Clear", 0): return $"wfGridClearRows(vm.{id})";
+                case ("RemoveAt", 1): return $"wfGridRemoveRow(vm.{id}, vm.{id}.rows[{Arg(0)}])";
+                case ("Remove", 1) when GridOfRow(args[0].Expression) is not null || args[0].Expression is IdentifierNameSyntax: return $"wfGridRemoveRow(vm.{id}, {Arg(0)})";
+            }
+            throw new Untranslatable($"call to {id}.Rows.{method}(...) is not translated");
+        }
+
+        switch (method, args.Count)
+        {
+            case ("Add", 2) or ("Add", 1) when args[0].Expression is LiteralExpressionSyntax or IdentifierNameSyntax or InterpolatedStringExpressionSyntax or BinaryExpressionSyntax:
+                return args.Count == 1 ? $"wfGridAddColumn(vm.{id}, {Arg(0)})" : $"wfGridAddColumn(vm.{id}, {Arg(0)}, {Arg(1)})";
+            case ("Clear", 0): return $"vm.{id}.columns.splice(0)";
+        }
+        throw new Untranslatable($"call to {id}.Columns.{method}(...) is not translated (a column object is not supported yet)");
+    }
+
     // ------------------------------------------------------------------------------------------------- TreeView
 
     private static readonly Dictionary<string, string> TreeNodeProps = new(StringComparer.Ordinal)
@@ -974,7 +1063,7 @@ internal sealed partial class MethodTranslator
         return _scope.Controls.Contains(name) || name == _scope.RootId ? name : null;
     }
 
-    /// <summary>Simple type name for `string`, `Math`, `ECMLibrary.UCM`, ... when the expression denotes a type, not a variable.</summary>
+    /// <summary>Simple type name for `string`, `Math`, `Vendor.Api`, ... when the expression denotes a type, not a variable.</summary>
     private string? StaticTypeName(ExpressionSyntax e)
     {
         switch (e)
@@ -1115,6 +1204,13 @@ internal sealed partial class MethodTranslator
     private string Assign(AssignmentExpressionSyntax a)
     {
         var op = a.OperatorToken.Text;
+
+        // row.Cells[k].Value = x
+        if (a.IsKind(SyntaxKind.SimpleAssignmentExpression) && a.Left is MemberAccessExpressionSyntax cellLeft && CellOf(cellLeft, out var setGrid, out var setRow, out var setKey))
+        {
+            _scope.Output.UsesViewModel = true;
+            return $"wfGridSetCell(vm.{setGrid}, {setRow}, {setKey}, {Ex(a.Right)})";
+        }
 
         // Event subscription in code: the source engine records it as wiring (`Wired.<Event> = "code"`), so the markup binds the handler.
         if (a.IsKind(SyntaxKind.AddAssignmentExpression) && a.Left is MemberAccessExpressionSyntax { Name.Identifier.ValueText: var wiredEvent } wiredLeft
@@ -1288,6 +1384,7 @@ internal sealed partial class MethodTranslator
 
         if (ListMethod(receiver, method, inv) is { } listCall) return listCall;
         if (TreeMethod(receiver, method, inv) is { } treeCall) return treeCall;
+        if (GridMethod(receiver, method, inv) is { } gridCall) return gridCall;
         if (CheckedListMethod(receiver, method, inv) is { } checkedCall) return checkedCall;
         if (ControlOf(receiver) is not null && NoOpCalls.Contains(method)) throw new Dropped($"{method}() has no browser equivalent");
 

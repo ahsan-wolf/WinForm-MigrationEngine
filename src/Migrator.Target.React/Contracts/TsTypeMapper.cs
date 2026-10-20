@@ -37,7 +37,7 @@ public sealed class TsTypeMapper
     /// <summary>Unmapped / inferred types, one line each (feeds the migration report).</summary>
     public List<string> Notes { get; } = new();
 
-    /// <summary>Flattened, collision-free TypeScript name: ECMLibrary.UCM+RenditionType -> UCMRenditionType.</summary>
+    /// <summary>Flattened, collision-free TypeScript name: Vendor.Api+StatusKind -> ApiStatusKind.</summary>
     public string NameOf(string fullName)
     {
         if (_names.TryGetValue(fullName, out var existing)) return existing;

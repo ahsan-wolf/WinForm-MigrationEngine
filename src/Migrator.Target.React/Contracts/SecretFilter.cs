@@ -31,7 +31,7 @@ public static partial class SecretFilter
         IsSecretName(m.Name) || IsSecretName(m.ReturnType)
         || m.Parameters.Any(p => IsSecretName(p.Name) && TextOrPrimitive.Contains(p.Type));
 
-    /// <summary>A non-primitive parameter whose type or name marks it as a credentials holder (NetworkCredential, UCMCredentialsInfo, ...).
+    /// <summary>A non-primitive parameter whose type or name marks it as a credentials holder (NetworkCredential, ServiceCredentialsInfo, ...).
     /// Browser code never holds credentials, so the generated signature drops it and the server supplies it.</summary>
     public static bool IsCredentialObject(ParameterContract p) =>
         !TextOrPrimitive.Contains(p.Type) && (IsSecretName(p.Type) || IsSecretName(p.Name));
