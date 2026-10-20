@@ -124,7 +124,7 @@ public static class AppWriter
             // Forms the entry form opens through ShowDialog() are normally reached from it, but those whose constructor arguments
             // are not translated yet (see MIGRATION_REPORT.md) cannot be reached that way.
             type PageProps = object;
-            const loaders = import.meta.glob('./pages/*.tsx') as Record<string, () => Promise<Record<string, unknown>>>;
+            const loaders = import.meta.glob(['./pages/*.tsx', '!./pages/*.code.tsx']) as Record<string, () => Promise<Record<string, unknown>>>;
             const pages = Object.entries(loaders).map(([path, load]) => {
               const name = path.slice('./pages/'.length, -'.tsx'.length);
               return { name, Page: lazy(async () => ({ default: (await load())[name] as ComponentType<PageProps> })) };

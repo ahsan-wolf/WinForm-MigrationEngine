@@ -105,8 +105,8 @@ Event naming (canonical → React / Angular / HTML): `click → onClick / (wfCli
 
 | WinForms | React | Angular | HTML+jQuery |
 |---|---|---|---|
-| `Form` (main/screen) ✅ | `pages/XPage.tsx`, route in router | `x.component.ts` standalone + route | `x.html` + `x.js` module |
-| `UserControl` ✅ | `components/X.tsx` with props | `x.component.ts` with `@Input()/@Output()` | partial `<template>` + `X.init(container, opts)` |
+| `Form` (main/screen) ✅ | `pages/XPage.tsx` (markup) **+ `pages/XPage.code.tsx` (code-behind hook `useXPageCode`)**, route in router | `x.component.ts` standalone + route | `x.html` + `x.js` module |
+| `UserControl` ✅ | `components/X.tsx` with props (generated: `XControl.tsx` + `XControl.code.tsx`) | `x.component.ts` with `@Input()/@Output()` | partial `<template>` + `X.init(container, opts)` |
 | `Form.Text` | `document.title` / `<h1>` | `Title` service / `<h1>` | `<title>` / `<h1>` |
 | `Form.Load` | `useEffect(() => {...}, [])` | `ngOnInit()` | `$(function(){ ... })` |
 | `Form.Shown` | `useEffect` after first render (`useLayoutEffect` if needed) | `ngAfterViewInit()` | `$(window).on('load')` |
@@ -290,6 +290,8 @@ Event naming (canonical → React / Angular / HTML): `click → onClick / (wfCli
 ---
 
 ## Skill 6 — Event Mapping
+
+**Where the wiring lives (React target):** the markup file binds handlers by name (`onClick={handleSaveClick}`); the handlers, the model and the translated methods are in the page's **code-behind file** `XPage.code.tsx`, which also exports a `wiring` table (`control`, `event`, `handler`, `method`, `source`) listing every `control.event → handler` of the original form. That is the file to open when tracing an event back to the WinForms `X.cs` (`source` is `designer`; wiring read from code-behind statements `ctl.Click += handler` will use `code`).
 
 | WinForms event | React | Angular | jQuery | Note |
 |---|---|---|---|---|

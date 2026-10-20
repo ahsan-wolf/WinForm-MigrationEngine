@@ -68,6 +68,7 @@ Known extractor limits: handlers in a third partial file, workflow steps deeper 
 ### 5.1 Generation (deterministic)
 - **Controls**: `TagName` → `Wf*` component through `controls.json` (`winformsTypes`, `props[].from/transform`, `events[].from`); no match → `WfUnsupported` + TODO + report entry.
 - **Layout**: no pixels. Dock/Location → top chrome, free rows (clustered by Y, ordered by X), left/fill/right band, bottom chrome (`wfm-*` flex classes).
+- **Code-behind**: a page is two files, `XPage.tsx` (markup, like `X.Designer.cs`) and `XPage.code.tsx` (hook `useXPageCode`: model, handlers, translated methods, `wiring` table, like `X.cs`).
 - **State**: one `useWfModel` per page — `vm` for control properties (text, enabled, visible, checked, value, readOnly; ListView `items`/`columns`; grid `rows`), `f` for form fields. A deep proxy: reads are immediate, writes batch into one re-render, so imperative WinForms code translates one to one. Declared only when referenced (lint-clean).
 - **Navigation**: `ShowDialog` → `await dialog.show(() => <XPage />, { title })`; `Close/Hide` → `dialog.close(result)` (closes the topmost dialog; on a standalone page the provider's `onRootClose` runs); `Button.DialogResult` closes the dialog after the Click handler with that result.
 - **Constructor arguments → props** with fixture defaults for contract data types, and `field = arg;` seeding the field model, so a dialog opens on its own.

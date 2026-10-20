@@ -217,6 +217,7 @@ public sealed class ReactAppGenerator
     private static void WritePage(string outputDirectory, GeneratedPage page, GenerationResult result)
     {
         AppWriter.Put(outputDirectory, $"src/pages/{page.ComponentName}.tsx", page.Source, result.Files);
+        if (page.CodeSource.Length > 0) AppWriter.Put(outputDirectory, $"src/pages/{page.ComponentName}.code.tsx", page.CodeSource, result.Files);
         AppWriter.Put(outputDirectory, $"src/legacy/{page.ComponentName}.cs.txt", page.LegacySource, result.Files);
         AppWriter.PutAssets(outputDirectory, page, result.Files);
     }
@@ -299,13 +300,14 @@ public sealed class ReactAppGenerator
                     continue;
                 }
 
-                var index = pages.FindIndex(p => d.File == $"src/pages/{p.Page.ComponentName}.tsx");
+                // Methods live in the code-behind file; errors in the markup file are not inside a translated method.
+                var index = pages.FindIndex(p => d.File == $"src/pages/{p.Page.ComponentName}.code.tsx");
                 if (index < 0) continue;
                 var range = pages[index].Page.MethodRanges.FirstOrDefault(r => r.Start <= d.Line && d.Line <= r.End);
                 if (range.TsName is null) continue;
                 if (!demoted.TryGetValue(pages[index].Unit, out var set)) demoted[pages[index].Unit] = set = new HashSet<string>(StringComparer.Ordinal);
                 if (set.Contains(range.TsName)) continue;
-                if (!pageLines.TryGetValue(pages[index].Unit, out var source)) pageLines[pages[index].Unit] = source = pages[index].Page.Source.Split('\n');
+                if (!pageLines.TryGetValue(pages[index].Unit, out var source)) pageLines[pages[index].Unit] = source = pages[index].Page.CodeSource.Split('\n');
                 // One failing simple statement is commented out on its own; anything else demotes the whole method.
                 var before = snapshot.GetValueOrDefault(pages[index].Unit) ?? new HashSet<string>();
                 if (TryLineKey(source, range.Start, d.Line, range.TsName, before) is { } lineKey) { if (set.Add(lineKey)) touched.Add(pages[index].Unit); }

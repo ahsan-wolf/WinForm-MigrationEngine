@@ -143,7 +143,8 @@ Generated pages import only `@wfm/ui-react`.
 | Not rendered | non-visual components (ImageList, ToolTip, BindingSource, Timer, file dialogs, ...) are listed in the report |
 | Unsupported | no spec entry -> `WfUnsupported` + TODO + report entry; inlined user controls render as a panel |
 | Grids | designer columns -> `WfGridColumn[]`; typed mock rows marked `// MOCK`; grids with columns created in code get a TODO |
-| Output | `src/pages/*.tsx`, `src/legacy/*.cs.txt`, app shell (package.json, vite, tsconfig, eslint), `MIGRATION_REPORT.md` |
+| Code-behind | Each page is **two files**: `XPage.tsx` (markup only: JSX, `const { vm, handleSaveClick, … } = useXPageCode()`) and `XPage.code.tsx` (hook `useXPageCode`: dialog service, state, `vm` / `f` models, handlers and translated methods; exported top-level constants such as grid columns; exported `wiring` table `{ control, event, handler, method, source }`). Imports are decided per file from the text it contains. The compile gate maps TypeScript errors to methods through the code-behind file (`GeneratedPage.CodeSource`, `MethodRanges`); errors in the markup file are reported but never demote a method. The launcher lists only markup files |
+| Output | `src/pages/*.tsx`, `src/pages/*.code.tsx`, `src/legacy/*.cs.txt`, app shell (package.json, vite, tsconfig, eslint), `MIGRATION_REPORT.md` |
 
 Known limits: `Show()` opens as a dialog (no router yet); no auth; TreeView/Tabs/RadioGroup/DatePicker have no library component yet
 (they become `WfUnsupported`); the generated app links the local `@wfm/ui-react` with `file:` (Vite `resolve.dedupe` keeps a single React).
