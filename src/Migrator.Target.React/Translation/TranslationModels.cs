@@ -113,6 +113,9 @@ public sealed class PageScope
     public Dictionary<string, List<string>> TabPages { get; } = new(StringComparer.Ordinal);
     public Dictionary<string, string> TabPageParent { get; } = new(StringComparer.Ordinal);
 
+    /// <summary>ImageList controls of the page: `il.Images.Add / Count / ...` work on `vm.<id>.keys` and `.urls` (the image resources of the list).</summary>
+    public HashSet<string> ImageLists { get; } = new(StringComparer.Ordinal);
+
     /// <summary>Containers the code adds user controls to (`panel.Controls.Add(new X(...))`): their `controls` list lives in the model.</summary>
     public HashSet<string> DynamicHosts { get; } = new(StringComparer.Ordinal);
 

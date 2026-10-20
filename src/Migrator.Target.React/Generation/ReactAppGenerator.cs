@@ -417,7 +417,7 @@ public sealed class ReactAppGenerator
             sb.AppendLine();
             sb.AppendLine("## Icons");
             sb.AppendLine();
-            sb.AppendLine($"{extracted + converted} icon file(s) written to `public/icons/` ({converted} converted to PNG from ICO or BMP), {placeholders} placeholder(s) where the original image could not be read (ImageList entries and Windows-only formats are not decoded).");
+            sb.AppendLine($"{extracted + converted} icon file(s) written to `public/icons/` ({converted} converted to PNG from ICO or BMP), {placeholders} placeholder(s) where the original image could not be read (ImageList streams are decoded for 1, 4, 8, 24 and 32 bits per pixel; other depths and Windows-only formats are not).");
         }
 
         if (translate)

@@ -137,6 +137,8 @@ public sealed partial class PageGenerator
         public HashSet<string> ComboIds { get; } = new();
         /// <summary>Containers the code adds user controls to: their `controls` list lives in the model and a WfDynamicHost renders it after the designer children.</summary>
         public HashSet<string> DynamicIds { get; } = new();
+        /// <summary>ImageList id -> its images as web resources (keys and urls); written under `public/images/{unit}/{id}/`.</summary>
+        public Dictionary<string, (List<string> Keys, List<string> Urls)> ImageLists { get; } = new(StringComparer.Ordinal);
 
         /// <summary>Control id -> id of its parent control (radio buttons of one container form a group).</summary>
         public Dictionary<string, string> ParentOf { get; } = new(StringComparer.Ordinal);
@@ -182,6 +184,7 @@ public sealed partial class PageGenerator
         foreach (var n in Walk(root)) c.ById.TryAdd(n.Id, n);
         FillParents(c, root);
         Prescan(c, root);
+        PrepareImageLists(c, root);
         if (_translation is not null)
             c.Translation = PageTranslator.Translate(unit, c.Names, _translation, WiredHandlers(c, root), demoted ?? new HashSet<string>());
 
@@ -215,7 +218,7 @@ public sealed partial class PageGenerator
             tr.UsesFormat = Regex.IsMatch(text, @"\bformatString\(");
             foreach (var helper in new[] { "wfListItem", "wfListItemFromArray" }) if (Regex.IsMatch(text, $@"\b{helper}\(")) c.Lib.Add(helper);
             if (Regex.IsMatch(text + "\n" + (usesFields ? fieldText : ""), @"\bWfListItem\b")) c.LibTypes.Add("WfListItem");
-            foreach (var helper in new[] { "wfDynamicControl", "wfTreeNode", "wfSetExpanded", "wfSetItemChecked", "wfGridAddColumn", "wfGridAddRow", "wfGridClearRows", "wfGridRemoveRow", "wfGridCell", "wfGridSetCell" }) if (Regex.IsMatch(text, $@"\b{helper}\(")) c.Lib.Add(helper);
+            foreach (var helper in new[] { "wfImageListAdd", "wfImageListClear", "wfImageListRemoveAt", "wfImageListRemoveByKey", "wfImageListUrl", "wfPlaceholderImage", "wfDynamicControl", "wfTreeNode", "wfSetExpanded", "wfSetItemChecked", "wfGridAddColumn", "wfGridAddRow", "wfGridClearRows", "wfGridRemoveRow", "wfGridCell", "wfGridSetCell" }) if (Regex.IsMatch(text, $@"\b{helper}\(")) c.Lib.Add(helper);
             if (Regex.IsMatch(text + "\n" + (usesFields ? fieldText : ""), @"\bWfTreeNode\b")) c.LibTypes.Add("WfTreeNode");
         }
 
@@ -790,6 +793,92 @@ public sealed partial class PageGenerator
         if (spec.Name == "WfDropDownButton" && node.Effective().EndsWith("SplitButton", StringComparison.Ordinal)) attrs.Add("split");
     }
 
+    // ------------------------------------------------------------------------------------------------ image lists
+
+    /// <summary>
+    /// An ImageList is not a control: its images become web files `public/images/{unit}/{list}/{key}.png` (converted from the decoded stream) and the list a pair of
+    /// `keys` / `urls` arrays. The arrays enter the model when code works with the list or a tree/list view shows images from it; statically referenced images
+    /// (tab pages, menu and toolbar items) are resolved to their path right here.
+    /// </summary>
+    private void PrepareImageLists(Ctx c, ControlNodeIr root)
+    {
+        if (_preview) return;
+        foreach (var node in Walk(root).Skip(1).Where(n => n.Effective() == ContainerUsage.ImageListType))
+        {
+            var keys = new List<string>();
+            var urls = new List<string>();
+            var a = node.Attributes;
+            var names = a.TryGetValue("Images.Keys", out var keyJson) ? System.Text.Json.JsonSerializer.Deserialize<List<string>>(keyJson) ?? new List<string>() : new List<string>();
+            var data = a.TryGetValue("Images.Data", out var dataJson) ? System.Text.Json.JsonSerializer.Deserialize<List<string>>(dataJson) ?? new List<string>() : new List<string>();
+            var taken = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            for (var i = 0; i < Math.Max(names.Count, data.Count); i++)
+            {
+                var key = i < names.Count ? names[i] : "";
+                var web = i < data.Count ? IconConverter.ToWeb(System.Convert.FromBase64String(data[i]), "bmp") : null;
+                var url = PlaceholderIcon;
+                if (web is not null)
+                {
+                    var path = $"images/{c.Unit.Name}/{node.Id}/{ImageFileName(key, i, taken)}.png";
+                    c.Assets.Add(($"public/{path}", web.Data));
+                    c.IconsConverted++;
+                    url = "/" + path;
+                }
+                else
+                {
+                    c.IconsPlaceholder++;
+                    c.Issue("icon-placeholder", $"{node.Id}: image {i}{(key.Length > 0 ? $" ('{key}')" : "")} could not be read (unsupported colour depth or no stream); a placeholder is shown");
+                }
+                keys.Add(key);
+                urls.Add(url);
+            }
+            c.ImageLists[node.Id] = (keys, urls);
+        }
+
+        var inCode = ContainerUsage.ImageListsInCode(c.Unit);
+        foreach (var node in c.ById.Values)
+        {
+            if (node.Attributes.GetValueOrDefault(node.Effective().EndsWith("TreeView", StringComparison.Ordinal) ? "ImageList" : "SmallImageList") is { } reference
+                && ImageListId(reference, c) is { } shown)
+                inCode.Add(shown);
+        }
+        foreach (var id in inCode)
+        {
+            if (!c.ImageLists.TryGetValue(id, out var list)) continue;
+            c.ModelSet(id, "Keys", "[" + string.Join(", ", list.Keys.Select(Str)) + "] as string[]");
+            c.ModelSet(id, "Urls", "[" + string.Join(", ", list.Urls.Select(Str)) + "] as string[]");
+        }
+    }
+
+    /// <summary>A file name (without extension) for an image: its key without a trailing image extension, made safe; the index when the image has no key; unique within the list.</summary>
+    private static string ImageFileName(string key, int index, HashSet<string> taken)
+    {
+        var name = Regex.Replace(Path.GetFileNameWithoutExtension(key.Trim()), @"[^A-Za-z0-9._-]+", "_").Trim('_', '.');
+        if (name.Length == 0) name = index.ToString();
+        var unique = name;
+        for (var n = 2; !taken.Add(unique); n++) unique = $"{name}-{n}";
+        return unique;
+    }
+
+    /// <summary>The id of the ImageList control a property value (`this.ilTree`) points at, when this page has it.</summary>
+    private static string? ImageListId(string reference, Ctx c) =>
+        c.ById.TryGetValue(LastToken(reference), out var target) && target.Effective() == ContainerUsage.ImageListType ? target.Id : null;
+
+    /// <summary>The web path of the image a control's ImageKey / ImageIndex names in its image list (the control's own list, or the one of the tab control / tool strip it sits in).</summary>
+    private string? ImageListIcon(ControlNodeIr node, Ctx c)
+    {
+        var key = node.Attributes.GetValueOrDefault("ImageKey");
+        var hasIndex = int.TryParse(node.Attributes.GetValueOrDefault("ImageIndex"), out var index) && index >= 0;
+        if (string.IsNullOrEmpty(key) && !hasIndex) return null;
+
+        for (ControlNodeIr? at = node; at is not null; at = c.ParentOf.TryGetValue(at.Id, out var parent) && c.ById.TryGetValue(parent, out var up) ? up : null)
+        {
+            if (at.Attributes.GetValueOrDefault("ImageList") is not { } reference || ImageListId(reference, c) is not { } id || !c.ImageLists.TryGetValue(id, out var list)) continue;
+            var at2 = !string.IsNullOrEmpty(key) ? list.Keys.IndexOf(key) : index;
+            return at2 >= 0 && at2 < list.Urls.Count ? list.Urls[at2] : null;
+        }
+        return null;
+    }
+
     /// <summary>A tree view keeps its nodes and selected node in the model so `Nodes.Add`, `new TreeNode`, `SelectedNode` and `node.Nodes` translate onto them.</summary>
     private static void AddTreeViewModel(Ctx c, ControlNodeIr node)
     {
@@ -826,6 +915,8 @@ public sealed partial class PageGenerator
             return;
         }
         c.UsesModel = true;
+        if (node.Attributes.GetValueOrDefault("ImageList") is { } treeImages && ImageListId(treeImages, c) is { } treeImageList && c.ImageLists.ContainsKey(treeImageList))
+            attrs.Add($"imageList={{vm.{treeImageList}}}");
         attrs.Add($"nodes={{vm.{node.Id}.nodes}}");
         attrs.Add($"selectedNode={{vm.{node.Id}.selectedNode}}");
     }
@@ -834,6 +925,8 @@ public sealed partial class PageGenerator
     {
         if (_preview) { AddListViewPreview(node, c, attrs); return; }
         c.UsesModel = true;
+        if (node.Attributes.GetValueOrDefault("SmallImageList") is { } listImages && ImageListId(listImages, c) is { } listImageList && c.ImageLists.ContainsKey(listImageList))
+            attrs.Add($"imageList={{vm.{listImageList}}}");
         attrs.Add($"columns={{vm.{node.Id}.columns}}");
         attrs.Add($"items={{vm.{node.Id}.items}}");
         if (node.Attributes.GetValueOrDefault("MultiSelect") == "false") attrs.Add("multiSelect={false}");
@@ -860,6 +953,7 @@ public sealed partial class PageGenerator
                 return Attr("icon", "/" + path);
             }
         }
+        if (ImageListIcon(node, c) is { } listIcon) return Attr("icon", listIcon);
         if (a.ContainsKey("Image") || a.ContainsKey("ImageIndex") || a.ContainsKey("ImageKey"))
         {
             c.IconsPlaceholder++;

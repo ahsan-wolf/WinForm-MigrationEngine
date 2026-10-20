@@ -1,4 +1,5 @@
 import { useState, type KeyboardEvent, type MouseEvent } from 'react';
+import { wfImageListUrl, type WfImageList } from './ImageList';
 
 /** One row. `text` is the first column, `subItems[k]` is column k + 1 (WinForms ListViewItem / SubItems). */
 export interface WfListItem {
@@ -7,7 +8,9 @@ export interface WfListItem {
   checked: boolean;
   selected: boolean;
   tag?: unknown;
+  /** ListViewItem.ImageKey / ImageIndex: the image in the list's `imageList` shown before the first column's text. */
   imageKey?: string;
+  imageIndex?: number;
   name?: string;
 }
 
@@ -26,6 +29,8 @@ export function wfListItemFromArray(values: string[]): WfListItem {
 export interface WfListViewProps {
   columns: WfListColumn[];
   items: WfListItem[];
+  /** Where `imageKey` / `imageIndex` of the items are looked up (WinForms ListView.SmallImageList). */
+  imageList?: WfImageList;
   checkBoxes?: boolean;
   multiSelect?: boolean;
   disabled?: boolean;
@@ -46,7 +51,7 @@ const selectedIndices = (items: WfListItem[]): number[] => items.flatMap((item, 
 
 /** Details-view list with row selection (click, Ctrl/Shift for several), optional check boxes and keyboard navigation. Controlled: it renders `items` as given. */
 export function WfListView({
-  columns, items, checkBoxes, multiSelect = true, disabled, onSelectionChange, onItemCheckedChange, onItemActivate,
+  columns, items, imageList, checkBoxes, multiSelect = true, disabled, onSelectionChange, onItemCheckedChange, onItemActivate,
   onClick, onDoubleClick, onKeyUp, onColumnClick, id, className,
 }: WfListViewProps) {
   const [anchor, setAnchor] = useState(0);
@@ -110,7 +115,12 @@ export function WfListView({
                          onClick={e => e.stopPropagation()} onChange={e => onItemCheckedChange?.(i, e.target.checked)} />
                 </td>
               )}
-              {Array.from({ length: columnCount }, (_, c) => <td key={c}>{c === 0 ? item.text : item.subItems[c - 1] ?? ''}</td>)}
+              {Array.from({ length: columnCount }, (_, c) => (
+                <td key={c}>
+                  {c === 0 && wfImageListUrl(imageList, item.imageKey ?? item.imageIndex) ? <img className="wf-listview-icon" src={wfImageListUrl(imageList, item.imageKey ?? item.imageIndex)} alt="" /> : null}
+                  {c === 0 ? item.text : item.subItems[c - 1] ?? ''}
+                </td>
+              ))}
             </tr>
           ))}
           {items.length === 0 && <tr><td className="wf-grid-empty" colSpan={columnCount + (checkBoxes ? 1 : 0)}>No items</td></tr>}

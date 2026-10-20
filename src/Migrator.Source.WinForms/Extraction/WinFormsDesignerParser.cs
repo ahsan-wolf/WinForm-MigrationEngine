@@ -301,6 +301,9 @@ public static partial class WinFormsDesignerParser
         // this.toolTip1.SetToolTip(this.btn, "text")  -> ToolTip attribute on the target control
         if (methodName == "SetToolTip" && receiver.Count == 1) return HandleSetToolTip(invoke, result);
 
+        // this.il.Images.SetKeyName(0, "folder.png") -> Images.Keys (JSON string array; the position is the image index)
+        if (methodName == "SetKeyName" && receiver is [var imageListId, "Images"]) return HandleImageKey(invoke, imageListId, result);
+
         // this.txt.DataBindings.Add(new Binding("Text", this.bindingSource1, "Name", ...))
         if (methodName == "Add" && receiver is [var boundId, "DataBindings"]) return HandleDataBinding(invoke, boundId, result);
 
@@ -416,6 +419,21 @@ public static partial class WinFormsDesignerParser
 
         Attrs(result, controlId)["ToolTip"] = text.Token.ValueText;
         Touch(result, controlId);
+        return true;
+    }
+
+    private static bool HandleImageKey(InvocationExpressionSyntax invoke, string imageListId, DesignerParseResult result)
+    {
+        var args = invoke.ArgumentList.Arguments;
+        if (args.Count != 2 || args[0].Expression is not LiteralExpressionSyntax { Token.Value: int index } || args[1].Expression is not LiteralExpressionSyntax key || index < 0 || index > 4096)
+            return false;
+
+        var attrs = Attrs(result, imageListId);
+        var keys = attrs.TryGetValue("Images.Keys", out var json) ? JsonSerializer.Deserialize<List<string>>(json) ?? new List<string>() : new List<string>();
+        while (keys.Count <= index) keys.Add("");
+        keys[index] = key.Token.ValueText;
+        attrs["Images.Keys"] = JsonSerializer.Serialize(keys);
+        Touch(result, imageListId);
         return true;
     }
 

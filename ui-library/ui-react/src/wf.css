@@ -135,3 +135,4 @@ textarea.wf-textbox { height: auto; padding: var(--wf-space-1); }
 .wf-dropdown-arrow { font-size: .8em; margin-left: 2px; }
 .wf-dropdown > .wf-menu { top: 100%; left: 0; z-index: var(--wf-z-menu, 10); }
 .wf-dynamic { display: flex; flex-direction: column; gap: var(--wf-gap, 4px); }
+.wf-listview-icon { width: 16px; height: 16px; margin-right: 4px; vertical-align: text-bottom; }

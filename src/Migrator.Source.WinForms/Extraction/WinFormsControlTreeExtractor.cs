@@ -62,6 +62,7 @@ public sealed class WinFormsControlTreeExtractor : IIrExtractor
 
         var resources = ResxReader.Parse(resourcesXml);
         var images = ResxReader.ParseImages(resourcesXml);
+        var imageStreams = ResxReader.ParseImageStreams(resourcesXml);
         if (designer.ResourceKeys.TryGetValue("", out var rootKey)) MergeResources(root.Attributes, resources, rootKey);
         MergeImages(root.Attributes, images, designer.ResourceKeys.GetValueOrDefault(""), "Icon");
 
@@ -79,6 +80,7 @@ public sealed class WinFormsControlTreeExtractor : IIrExtractor
 
             if (designer.ResourceKeys.TryGetValue(id, out var key)) MergeResources(attributes, resources, key);
             MergeImages(attributes, images, designer.ResourceKeys.GetValueOrDefault(id), "Image");
+            MergeImageList(attributes, imageStreams, designer.ResourceKeys.GetValueOrDefault(id));
 
             var node = new ControlNodeIr { Id = id, TagName = tagName, Attributes = attributes };
             Resolve(node);
@@ -125,6 +127,19 @@ public sealed class WinFormsControlTreeExtractor : IIrExtractor
         if (name is null || !images.TryGetValue(name, out var bytes)) return;
         attributes[$"{property}.Data"] = Convert.ToBase64String(bytes);
         attributes[$"{property}.Format"] = ResxReader.Sniff(bytes);
+    }
+
+    /// <summary>
+    /// An ImageList's images: the `ImageStream` resource decoded into one 32-bit BMP per image (base64 JSON array under the pseudo-attribute <c>Images.Data</c>)
+    /// plus <c>Images.Size</c> ("16x16"); the keys come from the designer's SetKeyName calls (<c>Images.Keys</c>). Streams that cannot be decoded are left out.
+    /// </summary>
+    private static void MergeImageList(Dictionary<string, string> attributes, Dictionary<string, byte[]> streams, string? resourceKey)
+    {
+        if (streams.Count == 0 || !attributes.ContainsKey("ImageStream")) return;
+        var name = ResxReader.ImageResourceName(attributes, resourceKey, "ImageStream");
+        if (name is null || !streams.TryGetValue(name, out var bytes) || ImageListDecoder.Decode(bytes) is not { } list) return;
+        attributes["Images.Data"] = System.Text.Json.JsonSerializer.Serialize(list.Images.Select(Convert.ToBase64String));
+        attributes["Images.Size"] = $"{list.Width}x{list.Height}";
     }
 
     /// <summary>Localizable forms keep Text/ToolTip in the .resx; values set in code win over the resource.</summary>

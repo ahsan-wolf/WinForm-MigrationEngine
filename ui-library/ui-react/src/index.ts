@@ -13,5 +13,6 @@ export * from './components/Dynamic';
 export * from './components/Menus';
 export * from './components/DataGrid';
 export * from './components/GridModel';
+export * from './components/ImageList';
 export * from './components/ListView';
 export * from './components/Dialog';

@@ -55,6 +55,7 @@ public static class PageTranslator
             scope.Controls.Add(node.Id);
             if (node.Effective() == "System.Windows.Forms.ListView") scope.ListViews.Add(node.Id);
             if (node.Effective() == "System.Windows.Forms.TabControl") scope.TabControls.Add(node.Id);
+            if (node.Effective() == ContainerUsage.ImageListType) scope.ImageLists.Add(node.Id);
             if (node.Effective() is "System.Windows.Forms.ComboBox" or "System.Windows.Forms.ToolStripComboBox" or "System.Windows.Forms.ListBox"
                 or "System.Windows.Forms.CheckedListBox" or "System.Windows.Forms.DomainUpDown") scope.Combos.Add(node.Id);
             if (node.Effective() == "System.Windows.Forms.CheckedListBox") scope.CheckedLists.Add(node.Id);

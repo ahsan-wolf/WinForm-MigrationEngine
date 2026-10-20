@@ -7,6 +7,58 @@ namespace Migrator.Target.React.Translation;
 
 internal sealed partial class MethodTranslator
 {
+    // ------------------------------------------------------------------------------------------------ image lists
+
+    private string? ImageListOf(ExpressionSyntax e) =>
+        e is MemberAccessExpressionSyntax { Name.Identifier.ValueText: "Images" } m && ControlOf(m.Expression) is { } id && _scope.ImageLists.Contains(id) ? id : null;
+
+    /// <summary>`il.Images.Count` / `Empty`</summary>
+    private string? ImageListMember(MemberAccessExpressionSyntax ma)
+    {
+        if (ma.Name.Identifier.ValueText is not ("Count" or "Empty") || ImageListOf(ma.Expression) is not { } id) return null;
+        _scope.Output.UsesViewModel = true;
+        return ma.Name.Identifier.ValueText == "Count" ? $"vm.{id}.urls.length" : $"(vm.{id}.urls.length === 0)";
+    }
+
+    /// <summary>
+    /// `il.Images.Add / Clear / RemoveAt / RemoveByKey / ContainsKey / IndexOfKey / SetKeyName` over the image list's keys and urls. An image argument that cannot be
+    /// resolved (a project resource, a file) is added as a placeholder image, with a TODO.
+    /// </summary>
+    private string? ImageListMethod(ExpressionSyntax receiver, string method, InvocationExpressionSyntax inv)
+    {
+        if (ImageListOf(receiver) is not { } id) return null;
+        var args = inv.ArgumentList.Arguments;
+        _scope.Output.UsesViewModel = true;
+        string Arg(int i) => Ex(args[i].Expression);
+
+        switch (method, args.Count)
+        {
+            case ("Add", 2) when args[1].Expression is not MemberAccessExpressionSyntax { Expression: IdentifierNameSyntax { Identifier.ValueText: "Color" } }:
+                return $"wfImageListAdd(vm.{id}, {Arg(0)}, {ImageValue(args[1].Expression)})";
+            case ("Add", 1 or 2): return $"wfImageListAdd(vm.{id}, \"\", {ImageValue(args[0].Expression)})";
+            case ("Clear", 0): return $"wfImageListClear(vm.{id})";
+            case ("RemoveAt", 1): return $"wfImageListRemoveAt(vm.{id}, {Arg(0)})";
+            case ("RemoveByKey", 1): return $"wfImageListRemoveByKey(vm.{id}, {Arg(0)})";
+            case ("ContainsKey", 1): return $"vm.{id}.keys.includes({Arg(0)})";
+            case ("IndexOfKey", 1): return $"vm.{id}.keys.indexOf({Arg(0)})";
+            case ("SetKeyName", 2): return $"(vm.{id}.keys[{Arg(0)}] = {Arg(1)})";
+        }
+        throw new Untranslatable($"call to {id}.Images.{method}(...) is not translated");
+    }
+
+    private string ImageValue(ExpressionSyntax image)
+    {
+        try
+        {
+            return Ex(image);
+        }
+        catch (Untranslatable)
+        {
+            _after.Add($"// TODO: image {Collapse(image)} is not resolvable from IR; a placeholder image is added in its place");
+            return "wfPlaceholderImage()";
+        }
+    }
+
     // ------------------------------------------------------------------------------------------------- tab pages
 
     private string? TabOf(ExpressionSyntax e) => ControlOf(e) is { } id && _scope.TabPages.ContainsKey(id) ? id : null;

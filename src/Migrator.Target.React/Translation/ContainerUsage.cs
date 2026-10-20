@@ -19,6 +19,18 @@ internal static partial class ContainerUsage
 
     public const string TabPageType = "System.Windows.Forms.TabPage";
     public const string TabControlType = "System.Windows.Forms.TabControl";
+    public const string ImageListType = "System.Windows.Forms.ImageList";
+
+    /// <summary>ImageList controls the code works with (`il.Images.Add(...)`, `il.Images.Count`): their keys and urls live in the page model.</summary>
+    public static HashSet<string> ImageListsInCode(UnitIr unit)
+    {
+        var result = new HashSet<string>(StringComparer.Ordinal);
+        if (unit.Page.RootControl is not { } root) return result;
+        var mentioned = ImagesRegex().Matches(CodeOf(unit)).Select(m => m.Groups[1].Value).ToHashSet(StringComparer.Ordinal);
+        foreach (var node in Walk(root).Skip(1))
+            if (mentioned.Contains(node.Id) && node.Effective() == ImageListType) result.Add(node.Id);
+        return result;
+    }
 
     public static IEnumerable<ControlNodeIr> Walk(ControlNodeIr node)
     {
@@ -60,6 +72,9 @@ internal static partial class ContainerUsage
             usage[m.Groups[1].Value] = usage.GetValueOrDefault(m.Groups[1].Value) || m.Groups[2].Value == "SelectedTab";
         return usage;
     }
+
+    [GeneratedRegex(@"\b(\w+)\s*\.\s*Images\b")]
+    private static partial Regex ImagesRegex();
 
     [GeneratedRegex(@"\b(\w+)\s*\.\s*Controls\b")]
     private static partial Regex ControlsRegex();
