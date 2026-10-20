@@ -208,7 +208,7 @@ Event naming (canonical → React / Angular / HTML): `click → onClick / (wfCli
 ### 3.3 ListView
 | WinForms | React | Angular | jQuery |
 |---|---|---|---|
-| `ListView` (`View.Details`) 🔧 | same as DataGridView table | same | DataTables |
+| `ListView` (`View.Details`) 🔧 | same as DataGridView table; **React target: a ListView with no wired event and no mention in any method is generated as `WfDataGrid`** (`ColumnHeader` → column, sample rows), otherwise `WfListView` | same | DataTables |
 | `View.LargeIcon / SmallIcon / Tile` | CSS grid of cards | CSS grid of `mat-card` | Bootstrap card grid |
 | `Groups` | grouped sections / `Object.groupBy` | `*ngFor` grouped | grouped `<tbody>` |
 | `Columns` / `ListViewItem.SubItems` | `columns` + row fields | same | same |
