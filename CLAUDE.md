@@ -146,7 +146,7 @@ public interface IEngineRegistry { void RegisterSource(ISourceEngine e); void Re
 public interface ISourceEngine : IEngine {
     string Technology { get; }                 // "WinForms"
     IProjectAnalyzer Analyzer { get; }         // Analyze(root) -> ProjectAnalysis { Forms, UserControls, StartupForm, FrameworkVersion }
-    IEnumerable<IIrExtractor> Extractors { get; }   // ordered: tree -> members -> semantics -> workflows -> navigation
+    IEnumerable<IIrExtractor> Extractors { get; }   // ordered: tree -> members -> code wiring -> semantics -> workflows -> navigation
 }
 
 public interface ITargetEngine : IEngine {
@@ -220,7 +220,7 @@ Rules:
 
 ### 4.2 Conventions specific to WinForms IR
 - `RootControl.Id` = class name; `RootControl.TagName` = base type (`System.Windows.Forms.Form` / `UserControl`).
-- Event wiring: `Attributes["OnClick"] = "btnSave_Click"` (same key style as ASP.NET `OnClick`).
+- Event wiring: `Attributes["OnClick"] = "btnSave_Click"` (same key style as ASP.NET `OnClick`). Subscriptions in the code-behind (`btn.Click += handler`, `new EventHandler(m)`, lambdas) are recorded the same way plus the marker `Wired.Click = "code"`; lambdas become synthetic handler members.
 - Base type is read from the code-behind class first, then designer, then defaults to `Form`.
 - Root event wiring (`this.Load += ...`) is `RootControl.Attributes["OnLoad"]`; a custom base class stays as the root `TagName` (e.g. `BaseForm`).
 - **Navigation** reuses the shared web-shaped `NavigationIr` without changing it. Always create/read through `Migrator.Engine.Navigation.WinNavigation`: `SourceControlId` = trigger control, `TriggerEvent` = event, `Target` = target form (empty for Close/Hide/Exit), `TargetType` = `Show | ShowDialog | Close | Hide | Exit`. The handler is the `WorkflowIr` with the same control + event (`FindWorkflow`). `Show/ShowDialog` count only on `new T()` or a local initialised with one (so `MessageBox.Show` is never navigation). If richer data is ever needed (DialogResult, ctor args), add a WinForms-owned sidecar file — do not change `NavigationIr`.

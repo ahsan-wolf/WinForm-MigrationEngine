@@ -11,6 +11,11 @@ Reconstructed from the merged slices (PR numbers refer to the repository's pull 
 - #35 App shell opens and closes dialogs (visual-only pages).
 - Versions: engines, `ui-spec` and `@wfm/ui-react` 0.1.0 → 0.2.0; IR schema stays 0.1.0. Guide v0.2 with decision records and the roadmap.
 
+## Unreleased (0.3.0 line)
+- #37 Each page is a markup file plus a code-behind file (`X.tsx` + `X.code.tsx`) with an exported `wiring` table.
+- #38 `WfTabs` is controlled only when a change handler is passed (a designer-set `SelectedIndex` no longer freezes the tabs).
+- Event wiring from code-behind subscriptions (`WinFormsCodeWiringExtractor`, `source: 'code'`) and `Path.*` helpers in the generated `lib/csharp.ts`.
+
 ## 0.1 (10–13 Oct)
 
 ## Foundation (10 Oct)

@@ -291,7 +291,7 @@ Event naming (canonical → React / Angular / HTML): `click → onClick / (wfCli
 
 ## Skill 6 — Event Mapping
 
-**Where the wiring lives (React target):** the markup file binds handlers by name (`onClick={handleSaveClick}`); the handlers, the model and the translated methods are in the page's **code-behind file** `XPage.code.tsx`, which also exports a `wiring` table (`control`, `event`, `handler`, `method`, `source`) listing every `control.event → handler` of the original form. That is the file to open when tracing an event back to the WinForms `X.cs` (`source` is `designer`; wiring read from code-behind statements `ctl.Click += handler` will use `code`).
+**Where the wiring lives (React target):** the markup file binds handlers by name (`onClick={handleSaveClick}`); the handlers, the model and the translated methods are in the page's **code-behind file** `XPage.code.tsx`, which also exports a `wiring` table (`control`, `event`, `handler`, `method`, `source`) listing every `control.event → handler` of the original form. That is the file to open when tracing an event back to the WinForms `X.cs` (`source` is `designer`, or `code` for wiring read from code-behind statements `ctl.Click += handler`, `new EventHandler(m)` or lambdas; the original statement stays in the translated code as a `// wired in the markup` comment).
 
 | WinForms event | React | Angular | jQuery | Note |
 |---|---|---|---|---|

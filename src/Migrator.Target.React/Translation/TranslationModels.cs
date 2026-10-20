@@ -17,6 +17,12 @@ public class Untranslatable : Exception
     public bool WireToRealApi { get; }
 }
 
+/// <summary>A subscription written in the code-behind (`btn.Click += handler`) that the source engine already recorded as event wiring: the markup binds it, so the statement itself is kept as a comment.</summary>
+public sealed class WiredInMarkup : Untranslatable
+{
+    public WiredInMarkup(string reason) : base(reason) { }
+}
+
 /// <summary>A statement that has no browser meaning (Application.DoEvents, Cursor, DialogResult assignment...): dropped with a comment, not a TODO.</summary>
 public sealed class Dropped : Untranslatable
 {
@@ -102,6 +108,9 @@ public sealed class PageScope
 
     /// <summary>Controls of type TabControl: `SelectedIndex` is `vm.<id>.selectedIndex`.</summary>
     public HashSet<string> TabControls { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>`controlId.Event` keys whose wiring came from code-behind subscriptions (IR marker `Wired.Event = "code"`): the markup binds them.</summary>
+    public HashSet<string> CodeWired { get; } = new(StringComparer.Ordinal);
 
     /// <summary>Controls of type CheckedListBox: `CheckedIndices` / `CheckedItems` / `GetItemChecked` / `SetItemChecked` use `vm.<id>.checkedIndices`.</summary>
     public HashSet<string> CheckedLists { get; } = new(StringComparer.Ordinal);

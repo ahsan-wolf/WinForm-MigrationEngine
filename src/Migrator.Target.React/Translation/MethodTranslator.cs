@@ -196,6 +196,11 @@ internal sealed partial class MethodTranslator
             _after.Clear();
             return lines;
         }
+        catch (WiredInMarkup w) when (s is ExpressionStatementSyntax)
+        {
+            _after.Clear();
+            return new List<string> { $"// wired in the markup ({w.Message}): {Collapse(s)}" };
+        }
         catch (Dropped d) when (s is ExpressionStatementSyntax)
         {
             _after.Clear();
@@ -1111,6 +1116,11 @@ internal sealed partial class MethodTranslator
     {
         var op = a.OperatorToken.Text;
 
+        // Event subscription in code: the source engine records it as wiring (`Wired.<Event> = "code"`), so the markup binds the handler.
+        if (a.IsKind(SyntaxKind.AddAssignmentExpression) && a.Left is MemberAccessExpressionSyntax { Name.Identifier.ValueText: var wiredEvent } wiredLeft
+            && (wiredLeft.Expression is ThisExpressionSyntax ? _scope.RootId : ControlOf(wiredLeft.Expression)) is { } wiredId && _scope.CodeWired.Contains($"{wiredId}.{wiredEvent}"))
+            throw new WiredInMarkup($"{wiredId}.{wiredEvent}");
+
         // Event subscription in code: x.Click += handler
         if (a.IsKind(SyntaxKind.AddAssignmentExpression) && a.Left is MemberAccessExpressionSyntax { Name.Identifier.ValueText: var evt }
             && evt is "Click" or "TextChanged" or "SelectedIndexChanged" or "CheckedChanged" or "DoubleClick" or "KeyDown" or "KeyPress" or "Tick")
@@ -1413,6 +1423,11 @@ internal sealed partial class MethodTranslator
             case ("Math", "Ceiling"): return $"Math.ceil({string.Join(", ", args)})";
             case ("DateTime", "Parse") when args.Count == 1: return $"new Date({args[0]}).toISOString()";
             case ("Guid", "NewGuid"): return "crypto.randomUUID()";
+            case ("Path", "Combine") when args.Count >= 2: return $"pathCombine({string.Join(", ", args)})";
+            case ("Path", "GetFileName") when args.Count == 1: return $"getFileName({args[0]})";
+            case ("Path", "GetFileNameWithoutExtension") when args.Count == 1: return $"getFileNameWithoutExtension({args[0]})";
+            case ("Path", "GetDirectoryName") when args.Count == 1: return $"getDirectoryName({args[0]})";
+            case ("Path", "GetExtension") when args.Count == 1: return $"getExtension({args[0]})";
             case ("Path" or "File" or "Directory" or "Process" or "Registry", _):
                 throw new Untranslatable($"{type}.{method}: file system / process access has no browser equivalent (needs a server-side service)");
         }

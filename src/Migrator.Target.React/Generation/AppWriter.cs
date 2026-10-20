@@ -167,6 +167,47 @@ public static class AppWriter
             export function formatString(format: string, ...args: unknown[]): string {
               return format.replace(/\{(\d+)(?::[^}]*)?\}/g, (_match, index: string) => String(args[Number(index)] ?? ''));
             }
+
+            // System.IO.Path on plain strings (no file access): both '/' and '\\' separate, so Windows paths keep working in the browser.
+            const separators = /[\\/]/;
+            const rooted = (p: string) => /^([\\/]|[A-Za-z]:)/.test(p);
+
+            /** Path.Combine: a later rooted part replaces what came before; the separator of the first part is reused ('\\' for Windows-looking paths). */
+            export function pathCombine(...parts: string[]): string {
+              let result = '';
+              for (const part of parts) {
+                if (part === '') continue;
+                if (result === '' || rooted(part)) { result = part; continue; }
+                const sep = result.includes('\\') || /^[A-Za-z]:/.test(result) ? '\\' : '/';
+                result = separators.test(result[result.length - 1]) ? result + part : result + sep + part;
+              }
+              return result;
+            }
+
+            /** Path.GetFileName */
+            export function getFileName(path: string): string {
+              return path.slice(path.search(/[^\\/]*$/));
+            }
+
+            /** Path.GetExtension: the last '.' of the file name onwards, '' when there is none. */
+            export function getExtension(path: string): string {
+              const name = getFileName(path);
+              const dot = name.lastIndexOf('.');
+              return dot > 0 && dot < name.length - 1 ? name.slice(dot) : '';
+            }
+
+            /** Path.GetFileNameWithoutExtension */
+            export function getFileNameWithoutExtension(path: string): string {
+              const name = getFileName(path);
+              const ext = getExtension(name);
+              return ext ? name.slice(0, name.length - ext.length) : name;
+            }
+
+            /** Path.GetDirectoryName: everything before the last separator ('' for a bare file name). */
+            export function getDirectoryName(path: string): string {
+              const cut = path.search(/[\\/][^\\/]*$/);
+              return cut <= 0 ? (cut === 0 ? path.slice(0, 1) : '') : path.slice(0, cut);
+            }
             """, files);
         }
 

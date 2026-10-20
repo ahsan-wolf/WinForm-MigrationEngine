@@ -76,6 +76,9 @@ public sealed partial class PageGenerator
     /// <summary>App shell only: a visual-only page still opens the forms its buttons and menu items open (and closes itself), through the dialog service. Nothing else runs.</summary>
     private readonly bool _previewNavigation;
 
+    /// <summary>Helpers of the generated `src/lib/csharp.ts`, imported by whichever file calls them.</summary>
+    internal static readonly string[] CsharpHelpers = { "formatString", "pathCombine", "getFileName", "getFileNameWithoutExtension", "getDirectoryName", "getExtension" };
+
     /// <param name="preview">Visual-only pages for the component viewer: controls and layout as designed with placeholder data; no handlers, model, dialogs, translation or imports other than the UI library.</param>
     public PageGenerator(SpecCatalog spec, IReadOnlyDictionary<string, UnitIr> units, IReadOnlyDictionary<string, string> components, ISet<string> generated, TranslationEnv? translation = null, bool preview = false, bool previewNavigation = false)
     {
@@ -95,6 +98,9 @@ public sealed partial class PageGenerator
         public string Event = "";
         public MemberIr Member = null!;
         public bool IsRoot;
+
+        /// <summary>`designer`, or `code` when the wiring was read from a subscription in the code-behind.</summary>
+        public string Source = "designer";
     }
 
     private sealed class Ctx
@@ -228,7 +234,7 @@ public sealed partial class PageGenerator
         body.Add("/** Event wiring of the original form (control.event -> handler). The markup binds these handlers by name; kept here so the wiring is easy to trace back to the WinForms code-behind. */");
         body.Add("export const wiring = [");
         foreach (var h in c.Handlers.Values.OrderBy(h => h.ControlId, StringComparer.Ordinal).ThenBy(h => h.Event, StringComparer.Ordinal))
-            body.Add($"  {{ control: {Str(h.ControlId)}, event: {Str(h.Event)}, handler: {Str(h.Name)}, method: {Str(h.Member.Name)}, source: 'designer' }},");
+            body.Add($"  {{ control: {Str(h.ControlId)}, event: {Str(h.Event)}, handler: {Str(h.Name)}, method: {Str(h.Member.Name)}, source: '{h.Source}' }},");
         body.Add("] as const;");
         body.Add("");
 
@@ -295,7 +301,8 @@ public sealed partial class PageGenerator
         codeLib.AddRange(c.LibTypes.Where(t => Regex.IsMatch(codeText, $@"\b{Regex.Escape(t)}\b")).Select(t => "type " + t));
         if (codeLib.Count > 0) code.AppendLine($"import {{ {string.Join(", ", codeLib)} }} from '@wfm/ui-react';");
         foreach (var (comp, file) in c.PageImports.Where(p => Regex.IsMatch(codeText, $@"<{p.Key}\b"))) code.AppendLine($"import {{ {comp} }} from './{file}';");
-        if (c.Translation is { UsesFormat: true } && Regex.IsMatch(codeText, @"\bformatString\(")) code.AppendLine("import { formatString } from '../lib/csharp';");
+        var csharpHelpers = CsharpHelpers.Where(h => Regex.IsMatch(codeText, $@"\b{h}\(")).ToList();
+        if (csharpHelpers.Count > 0) code.AppendLine($"import {{ {string.Join(", ", csharpHelpers)} }} from '../lib/csharp';");
         // Only code counts for the support classes: a model key or a column field with the same name as a class is not a use.
         var supportCode = SupportUsed(Code(handlerCode
             .Concat(usesFields ? c.Translation!.FieldInitials.Values : Enumerable.Empty<string>())
@@ -1130,7 +1137,7 @@ public sealed partial class PageGenerator
         var name = c.Translation is not null && c.Translation.ByMember.TryGetValue(member, out var translated)
             ? translated.TsName
             : c.Names.Unique(Naming.HandlerName(node.Id, eventName, isRoot));
-        var handler = new Handler { Name = name, ControlId = node.Id, Event = eventName, Member = member, IsRoot = isRoot };
+        var handler = new Handler { Name = name, ControlId = node.Id, Event = eventName, Member = member, IsRoot = isRoot, Source = node.Attributes.GetValueOrDefault("Wired." + eventName) == "code" ? "code" : "designer" };
         c.Handlers[key] = handler;
         return handler;
     }
