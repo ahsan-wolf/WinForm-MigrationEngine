@@ -47,7 +47,7 @@ Later facets read earlier ones from the `PageIr` only (event wiring is read back
 | `toolTip.SetToolTip(ctrl, "text")` | `ToolTip` on the control |
 | `resources.ApplyResources(...)` + sibling `.resx` | `Text`, `ToolTip`, `ToolTipText`, `HeaderText`, `PlaceholderText` merged when not set in code (code wins); geometry, binary and `>>` metadata entries ignored; a malformed `.resx` is skipped, not fatal |
 
-Dotted/pseudo attribute keys (`ParentSlot`, `TableLayout.*`, `DataBinding.*`, `DefaultCellStyle.*`) cannot collide with C# property names.
+Dotted/pseudo attribute keys (`ParentSlot`, `TableLayout.*`, `DataBinding.*`, `DefaultCellStyle.*`, `Wired.<Event>`, `Image.Data` / `Image.Format`) cannot collide with C# property names. `Wired.<Event> = "code"` marks event wiring that came from a subscription in the code-behind (see `WinFormsCodeWiringExtractor`: method groups, `new EventHandler(m)`, lambdas and anonymous methods, the last two as synthetic handler members `<ctl>_<Event>_lambda<n>`); designer wiring wins when both exist, and subscriptions on controls that are not in the tree are left alone.
 Anything else in `InitializeComponent` goes to `project.ir.json` `Shared.Unsupported` as `"{Unit}: {statement}"` (via the optional
 `IUnsupportedReporter`; capped at 50 per unit) — never silently dropped. Partially understood statements are reported too, e.g.
 non-literal table coordinates (`Controls.Add(btn, dynCol, 1)` keeps the literal row and reports the rest).

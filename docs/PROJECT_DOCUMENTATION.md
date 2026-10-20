@@ -43,7 +43,7 @@ Dependency rule: `Cli → Engine → (Source.*, Target.*) → IR`; engines never
 ## 3. Pipeline
 
 1. **Analyze** — find forms, user controls, the startup form (`Program.cs`), framework version.
-2. **Extract IR** — per unit: control tree → members → semantics → workflows → navigation. One extraction, many projections: the other files are derived from `complete.ir.json`.
+2. **Extract IR** — per unit: control tree → members → code-behind wiring → semantics → workflows → navigation. One extraction, many projections: the other files are derived from `complete.ir.json`.
 3. **Extract support classes** — the app's own non-form classes into `support.ir.json`.
 4. *(optional)* **Contract** — `migrator contract` reads a backend DLL's public API from metadata only.
 5. **Generate** — deterministic: pages, layout, state model, navigation, services, support module, app shell.

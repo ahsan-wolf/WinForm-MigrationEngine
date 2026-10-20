@@ -111,6 +111,7 @@ Colours and fonts are CSS variables at the top of `src/appshell.css` (system-sty
 | `// dropped (no browser equivalent: ...)` | Appearance-only or UI-loop code (Cursor, `DoEvents`, Refresh) that has no behaviour in a browser |
 | `// LLM-translated — verify` | Reserved for the LLM tier (not generated yet) |
 | `/* FALLBACK: DateTimePicker */` | A control with no library component of its own, rendered by the closest one (here a text box); behaviour may differ, see the report |
+| `// wired in the markup (btn.Click): btn.Click += handler;` | A subscription in the code-behind that the extractor turned into event wiring: the markup binds the handler (`wiring` table, `source: 'code'`); the original statement is kept as this comment |
 | `// BYPASSED — Windows-specific API (...)` | A statement using a Windows-only API (registry, clipboard, `Process.Start`, directory services, ...) was left out; the original is kept next to it |
 | `<WfUnsupported .../>` | A control that could not even be given a fallback (rare) |
 
@@ -156,7 +157,8 @@ What to click through: the menu and toolbar, each dialog from the entry form, li
 - No pixel fidelity: layout is derived from Dock/Anchor/Location facts into flex/grid.
 - Windows-only APIs are bypassed, not translated (`rules/windows-bypass.json`; the report lists each).
 - Classes from referenced projects outside the source folder are included as API shapes only (typed fields, stubbed methods); data access, file system and configuration code is left out and listed in the report as backend work.
-- Not translated today: `ref`/`out`, event subscriptions in code, `string.Format` format specifiers, `ConfigurationManager`/registry/file access, GDI+/P/Invoke/COM, UI calls inside non-form classes, LINQ query syntax, lambdas, `dgv.Rows` and `pnl.Controls` members, runtime-created controls.
+- Event subscriptions written in the code-behind (`btn.Click += handler`, `new EventHandler(m)`, lambdas, anonymous methods) are read as event wiring and bound in the markup (`source: 'code'` in the `wiring` table); only subscriptions on controls created at run time stay TODO.
+- Not translated today: `ref`/`out`, `string.Format` format specifiers, `ConfigurationManager`/registry/file access, GDI+/P/Invoke/COM, UI calls inside non-form classes, LINQ query syntax, lambdas, `dgv.Rows` and `pnl.Controls` members, runtime-created controls.
 - Controls without a library component yet (TreeView, list box, rich/masked text, month calendar, ...) are rendered by the closest component (`ui-spec/fallbacks.json`): a date picker is a text box, a tree a flat list, tabs stacked panels. They work, but look and behave simply.
 - Only the React target exists; Angular and HTML+jQuery are planned. See `PROJECT_PLAN.md` for the roadmap.
 

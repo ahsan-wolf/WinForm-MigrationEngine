@@ -325,7 +325,7 @@ Original first-two-weeks list, with status: D1 confirmed; D2 and D6 still open �
 Done since: pilot run (D6) and the P1 gaps it exposed, `ui-spec` MVP + React library, React target (M1-lite), contracts, translation (P4.2) and the slices listed in §0.
 
 Next, in order (the engine slices 1–7 are costed in `guide/v0.2/08-roadmap.md`):
-0. **Slices for 0.3.0:** event wiring from code-behind, `dgv.Rows`, `panel.Controls` dynamic host, tab pages, image resources (replacing `ImageList`), `Path.*` helpers, History-API routes. **To-do list:** the backend gateway (variant A/B, service URLs and authentication still open).
+0. **Slices for 0.3.0:** (done: event wiring from code-behind, `Path.*` helpers), `dgv.Rows`, `panel.Controls` dynamic host, tab pages, image resources (replacing `ImageList`), `Path.*` helpers, History-API routes. **To-do list:** the backend gateway (variant A/B, service URLs and authentication still open).
 1. **P4.3 LLM tier** on the residue (~120 methods the rules cannot translate): one method per call through the shared `LlmRegistry`, compile gate, cache in git-ignored `local-outputs/llm-cache/`.
 2. **Real data for pages:** the opener passes real constructor arguments to dialogs; the remaining `ref`/`out`, `string.Format` specifiers, event subscriptions in code, `dgv.Rows`/`pnl.Controls` members; dynamic fields (`WfDynamicFields`).
 3. Missing controls: none of the standard ones (check list, up/down, track/scroll bar, drop-down button done). Tree view done (`Nodes`, `SelectedNode`, `new TreeNode`, `Expand*` translate). Done: date/time picker, radio button (groups), numeric up/down, tabs, link label, masked text, rich text, month calendar, list box.

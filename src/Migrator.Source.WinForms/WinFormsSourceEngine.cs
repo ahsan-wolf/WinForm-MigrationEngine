@@ -48,6 +48,7 @@ public sealed class WinFormsSourceEngine : IProjectAwareSourceEngine, IIrProject
     {
         new WinFormsControlTreeExtractor(userControls, resolver: resolver),
         new WinFormsMemberExtractor(typeFiles),
+        new WinFormsCodeWiringExtractor(),
         new WinFormsSemanticsExtractor(),
         new WinFormsWorkflowExtractor(),
         new WinFormsNavigationExtractor()

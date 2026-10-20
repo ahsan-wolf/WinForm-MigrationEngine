@@ -57,7 +57,8 @@ internal static class SupportTranslator
         var typeImports = output.TypeImports.Where(t => Regex.IsMatch(code, $@"(?<![\w.]){Regex.Escape(t)}\b")).ToList();
         if (typeImports.Count > 0) header.Add($"import type {{ {string.Join(", ", typeImports)} }} from '{env.Vocabulary.TypesImport}';");
         if (Regex.IsMatch(code, @"\bfixtures\.") && output.FixturesImport.Length > 0) header.Add($"import {{ fixtures }} from '{output.FixturesImport}';");
-        if (Regex.IsMatch(code, @"\bformatString\(")) header.Add("import { formatString } from '../lib/csharp';");
+        var csharpHelpers = Migrator.Target.React.Generation.PageGenerator.CsharpHelpers.Where(h => Regex.IsMatch(code, $@"\b{h}\(")).ToList();
+        if (csharpHelpers.Count > 0) header.Add($"import {{ {string.Join(", ", csharpHelpers)} }} from '../lib/csharp';");
         var uiImports = new List<string>();
         if (Regex.IsMatch(code, @"\bWfListItem\b")) uiImports.Add("type WfListItem");
         if (Regex.IsMatch(code, @"\bWfTreeNode\b")) uiImports.Add("type WfTreeNode");
