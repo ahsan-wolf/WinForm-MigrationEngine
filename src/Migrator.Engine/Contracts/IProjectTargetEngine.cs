@@ -27,6 +27,9 @@ public sealed class GenerationOptions
     /// <summary>contract.json files (from `migrator contract`) of binary-only dependencies the app calls; the target emits typed mock services from them.</summary>
     public IReadOnlyList<string> ContractFiles { get; init; } = Array.Empty<string>();
 
+    /// <summary>Folder of image files named by key (`Name.png`, `Name.ico`, ...): supplies `Properties.Resources.Name` images and image-list entries that could not be extracted.</summary>
+    public string? ImagesFolder { get; init; }
+
     /// <summary>"used" (default): only types/methods the generated forms reference. "all": every public data type and static method.</summary>
     public string ContractScope { get; init; } = "used";
 

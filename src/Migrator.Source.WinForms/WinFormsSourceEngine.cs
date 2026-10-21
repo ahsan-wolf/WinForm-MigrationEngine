@@ -8,7 +8,7 @@ using WebFormsMigrator.IR.Models;
 
 namespace Migrator.Source.WinForms;
 
-public sealed class WinFormsSourceEngine : IProjectAwareSourceEngine, IIrProjectionProvider, IUnsupportedReporter, ISupportSourceEngine, IDependencySourceEngine
+public sealed class WinFormsSourceEngine : IProjectAwareSourceEngine, IIrProjectionProvider, IUnsupportedReporter, ISupportSourceEngine, IResourceSourceEngine, IDependencySourceEngine
 {
     public string Id => "winforms";
     public string Technology => "WinForms";
@@ -32,6 +32,9 @@ public sealed class WinFormsSourceEngine : IProjectAwareSourceEngine, IIrProject
 
     /// <summary>The project's own non-UI classes (helpers, data classes, enums), written as support.ir.json.</summary>
     public SupportFileIr ExtractSupport(ProjectAnalysis analysis) => WinFormsSupportExtractor.Extract(analysis);
+
+    /// <summary>The images of the project's Resources.resx that code references, written as resources.ir.json.</summary>
+    public ResourceFileIr ExtractResources(ProjectAnalysis analysis) => WinFormsResourceExtractor.Extract(analysis);
 
     /// <summary>External (binary) assemblies the project files reference, for contract extraction.</summary>
     public IReadOnlyList<ExternalAssemblyIr> FindExternalAssemblies(ProjectAnalysis analysis) => WinFormsDependencyScanner.Find(analysis);

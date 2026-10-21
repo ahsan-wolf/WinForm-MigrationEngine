@@ -167,7 +167,9 @@
                   { "name": "cellEdit", "from": "CellEndEdit", "react": "onCellEdit" },
                   { "name": "cellClick", "from": "CellClick", "react": "onCellClick" },
                   { "name": "cellClick", "from": "CellContentClick", "react": "onCellClick" },
-                  { "name": "cellClick", "from": "CellMouseClick", "react": "onCellClick" } ],
+                  { "name": "cellClick", "from": "CellMouseClick", "react": "onCellClick" },
+                  { "name": "cellDoubleClick", "from": "CellDoubleClick", "react": "onCellDoubleClick" },
+                  { "name": "cellDoubleClick", "from": "CellContentDoubleClick", "react": "onCellDoubleClick" } ],
       "a11y": "table with row selection via click and aria-selected.", "example": "<WfDataGrid rows={rows} columns={cols} onRowSelect={handle} />" },
     { "name": "WfListView", "winformsTypes": ["System.Windows.Forms.ListView"], "container": true,
       "props": [

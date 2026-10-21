@@ -8,7 +8,7 @@ public static class AppWriter
     private static readonly JsonSerializerOptions Pretty = new() { WriteIndented = true };
 
     /// <param name="entryComponent">The entry form's component; null for the viewer app, which writes its own entry point and needs no C# helpers.</param>
-    public static void Write(string appDir, string appName, string? entryComponent, string uiLibraryDir, List<string> files)
+    public static void Write(string appDir, string appName, string? entryComponent, string uiLibraryDir, List<string> files, string? favicon = null)
     {
         var uiRelative = Path.GetRelativePath(appDir, uiLibraryDir).Replace('\\', '/');
         var package = new Dictionary<string, object>
@@ -41,6 +41,7 @@ public static class AppWriter
                 <meta charset="UTF-8" />
                 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
                 <title>{{appName}}</title>
+                {{FaviconLink(favicon)}}
                 <!-- Relative URLs (icons/…, images/…, route links) resolve against the app base, so the app runs at the site root or under a sub-path. -->
                 <base href="%BASE_URL%" />
               </head>
@@ -272,6 +273,9 @@ public static class AppWriter
             .wfm-fill { flex: 1 1 auto; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
             """, files);
     }
+
+    /// <summary>`<link rel="icon">` for the form icon (relative, so it resolves against the app base); empty when the entry form has no icon.</summary>
+    private static string FaviconLink(string? favicon) => favicon is null ? "<!-- the entry form has no icon -->" : $"<link rel=\"icon\" href=\"{favicon}\" />";
 
     public static void PutBytes(string dir, string relativePath, byte[] data, List<string> files)
     {

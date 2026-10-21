@@ -9,6 +9,8 @@ export interface WfGridColumn {
 }
 export type GridRow = Record<string, unknown>;
 export interface WfGridCellEdit { row: GridRow; field: string; rowIndex: number; value: unknown }
+/** A click or double click on a cell: the counterpart of DataGridViewCellEventArgs (`RowIndex`, `ColumnIndex`). */
+export interface WfGridCellEvent { row: GridRow; field: string; rowIndex: number; columnIndex: number }
 
 export interface WfDataGridProps {
   rows: GridRow[];
@@ -27,7 +29,8 @@ export interface WfDataGridProps {
   /** Column widths can be dragged (default true). */
   resizable?: boolean;
   onRowSelect?: (rows: GridRow[]) => void;
-  onCellClick?: (e: { row: GridRow; field: string; rowIndex: number }) => void;
+  onCellClick?: (e: WfGridCellEvent) => void;
+  onCellDoubleClick?: (e: WfGridCellEvent) => void;
   /** An edited cell: the grid never changes `rows`; the parent applies the value. Without this callback the edit is kept inside the grid. */
   onCellEdit?: (e: WfGridCellEdit) => void;
   id?: string;
@@ -48,7 +51,7 @@ const compare = (x: unknown, y: unknown): number =>
   x === y ? 0 : typeof x === 'number' && typeof y === 'number' ? x - y : String(x ?? '') < String(y ?? '') ? -1 : 1;
 
 export function WfDataGrid({
-  rows, columns, selectionMode = 'single', sortable = true, readOnly, rowKey, pageSize, resizable = true, onRowSelect, onCellClick, onCellEdit, id, className,
+  rows, columns, selectionMode = 'single', sortable = true, readOnly, rowKey, pageSize, resizable = true, onRowSelect, onCellClick, onCellDoubleClick, onCellEdit, id, className,
 }: WfDataGridProps) {
   const keyOf = (row: GridRow): unknown => (rowKey ? row[rowKey] : row);
   const [selected, setSelected] = useState<ReadonlySet<unknown>>(new Set());
@@ -156,7 +159,7 @@ export function WfDataGrid({
                   const value = cellValue(row, c.field);
                   const isEditing = editing !== null && editing.key === keyOf(row) && editing.col === ci;
                   return (
-                    <td key={`${ci}:${c.field}`} onClick={() => { setActiveField(c.field); onCellClick?.({ row, field: c.field, rowIndex: i }); }} onDoubleClick={() => beginEdit(row, c, ci)}>
+                    <td key={`${ci}:${c.field}`} onClick={() => { setActiveField(c.field); onCellClick?.({ row, field: c.field, rowIndex: i, columnIndex: ci }); }} onDoubleClick={() => { onCellDoubleClick?.({ row, field: c.field, rowIndex: i, columnIndex: ci }); beginEdit(row, c, ci); }}>
                       {isEditing ? (
                         <input className="wf-grid-edit" autoFocus value={editing.draft} onChange={e => setEditing({ ...editing, draft: e.target.value })}
                                onClick={e => e.stopPropagation()}

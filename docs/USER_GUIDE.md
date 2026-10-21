@@ -68,6 +68,7 @@ Use an output folder **outside the repository**. Never commit generated output d
 | `--translate none\|rules\|llm` | `none`: handlers stay commented C#. `rules`: deterministic C# -> TypeScript. `llm` currently behaves like `rules` (LLM tier planned) |
 | `--compile-gate` | Run `npm install` if needed, then `tsc`; methods that do not compile are demoted back to commented C# and the page is regenerated (up to 5 rounds). Without the flag the gate runs only if dependencies already exist; `--no-compile-gate` skips it |
 | `--contract <file>` (repeatable) | Turn a backend contract into typed services, fixtures and types in the app |
+| `--images <folder>` | Image files named by key (`Name.png`, `Name.ico`, ...) for `Properties.Resources.Name` and image-list entries the engine could not extract |
 | `--contract-scope used\|all` | Emit only what the generated code uses (default) or everything |
 
 The console ends with counts: units extracted, pages generated, methods complete/partial/not translated, support classes, remaining TypeScript errors.

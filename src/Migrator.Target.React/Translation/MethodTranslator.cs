@@ -522,7 +522,9 @@ internal sealed partial class MethodTranslator
             case IsPatternExpressionSyntax ip: return IsPattern(ip);
             case ThisExpressionSyntax: throw new Untranslatable("`this` used as a value");
             case DefaultExpressionSyntax or TypeOfExpressionSyntax: throw new Untranslatable("typeof/default expression");
-            case SimpleLambdaExpressionSyntax or ParenthesizedLambdaExpressionSyntax or AnonymousMethodExpressionSyntax: throw new Untranslatable("lambda / anonymous method");
+            case SimpleLambdaExpressionSyntax simple: return Lambda(new[] { simple.Parameter.Identifier.ValueText }, simple.Body, simple.AsyncKeyword);
+            case ParenthesizedLambdaExpressionSyntax paren: return Lambda(paren.ParameterList.Parameters.Select(x => x.Identifier.ValueText), paren.Body, paren.AsyncKeyword);
+            case AnonymousMethodExpressionSyntax: throw new Untranslatable("lambda / anonymous method");
             case QueryExpressionSyntax: throw new Untranslatable("LINQ query expression");
             default: throw new Untranslatable($"expression kind {e.Kind()}");
         }
@@ -567,6 +569,9 @@ internal sealed partial class MethodTranslator
         var name = ma.Name.Identifier.ValueText;
         var left = ma.Expression;
 
+        if (ResourceImage(ma) is { } resourceImage) return resourceImage;
+        if (name is "RowIndex" or "ColumnIndex" && left is IdentifierNameSyntax eventArgument && IsGridEventArgument(eventArgument.Identifier.ValueText))
+            return $"{eventArgument.Identifier.ValueText}.{char.ToLowerInvariant(name[0])}{name[1..]}";
         if (ImageListMember(ma) is { } imageListMember) return imageListMember;
         if (TabCount(ma) is { } tabCount) return tabCount;
         if (HostCount(ma) is { } hostCount) return hostCount;
@@ -612,7 +617,7 @@ internal sealed partial class MethodTranslator
                 _scope.Output.UsesViewModel = true;
                 return name == "CheckedIndices" ? $"vm.{controlId}.checkedIndices" : $"vm.{controlId}.checkedIndices.map((i) => vm.{controlId}.items[i])";
             }
-            if (_scope.Grids.Contains(controlId) && name is "Rows" or "SelectedRows" or "Columns" or "CurrentRow")
+            if (_scope.Grids.Contains(controlId) && name is "Rows" or "SelectedRows" or "Columns" or "CurrentRow" or "DataSource")
             {
                 _scope.Output.UsesViewModel = true;
                 return name switch
@@ -620,6 +625,7 @@ internal sealed partial class MethodTranslator
                     "Rows" => $"vm.{controlId}.rows",
                     "SelectedRows" => $"vm.{controlId}.selected",
                     "Columns" => $"vm.{controlId}.columns",
+                    "DataSource" => $"(vm.{controlId}.rows.length > 0 ? vm.{controlId}.rows : null)",
                     _ => $"(vm.{controlId}.selected[0] ?? null)"
                 };
             }
@@ -914,6 +920,10 @@ internal sealed partial class MethodTranslator
 
     // ------------------------------------------------------------------------------------------------- DataGridView rows
 
+    /// <summary>The `e` of a handler wired to a grid cell event: `e.RowIndex` / `e.ColumnIndex` read the grid's cell event.</summary>
+    private bool IsGridEventArgument(string name) =>
+        _method is { Parameters.Count: 2 } m && m.Parameters[1].Name == name && _scope.Functions.TryGetValue(m.Name, out var functions) && functions.Any(f => f.Member == m && f.GridEvent);
+
     private string? GridControl(ExpressionSyntax e) => ControlOf(e) is { } id && _scope.Grids.Contains(id) ? id : null;
 
     /// <summary>`grid.Rows` or `grid.SelectedRows`: the grid id.</summary>
@@ -1096,6 +1106,26 @@ internal sealed partial class MethodTranslator
         _ => t.ToString()
     };
 
+    /// <summary>
+    /// An expression-bodied lambda (`x => x.Id == id`) as an arrow function; its parameters are locals of the body. Block bodies and async lambdas are not translated
+    /// (a block would need the statement translator, with its own scope).
+    /// </summary>
+    private string Lambda(IEnumerable<string> parameters, CSharpSyntaxNode body, SyntaxToken asyncKeyword)
+    {
+        if (body is not ExpressionSyntax expression || !asyncKeyword.IsKind(SyntaxKind.None)) throw new Untranslatable("lambda / anonymous method");
+        var names = parameters.ToList();
+        var added = names.Where(n => _locals.Add(n)).ToList();
+        try
+        {
+            var text = Ex(expression);
+            return $"{(text.Contains("await ", StringComparison.Ordinal) ? "async " : "")}({string.Join(", ", names)}) => {text}";
+        }
+        finally
+        {
+            foreach (var n in added) _locals.Remove(n);
+        }
+    }
+
     private string Cast(CastExpressionSyntax cast)
     {
         var inner = Ex(cast.Expression);
@@ -1214,6 +1244,15 @@ internal sealed partial class MethodTranslator
     private string Assign(AssignmentExpressionSyntax a)
     {
         var op = a.OperatorToken.Text;
+
+        // grid.DataSource = list: the rows of the grid (a null source empties it)
+        if (a.IsKind(SyntaxKind.SimpleAssignmentExpression) && a.Left is MemberAccessExpressionSyntax { Name.Identifier.ValueText: "DataSource" } sourceLeft && GridControl(sourceLeft.Expression) is { } sourceGrid)
+        {
+            _scope.Output.UsesViewModel = true;
+            return a.Right is LiteralExpressionSyntax { RawKind: (int)SyntaxKind.NullLiteralExpression }
+                ? $"vm.{sourceGrid}.rows = []"
+                : $"vm.{sourceGrid}.rows = ({Ex(a.Right)}) as unknown as typeof vm.{sourceGrid}.rows";
+        }
 
         // row.Cells[k].Value = x
         if (a.IsKind(SyntaxKind.SimpleAssignmentExpression) && a.Left is MemberAccessExpressionSyntax cellLeft && CellOf(cellLeft, out var setGrid, out var setRow, out var setKey))
@@ -1350,12 +1389,16 @@ internal sealed partial class MethodTranslator
 
     private List<string> Args(InvocationExpressionSyntax inv) => Args(inv.ArgumentList);
 
-    private List<string> Args(ArgumentListSyntax arguments)
+    private List<string> Args(ArgumentListSyntax arguments, MemberFunction? callee = null)
     {
         var list = new List<string>();
+        var position = 0;
         foreach (var arg in arguments.Arguments)
         {
-            if (!arg.RefKindKeyword.IsKind(SyntaxKind.None)) throw new Untranslatable("ref/out argument");
+            // `ref x` to a method that never assigns that parameter is plain pass-by-value in the browser (an object is shared either way).
+            if (!arg.RefKindKeyword.IsKind(SyntaxKind.None) && !(arg.RefKindKeyword.IsKind(SyntaxKind.RefKeyword) && callee is not null && ParameterNotAssigned(callee.Member, position)))
+                throw new Untranslatable("ref/out argument");
+            position++;
             if (arg.NameColon is not null) throw new Untranslatable("named argument");
             list.Add(NullBang(arg.Expression, Ex(arg.Expression)));
         }
@@ -1435,7 +1478,7 @@ internal sealed partial class MethodTranslator
         if (method == "Equals" && args.Count == 1)
             return $"({Binary(SyntaxFactory.BinaryExpression(SyntaxKind.EqualsExpression, receiver, inv.ArgumentList.Arguments[0].Expression))})";
         if (method == "ContainsKey" && args.Count == 1) return $"({args[0]} in {recv})";
-        if (InstanceSuffix(method, args) is { } suffix) return recv + suffix;
+        if (InstanceSuffix(method, args) is { } suffix) return suffix.Contains(" ?? ", StringComparison.Ordinal) ? $"({recv}{suffix})" : recv + suffix;
         throw new Untranslatable($"call to {Collapse(receiver)}.{method}(...) not resolvable from IR", wireToRealApi: true);
     }
 
@@ -1457,9 +1500,17 @@ internal sealed partial class MethodTranslator
     {
         var argc = inv.ArgumentList.Arguments.Count;
         var fn = _scope.Resolve(name, argc) ?? throw new Untranslatable($"call to {name}(...) not resolvable from IR", wireToRealApi: true);
-        var args = fn.IgnoresArgs ? new List<string>() : Args(inv);
+        var args = fn.IgnoresArgs ? new List<string>() : Args(inv.ArgumentList, fn);
         var call = $"{fn.Prefix}{fn.TsName}({string.Join(", ", args)})";
         return fn.IsAsync ? Await(call, top) : call;
+    }
+
+    /// <summary>True when the method's body never assigns, increments or passes on (`ref`/`out`) the parameter at that position.</summary>
+    private static bool ParameterNotAssigned(MemberIr method, int position)
+    {
+        if (position >= method.Parameters.Count || method.Body is null) return false;
+        var name = Regex.Escape(method.Parameters[position].Name);
+        return !Regex.IsMatch(method.Body, $@"(?<![\w.]){name}\s*(=(?!=)|\+=|-=|\*=|/=|\+\+|--|\?\?=)|(\+\+|--){name}\b|\b(ref|out)\s+{name}\b");
     }
 
     private string MessageBox(InvocationExpressionSyntax inv, bool top)
@@ -1617,6 +1668,26 @@ internal sealed partial class MethodTranslator
         ("RemoveAt", 1) => $".splice({a[0]}, 1)",
         ("Clear", 0) => ".length = 0",
         ("ToArray" or "ToList", 0) => ".slice()",
+        // LINQ over arrays: the lambda arrives translated as an arrow function.
+        ("Where" or "FindAll", 1) => $".filter({a[0]})",
+        ("Select", 1) => $".map({a[0]})",
+        ("FirstOrDefault", 0) => ".at(0) ?? null",
+        ("FirstOrDefault" or "Find", 1) => $".find({a[0]}) ?? null",
+        ("First", 0) => ".at(0)!",
+        ("First", 1) => $".find({a[0]})!",
+        ("LastOrDefault", 0) => ".at(-1) ?? null",
+        ("Last", 0) => ".at(-1)!",
+        ("Any", 0) => ".some(() => true)",
+        ("Any" or "Exists", 1) => $".some({a[0]})",
+        ("All", 1) => $".every({a[0]})",
+        ("Count", 0) => ".length",
+        ("Count", 1) => $".filter({a[0]}).length",
+        ("Take", 1) => $".slice(0, {a[0]})",
+        ("Skip", 1) => $".slice({a[0]})",
+        ("ForEach", 1) => $".forEach({a[0]})",
+        ("Sum", 1) => $".reduce((total, item) => total + ({a[0]})(item), 0)",
+        ("OrderBy", 1) => $".slice().sort((x, y) => {{ const kx = ({a[0]})(x), ky = ({a[0]})(y); return kx < ky ? -1 : kx > ky ? 1 : 0; }})",
+        ("OrderByDescending", 1) => $".slice().sort((x, y) => {{ const kx = ({a[0]})(x), ky = ({a[0]})(y); return kx < ky ? 1 : kx > ky ? -1 : 0; }})",
         _ => null
     };
 }

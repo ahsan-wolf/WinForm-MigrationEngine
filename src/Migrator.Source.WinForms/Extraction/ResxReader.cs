@@ -74,6 +74,42 @@ internal static partial class ResxReader
         return images;
     }
 
+    /// <summary>
+    /// The image files a .resx points at (`ResXFileRef`: `..\Resources\login.png;System.Drawing.Bitmap, ...`): name -> file bytes, read relative to the .resx folder.
+    /// Missing, oversized or non-image files are skipped.
+    /// </summary>
+    public static Dictionary<string, byte[]> ParseFileReferences(string? resxXml, string baseDirectory)
+    {
+        var files = new Dictionary<string, byte[]>(StringComparer.Ordinal);
+        if (string.IsNullOrWhiteSpace(resxXml) || !resxXml.Contains("ResXFileRef", StringComparison.Ordinal)) return files;
+        try
+        {
+            foreach (var data in XDocument.Parse(resxXml).Root?.Elements("data") ?? Enumerable.Empty<XElement>())
+            {
+                var name = (string?)data.Attribute("name");
+                if (string.IsNullOrEmpty(name) || !((string?)data.Attribute("type") ?? "").StartsWith("System.Resources.ResXFileRef", StringComparison.Ordinal)) continue;
+                var relative = ((string?)data.Element("value") ?? "").Split(';')[0].Trim().Replace('\\', Path.DirectorySeparatorChar);
+                if (relative.Length == 0) continue;
+                var path = Path.GetFullPath(Path.Combine(baseDirectory, relative));
+                try
+                {
+                    if (!File.Exists(path) || new FileInfo(path).Length > MaxImageBytes) continue;
+                    var bytes = File.ReadAllBytes(path);
+                    if (Sniff(bytes) != "unknown") files[name] = bytes;
+                }
+                catch (IOException)
+                {
+                    // unreadable file: no image
+                }
+            }
+        }
+        catch (System.Xml.XmlException)
+        {
+            // A malformed .resx must not fail the extraction.
+        }
+        return files;
+    }
+
     /// <summary>The BinaryFormatter ImageList streams of a .resx (`imageList1.ImageStream`): name -> the serialized bytes. Decoded by <see cref="ImageListDecoder"/>.</summary>
     public static Dictionary<string, byte[]> ParseImageStreams(string? resxXml)
     {

@@ -68,6 +68,9 @@ public sealed class PageTranslation
     public bool UsesFormat { get; set; }
     public SortedSet<string> PageImports { get; } = new(StringComparer.Ordinal);
 
+    /// <summary>Names of `Properties.Resources.X` images the page uses; the generator writes their files under `public/images/resources`.</summary>
+    public SortedSet<string> ResourceRefs { get; } = new(StringComparer.Ordinal);
+
     /// <summary>Constructor arguments of the original form, offered as optional props (with mock defaults where the type allows).</summary>
     public List<CtorProp> CtorProps { get; } = new();
 
@@ -92,6 +95,9 @@ public sealed class MemberFunction
 
     /// <summary>Event-handler shape (object sender, EventArgs e): callers' arguments are dropped.</summary>
     public bool IgnoresArgs { get; init; }
+
+    /// <summary>Wired to a grid cell or row event: its `e` argument is the grid's cell event (`e.RowIndex`, `e.ColumnIndex`).</summary>
+    public bool GridEvent { get; init; }
 }
 
 /// <summary>What a method translation may reference on the page.</summary>
@@ -146,6 +152,9 @@ public sealed class PageScope
 
     /// <summary>Markers of server-side code: such methods of project classes become typed stubs.</summary>
     public ServerBoundRules ServerBound { get; init; } = ServerBoundRules.Empty;
+
+    /// <summary>Images by name for `Properties.Resources.X`.</summary>
+    public ResourceImages Resources { get; init; } = ResourceImages.Empty;
 
     /// <summary>Control id -> WinForms member -> member of the replacement control (a control rendered by a fallback component: `Value` -> `Text`).</summary>
     public Dictionary<string, Dictionary<string, string>> Aliases { get; } = new(StringComparer.Ordinal);

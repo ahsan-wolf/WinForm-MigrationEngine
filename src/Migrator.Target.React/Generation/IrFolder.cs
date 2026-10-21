@@ -20,6 +20,9 @@ public sealed class IrFolder
 
     /// <summary>The project's own non-UI classes (support.ir.json), when the source engine extracted any.</summary>
     public SupportFileIr? Support { get; private init; }
+
+    /// <summary>Images of the project's resource file that its code references (resources.ir.json), when the source engine extracted any.</summary>
+    public ResourceFileIr? Resources { get; private init; }
     public IReadOnlyDictionary<string, UnitIr> Units { get; private init; } = new Dictionary<string, UnitIr>();
 
     public static IrFolder Load(string irFolder)
@@ -46,6 +49,8 @@ public sealed class IrFolder
         }
         var supportPath = Path.Combine(irFolder, "support.ir.json");
         var support = File.Exists(supportPath) ? JsonSerializer.Deserialize<SupportFileIr>(File.ReadAllText(supportPath), Json) : null;
-        return new IrFolder { Project = project, Units = units, Support = support };
+        var resourcesPath = Path.Combine(irFolder, "resources.ir.json");
+        var resources = File.Exists(resourcesPath) ? JsonSerializer.Deserialize<ResourceFileIr>(File.ReadAllText(resourcesPath), Json) : null;
+        return new IrFolder { Project = project, Units = units, Support = support, Resources = resources };
     }
 }

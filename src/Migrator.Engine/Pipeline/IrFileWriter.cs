@@ -15,6 +15,7 @@ public static class IrFileWriter
 {
     public const string CompleteSuffix = "complete";
     public const string SupportFileName = "support.ir.json";
+    public const string ResourcesFileName = "resources.ir.json";
     private const int MaxUnsupportedPerUnit = 50;
 
     /// <summary>Indented PascalCase, matching the existing IR samples.</summary>
@@ -67,6 +68,9 @@ public static class IrFileWriter
 
         if (engine is ISupportSourceEngine supportEngine && supportEngine.ExtractSupport(analysis) is { Classes.Count: > 0 } support)
             WriteJson(Path.Combine(irRoot, SupportFileName), support, written);
+
+        if (engine is IResourceSourceEngine resourceEngine && resourceEngine.ExtractResources(analysis) is { Images.Count: > 0 } resources)
+            WriteJson(Path.Combine(irRoot, ResourcesFileName), resources, written);
 
         if (engine is IDependencySourceEngine dependencies)
             project.Shared.ExternalAssemblies.AddRange(dependencies.FindExternalAssemblies(analysis));

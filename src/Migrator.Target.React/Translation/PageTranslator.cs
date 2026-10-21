@@ -17,6 +17,9 @@ public sealed class TranslationEnv
     public SupportRegistry? Support { get; init; }
     public BypassRules Bypass { get; init; } = BypassRules.Empty;
     public ServerBoundRules ServerBound { get; init; } = ServerBoundRules.Empty;
+
+    /// <summary>Images by name (`Properties.Resources.X`): the project's resource file and the `--images` folder.</summary>
+    public ResourceImages Resources { get; init; } = ResourceImages.Empty;
 }
 
 /// <summary>Where an event handler method is wired: first control + event that uses it.</summary>
@@ -47,6 +50,7 @@ public static class PageTranslator
             Units = env.Units,
             Generated = env.Generated,
             Support = env.Support?.Classes ?? new Dictionary<string, SupportClassInfo>(),
+            Resources = env.Resources,
             Bypass = env.Bypass,
             Output = output
         };
@@ -90,7 +94,11 @@ public static class PageTranslator
         {
             var isWired = wired.TryGetValue(m.Name, out var w) && ReferenceEquals(wiredMember[m.Name], m);
             var tsName = names.Unique(isWired ? Naming.HandlerName(w!.ControlId, w.Event, w.IsRoot) : SafeName(Naming.Camel(m.Name)));
-            var fn = new MemberFunction { Member = m, TsName = tsName, IgnoresArgs = m.Parameters.Count == 2 && m.Parameters[0].Type == "object" };
+            var fn = new MemberFunction
+            {
+                Member = m, TsName = tsName, IgnoresArgs = m.Parameters.Count == 2 && m.Parameters[0].Type == "object",
+                GridEvent = m.Parameters.Count == 2 && wired.TryGetValue(m.Name, out var gridWire) && scope.Grids.Contains(gridWire.ControlId) && gridWire.Event.StartsWith("Cell", StringComparison.Ordinal)
+            };
             if (!scope.Functions.TryGetValue(m.Name, out var list)) scope.Functions[m.Name] = list = new List<MemberFunction>();
             list.Add(fn);
             translations.Add(new MethodTranslation { Member = m, TsName = tsName, IsWiredHandler = isWired });
@@ -315,6 +323,7 @@ public static class PageTranslator
             if (!used) name = "_" + name;
 
             var type = scope.Vocabulary.MapType(p.Type, scope.Output.TypeImports);
+            if (fn.GridEvent && m.Parameters.IndexOf(p) == 1) { parts.Add($"{name}: WfGridCellEvent"); continue; }
             if (fn.IgnoresArgs) { parts.Add($"{name}?: unknown"); continue; }
 
             if (p.DefaultValue is null) { parts.Add($"{name}: {type}"); continue; }
