@@ -1,6 +1,6 @@
 {
   "name": "@wfm/ui-react",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "React 18 implementation of @wfm/ui-spec. Independent of the migration engine and of any IR.",
   "type": "module",
   "private": true,
@@ -20,6 +20,9 @@
   "sideEffects": [
     "*.css"
   ],
+  "dependencies": {
+    "@wfm/ui-core": "file:../ui-core"
+  },
   "peerDependencies": {
     "react": "^18.0.0",
     "react-dom": "^18.0.0"

@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>Migrator.Target.Core</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Framework-neutral part of every target engine: IR folder loading, ui-spec catalog, C# -> TypeScript translation, contract services, naming, layout, icons.
+         Targets reference this project; they never reference each other (CLAUDE.md 2.1). -->
+    <ProjectReference Include="..\Migrator.Engine\Migrator.Engine.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Same version as WebFormsMigrator.IR.Contracts so the two never diverge. Used to parse C# method bodies for translation. -->
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.8.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The target engines use the translator's internal members (MethodTranslator, ContainerUsage, ...). -->
+    <InternalsVisibleTo Include="Migrator.Target.React" />
+    <InternalsVisibleTo Include="Migrator.Target.Angular" />
+  </ItemGroup>
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\build\IrReference.props" />
+
+</Project>

@@ -25,7 +25,7 @@ It produces a **minimum working application**: it builds, screens render, contro
 
 ```bash
 dotnet build WinFormsMigrator.sln
-cd ui-library/ui-react && npm ci && npm run build && cd ../..
+cd ui-library/ui-core && npm ci && npm run build && cd ../ui-react && npm ci && npm run build && cd ../..
 ```
 `engines.json` lists the enabled engines (`winforms` source, `react-app` target) and where the `ui-spec` and the library live. Only listed engines load.
 
@@ -60,7 +60,7 @@ Use an output folder **outside the repository**. Never commit generated output d
 
 | Option | Meaning |
 |---|---|
-| `--target react-app` | Target engine (only React exists today; Angular and HTML+jQuery are planned) |
+| `--target react-app` or `angular-app` | Target engine (default `react-app`; the Angular app lands in `<out>/angular-app`; the viewer and app shell are React only; HTML+jQuery is planned) |
 | `--entry <form>` | Entry form (default: the startup form from `Program.cs`) |
 | `--no-external-projects` | Do not follow `ProjectReference`s that point outside the source folder (by default their classes are included as typed API shapes) |
 | `--units all` | Generate every form and user control, not only the ones reachable from the entry form (use for shells that open screens from menu data) |
@@ -161,7 +161,7 @@ What to click through: the menu and toolbar, each dialog from the entry form, li
 - Event subscriptions written in the code-behind (`btn.Click += handler`, `new EventHandler(m)`, lambdas, anonymous methods) are read as event wiring and bound in the markup (`source: 'code'` in the `wiring` table); only subscriptions on controls created at run time stay TODO.
 - Not translated today: `ref`/`out`, `string.Format` format specifiers, `ConfigurationManager`/registry/file access, GDI+/P/Invoke/COM, UI calls inside non-form classes, LINQ query syntax, lambdas, `dgv.Rows` and `pnl.Controls` members, runtime-created controls.
 - Controls without a library component yet (TreeView, list box, rich/masked text, month calendar, ...) are rendered by the closest component (`ui-spec/fallbacks.json`): a date picker is a text box, a tree a flat list, tabs stacked panels. They work, but look and behave simply.
-- Only the React target exists; Angular and HTML+jQuery are planned. See `PROJECT_PLAN.md` for the roadmap.
+- React and Angular targets exist (Angular: see `guide/v0.4/09-angular.md`, needs Node 20.19+/22.12+); HTML+jQuery is planned. See `PROJECT_PLAN.md` for the roadmap.
 
 ## 11. Troubleshooting
 
@@ -169,7 +169,7 @@ What to click through: the menu and toolbar, each dialog from the entry form, li
 |---|---|
 | `engines.json not found` | Run from the repo root or pass `--config <path>` |
 | Plugin DLL ignored | A DLL in `plugins/` that is not listed in `engines.json` is reported and never executed — list it |
-| `Cannot find @wfm/ui-react` or blank styles | Build the library first: `cd ui-library/ui-react && npm ci && npm run build` |
+| `Cannot find @wfm/ui-react` or blank styles | Build the libraries first: `cd ui-library/ui-core && npm ci && npm run build`, then `cd ../ui-react && npm ci && npm run build` |
 | `npm run` fails on a path containing `&` or spaces | The generated scripts call `node ./node_modules/<tool>/bin/...` for that reason; do not replace them with `.bin` shims |
 | Compile gate does nothing | Dependencies are not installed: pass `--compile-gate` (installs) or run `npm install` first |
 | Page is blank in the browser | Hard refresh; open `/<page-name>` to see the render error; check the console |

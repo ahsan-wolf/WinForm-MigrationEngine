@@ -1,20 +1,5 @@
 import { useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from 'react';
-
-export interface WfGridColumn {
-  field: string; header: string; width?: number; format?: 'date' | 'number' | string;
-  /** Cells of this column can be edited in place (double-click, or F2 / Enter on the selected row). `false` keeps it read-only even when the grid has `readOnly={false}`. */
-  editable?: boolean;
-  /** Custom cell text (the counterpart of WinForms `CellFormatting`): receives the cell value and its row. */
-  formatter?: (value: unknown, row: GridRow) => string;
-}
-export type GridRow = Record<string, unknown>;
-export interface WfGridCellEdit { row: GridRow; field: string; rowIndex: number; value: unknown }
-/** A click or double click on a cell: the counterpart of DataGridViewCellEventArgs (`RowIndex`, `ColumnIndex`). */
-export interface WfGridCellEvent {
-  row: GridRow; field: string; rowIndex: number; columnIndex: number;
-  /** Only in `onCellFormatting`: the cell's value, which the handler may replace (DataGridViewCellFormattingEventArgs.Value). */
-  value?: unknown;
-}
+import type { GridRow, WfGridCellEdit, WfGridCellEvent, WfGridColumn } from '@wfm/ui-core';
 
 export interface WfDataGridProps {
   rows: GridRow[];

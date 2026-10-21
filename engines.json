@@ -6,6 +6,8 @@
   "engines": [
     { "id": "winforms", "enabled": true, "assembly": "Migrator.Source.WinForms", "options": {} },
     { "id": "react-app", "enabled": true, "assembly": "Migrator.Target.React",
-      "options": { "uiSpecPath": "ui-library/ui-spec/controls.json", "uiLibraryPath": "ui-library/ui-react" } }
+      "options": { "uiSpecPath": "ui-library/ui-spec/controls.json", "uiLibraryPath": "ui-library/ui-react" } },
+    { "id": "angular-app", "enabled": true, "assembly": "Migrator.Target.Angular",
+      "options": { "uiSpecPath": "ui-library/ui-spec/controls.json", "uiLibraryPath": "ui-library/ui-angular" } }
   ]
 }

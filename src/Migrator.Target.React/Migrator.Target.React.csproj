@@ -7,6 +7,7 @@
   <ItemGroup>
     <!-- Contracts only. Targets never reference a source engine; they read the IR files. -->
     <ProjectReference Include="..\Migrator.Engine\Migrator.Engine.csproj" />
+    <ProjectReference Include="..\Migrator.Target.Core\Migrator.Target.Core.csproj" />
   </ItemGroup>
 
   <ItemGroup>

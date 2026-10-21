@@ -677,3 +677,6 @@ Reads the IR folder (including `support.ir.json`) + `ui-spec`; pages import only
 
 ### 18.4 Branch & report reminder
 Every addition is done on a **new branch**, committed locally, **not pushed**; finish with the push + fetch/update command block from `CLAUDE.md` §0.2.
+
+### Angular target (built: `angular-app`)
+Mapping in practice (`docs/guide/v0.4/09-angular.md`): every `Wf*` control is a standalone component `wf-*` with the same props and the canonical events as `wf` + name outputs (`(wfClick)`, `(wfValueChange)`); an element id is `controlId`; events with two values emit a tuple. A page is `x.page.ts` (component), `x.page.html` (template) and `x.page.code.ts` (factory `createXCode(dialog, props)` with `vm`, `f`, handlers, translated methods, `wiring`). The model is a plain object: zone.js re-renders after handlers. Routes use the Angular router (`/`, `/<page>`, `/pages`). The compile gate is `ngc --noEmit` with strict templates. To support a control in Angular: add the component to `ui-library/ui-angular/src`, list its class name in `AngularPageAssembler.Supported`, and add its event payload types to `JsxToAngular.PayloadTypes`.

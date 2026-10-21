@@ -1,9 +1,11 @@
 using Migrator.Engine.Contracts;
 using Migrator.Engine.Projections;
 using Migrator.Target.React.Generation;
-using Migrator.Target.React.Spec;
+using Migrator.Target.Core.Spec;
 using WebFormsMigrator.IR.Contracts;
 using WebFormsMigrator.IR.Models;
+using Migrator.Target.Core.Ir;
+using Migrator.Target.Core.Generation;
 
 namespace Migrator.Target.React;
 
@@ -40,7 +42,7 @@ public sealed class ReactTargetEngine : IProjectTargetEngine
     public ReactTargetEngine(ReactTargetOptions options) => _options = options;
 
     public string Id => "react-app";
-    public Version Version { get; } = new(0, 3, 0);
+    public Version Version { get; } = new(0, 4, 0);
     public Version SchemaVersion { get; } = Version.Parse(IrSchema.Version);
     public string UiLibraryPackage => "@wfm/ui-react";
     public IReadOnlyList<string> RequiredSpecVersion { get; } = new[] { "^0.3" };

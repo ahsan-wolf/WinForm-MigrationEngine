@@ -4,7 +4,7 @@ Converts legacy **.NET WinForms** applications into a **minimum working React + 
 
 ```bash
 dotnet build WinFormsMigrator.sln
-cd ui-library/ui-react && npm ci && npm run build && cd ../..
+cd ui-library/ui-core && npm ci && npm run build && cd ../ui-react && npm ci && npm run build && cd ../..
 dotnet run --project src/Migrator.Cli -- migrate --source "<winforms project>" --out "<output outside this repo>" --translate rules --compile-gate --depth all
 cd "<output>/react-app" && npm install && npm run dev      # /<page-name> opens any generated page, /pages lists them
 ```

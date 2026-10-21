@@ -68,7 +68,7 @@ Convert legacy **.NET WinForms** applications (`*.Designer.cs` + code-behind `*.
 | Target key | Output |
 |---|---|
 | `react-app` | React 18 + TypeScript + Vite, using `@wfm/ui-react` |
-| `angular-app` | Angular 17+ standalone, signals, reactive forms, using `@wfm/ui-angular` |
+| `angular-app` | Angular 21 standalone components, router, zone.js, using `@wfm/ui-angular` (built; see `docs/guide/v0.4/09-angular.md`) |
 | `html-jquery-app` | Static HTML5 + jQuery 3, using `@wfm/ui-html` |
 | *(extensible)* | Vue, Blazor, … add a Target Engine + a ui-library package |
 
@@ -86,14 +86,16 @@ WinFormsMigrator/                         # standalone repo + solution (NOT insi
 ├─ src/
 │  ├─ Migrator.Engine/                    # HOST: pipeline, engine registry, plugin loader, config, CLI services
 │  ├─ Migrator.Source.WinForms/           # SOURCE ENGINE: project analyzer, designer parser, extractors
+│  ├─ Migrator.Target.Core/               # SHARED by every target: IR folder loading, ui-spec catalog, C# -> TypeScript translation, contract services, naming, layout, icons
 │  ├─ Migrator.Target.React/              # TARGET ENGINE: IIrGenerator -> react-app
-│  ├─ Migrator.Target.Angular/            # TARGET ENGINE: IIrGenerator -> angular-app
+│  ├─ Migrator.Target.Angular/            # TARGET ENGINE: IProjectTargetEngine -> angular-app (standalone components, ngc gate)
 │  ├─ Migrator.Target.Html/               # TARGET ENGINE: IIrGenerator -> html-jquery-app
 │  └─ Migrator.Cli/                       # thin console entry point (args -> Engine)
 ├─ ui-library/                            # INDEPENDENT of engine + IR (own build, own versions)
 │  ├─ ui-spec/                            # framework-neutral control contract (JSON) + design tokens
+│  ├─ ui-core/                            # @wfm/ui-core: framework-free helpers and types shared by the ui-* packages (grid model, image list, tree nodes, list items, mnemonics)
 │  ├─ ui-react/                           # @wfm/ui-react
-│  ├─ ui-angular/                         # @wfm/ui-angular
+│  ├─ ui-angular/                         # @wfm/ui-angular (consumed as TypeScript source through tsconfig paths)
 │  └─ ui-html/                            # @wfm/ui-html (HTML/CSS/vanilla JS + jQuery adapter)
 ├─ llm-config/                            # *.model.json / *.prompt.json (runtime-extensible)
 ├─ plugins/                               # drop-in engines (assemblies implementing IEngineModule)
@@ -106,6 +108,7 @@ WinFormsMigrator/                         # standalone repo + solution (NOT insi
 ### 2.1 Dependency direction (enforced)
 ```
 Cli -> Engine -> (Source.* , Target.*) -> IR + IR.Contracts
+Target.React / Target.Angular -> Target.Core -> Engine   # the framework-neutral part lives once, in Target.Core
 Target.* -> ui-spec (read-only, as data)          # never imports ui-react/angular/html code
 ui-library/*  -> nothing from src/ (zero knowledge of IR, WinForms, or the engine)
 Source.* ✗ Target.*   Target.* ✗ Target.*   Source.* ✗ Source.*   (engines never reference each other)
@@ -253,10 +256,10 @@ The controls live in a **separate, UI-independent library** under `ui-library/`.
 |---|---|
 | `ui-spec` | Single contract: for each control — name, WinForms types it replaces, props, events, slots, a11y rules, example. JSON + design tokens (CSS variables). Versioned (semver). |
 | `@wfm/ui-react` | React 18 + TS components implementing the spec |
-| `@wfm/ui-angular` | Angular 17+ standalone components/directives implementing the spec |
+| `@wfm/ui-angular` | Angular 21 standalone components implementing the spec (selectors `wf-*`, outputs `wf` + event name) |
 | `@wfm/ui-html` | HTML/CSS + vanilla JS web-friendly components; jQuery adapter (`$.fn.wfDataGrid`, …) |
 
-**As built:** `ui-spec` 0.3.0 (`controls.json` + `fallbacks.json` + `tokens.css`) and `@wfm/ui-react` 0.3.0 exist, with 41 spec entries (36 map WinForms controls; native HTML only, no third-party dependency) plus the dialog service (`dialog.show()` / `dialog.close()`), `useWfModel` and `WfUnsupported`; see `ui-library/README.md` and `docs/UI_CONTROL_MAPPING.md`. `ui-angular` and `ui-html` are not started. Generators read `controls.json` as data (`winformsTypes`, `props[].from/transform`, `events[].from`).
+**As built:** `ui-spec` 0.3.0 (`controls.json` + `fallbacks.json` + `tokens.css`) and `@wfm/ui-react` 0.3.0 exist, with 41 spec entries (36 map WinForms controls; native HTML only, no third-party dependency) plus the dialog service (`dialog.show()` / `dialog.close()`), `useWfModel` and `WfUnsupported`; see `ui-library/README.md` and `docs/UI_CONTROL_MAPPING.md`. `@wfm/ui-core` 0.4.0 (framework-free helpers) and `@wfm/ui-angular` 0.4.0 exist too (React 0.4.0); `ui-html` is not started. Generators read `controls.json` as data (`winformsTypes`, `props[].from/transform`, `events[].from`).
 
 Hard rules:
 1. **Library-first generation.** Generated pages import `Wf*` components only. They never import AG Grid / DataTables / Material / jstree etc. directly — those are the library's private implementation detail (peer deps).
@@ -338,7 +341,8 @@ dotnet run --project src/Migrator.Cli -- backend --source <dir>... [--wsdl <dir>
 dotnet run --project src/Migrator.Cli -- migrate --source <path> --out <dir> --preview   # EXISTS: component viewer -> <out>/react-viewer: a visual-only page per form and user control + a sidebar shell (no handlers, data or logic)
 dotnet run --project src/Migrator.Cli -- migrate --source <path> --out <dir> --appshell  # EXISTS: WinForms-style app shell -> <out>/react-appshell: bordered host window, hyperlink navigation on the left, the selected unit in a form-style frame on the right (visual-only pages, same as --preview)
 set WFM_LLM_TARGET=react-app                                                   # opt-in LLM translation
-cd ui-library/ui-react && npm ci && npm run build && npm run lint
+cd ui-library/ui-core && npm ci && npm run build && npm run lint   # first: ui-react and generated apps import it
+cd ../ui-react && npm ci && npm run build && npm run lint
 ```
 (Adjust CLI verbs to what exists; if a command doesn't exist yet, add it in `Migrator.Cli` as a thin wrapper over the Engine.)
 

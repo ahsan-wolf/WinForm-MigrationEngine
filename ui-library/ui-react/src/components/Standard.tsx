@@ -5,13 +5,6 @@ const cls = (base: string, extra?: string): string => (extra ? `${base} ${extra}
 
 // ---------------------------------------------------------------------------------------------------------- CheckedListBox
 
-/** `SetItemChecked(i, checked)` over the page model's `checkedIndices` array. */
-export function wfSetItemChecked(indices: number[], index: number, checked: boolean): void {
-  const at = indices.indexOf(index);
-  if (checked && at < 0) indices.push(index);
-  else if (!checked && at >= 0) indices.splice(at, 1);
-}
-
 export interface WfCheckedListBoxProps extends Common {
   items?: string[];
   /** Indices of the checked items (WinForms `CheckedIndices`). Controlled when `onItemCheck` is passed, otherwise only the starting state. */

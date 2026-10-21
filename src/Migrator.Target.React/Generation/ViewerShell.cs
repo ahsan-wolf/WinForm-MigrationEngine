@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Migrator.Target.Core.Ir;
 
 namespace Migrator.Target.React.Generation;
 
