@@ -87,7 +87,6 @@ public static partial class CompileGate
             var stderr = proc.StandardError.ReadToEndAsync();
             if (!proc.WaitForExit(TimeSpan.FromMinutes(5))) { proc.Kill(true); return null; }
             var output = AnsiRegex().Replace(stdout.Result + "\n" + stderr.Result, "");
-            if (Environment.GetEnvironmentVariable("WFM_GATE_LOG") == "1") File.WriteAllText(Path.Combine(appDir, "gate-output.log"), $"exit {proc.ExitCode}\n{output}");
             var found = DiagnosticRegex().Matches(output).Concat(PrettyDiagnosticRegex().Matches(output)).Select(m => new TscDiagnostic(
                 m.Groups["file"].Value.Replace('\\', '/'), int.Parse(m.Groups["line"].Value), int.Parse(m.Groups["col"].Value),
                 m.Groups["code"].Value, m.Groups["msg"].Value.Trim())).ToList();
