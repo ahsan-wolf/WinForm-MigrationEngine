@@ -1,6 +1,6 @@
 {
   "name": "@wfm/ui-react",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "React 18 implementation of @wfm/ui-spec. Independent of the migration engine and of any IR.",
   "type": "module",
   "private": true,

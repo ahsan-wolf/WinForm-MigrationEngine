@@ -40,10 +40,10 @@ public sealed class ReactTargetEngine : IProjectTargetEngine
     public ReactTargetEngine(ReactTargetOptions options) => _options = options;
 
     public string Id => "react-app";
-    public Version Version { get; } = new(0, 2, 0);
+    public Version Version { get; } = new(0, 3, 0);
     public Version SchemaVersion { get; } = Version.Parse(IrSchema.Version);
     public string UiLibraryPackage => "@wfm/ui-react";
-    public IReadOnlyList<string> RequiredSpecVersion { get; } = new[] { "^0.2" };
+    public IReadOnlyList<string> RequiredSpecVersion { get; } = new[] { "^0.3" };
 
     /// <summary>Page-level generator (one component, no project context). Prefer <see cref="GenerateProject"/>.</summary>
     public IIrGenerator Generator => new ReactPageIrGenerator(_options);
