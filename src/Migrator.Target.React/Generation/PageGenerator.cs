@@ -807,7 +807,6 @@ public sealed partial class PageGenerator
     /// </summary>
     private void PrepareImageLists(Ctx c, ControlNodeIr root)
     {
-        if (_preview) return;
         foreach (var node in Walk(root).Skip(1).Where(n => n.Effective() == ContainerUsage.ImageListType))
         {
             var keys = new List<string>();
@@ -841,6 +840,8 @@ public sealed partial class PageGenerator
             }
             c.ImageLists[node.Id] = (keys, urls);
         }
+
+        if (_preview) return; // a visual-only page has no model: only the static images (tab pages, toolbar and menu items) are used
 
         var inCode = ContainerUsage.ImageListsInCode(c.Unit);
         foreach (var node in c.ById.Values)
@@ -1074,7 +1075,7 @@ public sealed partial class PageGenerator
     private void AddGrid(ControlNodeIr node, Ctx c, List<string> attrs)
     {
         c.LibTypes.Add("WfGridColumn");
-        c.LibTypes.Add("WfGridCellEvent");
+        if (!_preview) c.LibTypes.Add("WfGridCellEvent"); // imported only where a handler uses it; a visual-only page imports every type listed
         var baseName = Naming.StateName(node.Id);
         var colsName = c.Names.Unique(baseName + "Columns");
         var (defs, fields, designerColumns) = GridColumns(node, placeholders: _preview || c.ListGrids.Contains(node.Id));
@@ -1164,6 +1165,8 @@ public sealed partial class PageGenerator
         var c = new Ctx(unit, component);
         ApplyFallbacks(c, root);
         foreach (var n in Walk(root)) c.ById.TryAdd(n.Id, n);
+        FillParents(c, root);
+        PrepareImageLists(c, root); // the images of an ImageList show on tab pages, toolbar and menu items even in a visual-only page
         var jsx = RenderElement(root, c, isRoot: true) ?? throw new InvalidDataException($"{unit.Name}: root control produced no output.");
 
         var sb = new StringBuilder();

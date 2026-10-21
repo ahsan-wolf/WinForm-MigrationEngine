@@ -160,6 +160,7 @@ public interface IProjectAwareSourceEngine : ISourceEngine { IEnumerable<IIrExtr
 public interface IIrProjectionProvider { IEnumerable<IIrProjection> Projections { get; } }   // technology-specific facet files (WinForms: layout)
 public interface IUnsupportedReporter { IEnumerable<string> FindUnsupported(IrExtractionContext c); } // unhandled constructs -> project.ir.json Shared.Unsupported
 public interface ISupportSourceEngine { SupportFileIr ExtractSupport(ProjectAnalysis a); }   // the project's own non-UI classes -> ir/support.ir.json (WinForms-owned sidecar)
+public interface IResourceSourceEngine { ResourceFileIr ExtractResources(ProjectAnalysis a); }   // images of the project's Resources.resx the code references -> ir/resources.ir.json (WinForms-owned sidecar)
 public interface IDependencySourceEngine { IReadOnlyList<ExternalAssemblyIr> FindExternalAssemblies(ProjectAnalysis a); }   // referenced binary assemblies -> project.ir.json Shared.ExternalAssemblies
 public interface IProjectTargetEngine : ITargetEngine { GenerationResult GenerateProject(string irFolder, string outDir, GenerationOptions o); } // whole-app generation from the IR FOLDER only (never a source engine)
 ```
@@ -208,6 +209,7 @@ PageIr  (one per Form/UserControl)             # == complete.ir.json shape
 | `{Form}.code-behind.ir.json` | `Name` + `Members[]` (bodies included) | `code-behind.ir.json` |
 | `{Form}.layout.ir.json` | Per-control layout facts: `Dock, Anchor[], Location, Size, TabIndex, Margin, Padding, Visible, Enabled, TableLayout {Row, Column, RowSpan, ColumnSpan}`; `TableDefinition {Columns[], Rows[]}` on a `TableLayoutPanel`. `null` = not set / not a literal | `html-css.ir.json` (WinForms has no HTML/CSS; layout is the equivalent facet) |
 | `support.ir.json` | Project-level sidecar (not per unit): the app's own non-UI classes — static helper modules (`main`), data classes, structs, enums (nested ones flattened, `Container` set). Members reuse `MemberIr`; modifiers as `mod:const/auto/accessors/...` in `Attributes` | — |
+| `resources.ir.json` | Project-level sidecar: the images of the project's `Resources.resx` that code references (`Properties.Resources.X`), `{Name, Format, Data}` with base64 file bytes; written only when there are any | — |
 | `project.ir.json` | `ProjectIr` index: `Source`, `Forms[]`/`UserControls[]` (`{Name, Kind, IrFile}`), `Shared` (`Unsupported` filled from unhandled designer statements; `Settings`/`Resources`/`Dependencies` still empty), `Failures[]` | — |
 
 Rules:
@@ -237,7 +239,7 @@ Rules:
 - Only direct method calls become workflow steps (not 2+ levels deep); steps follow **call order** (implemented).
 - A handler name inside an inlined UserControl that equals a form method name would be attributed to the form.
 - `Controls.Add` order in designer code is reverse z-order, so child order is not visual order (generators order by TabIndex/Dock, Skill 4).
-- Culture-specific `.resx` files and external `.resx` file references are not read; readable byte-array images become the pseudo-attributes `Image.Data` / `Image.Format` (the React target writes them to `public/icons`, converting ICO/BMP to PNG; unreadable ones get a placeholder icon); `ImageList` streams are decoded in managed code (1, 4, 8, 24 and 32 bits per pixel) into `Images.Data` / `Images.Keys` / `Images.Size` (other depths: placeholders), while the project's own `Resources.resx` (`Properties.Resources.X`) is not read yet; items added by helper methods/loops and layout computed at runtime are not seen.
+- Culture-specific `.resx` files and external `.resx` file references are not read; readable byte-array images become the pseudo-attributes `Image.Data` / `Image.Format` (the React target writes them to `public/icons`, converting ICO/BMP to PNG; unreadable ones get a placeholder icon); `ImageList` streams are decoded in managed code (1, 4, 8, 24 and 32 bits per pixel) into `Images.Data` / `Images.Keys` / `Images.Size` (other depths: placeholders), and the referenced images of the project's own `Resources.resx` become `resources.ir.json`; items added by helper methods/loops and layout computed at runtime are not seen.
 - No pixel/visual fidelity (layout facts only).
 - Binary-only inputs (EXE/DLL without source) are members-first and lossy; no event wiring unless wired with `+=` in code.
 
@@ -330,7 +332,7 @@ Migration run steps: Analyze (find Designer/code-behind pairs, UserControls firs
 dotnet build WinFormsMigrator.sln
 dotnet run --project src/Migrator.Cli -- engines [--config engines.json]       # EXISTS: list engines that load
 dotnet run --project src/Migrator.Cli -- ir --source <path> --out <dir>      # EXISTS: IR only -> six files per unit + project.ir.json
-dotnet run --project src/Migrator.Cli -- migrate --source <path> --out <dir> [--target react-app] [--entry <form>] [--depth <n|all>] [--contract <contract.json>]... [--translate none|rules|llm] [--compile-gate]   # EXISTS: ir step + app into <out>/react-app; rules = deterministic C#->TS (llm tier planned)
+dotnet run --project src/Migrator.Cli -- migrate --source <path> --out <dir> [--target react-app] [--entry <form>] [--depth <n|all>] [--contract <contract.json>]... [--translate none|rules|llm] [--images <folder>] [--compile-gate]   # EXISTS: ir step + app into <out>/react-app; rules = deterministic C#->TS (llm tier planned)
 dotnet run --project src/Migrator.Cli -- contract --assembly <dll> --out <dir>   # EXISTS: public API of a managed assembly from metadata only (never executed); use a git-ignored folder
 dotnet run --project src/Migrator.Cli -- backend --source <dir>... [--wsdl <dir>...] --out <dir>   # EXISTS: read-only survey of backend code (class libraries, ASMX) -> BACKEND_ANALYSIS.md; rules in rules/backend-patterns.json; git-ignored --out
 dotnet run --project src/Migrator.Cli -- migrate --source <path> --out <dir> --preview   # EXISTS: component viewer -> <out>/react-viewer: a visual-only page per form and user control + a sidebar shell (no handlers, data or logic)

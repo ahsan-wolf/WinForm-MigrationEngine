@@ -21,6 +21,9 @@ Reconstructed from the merged slices (PR numbers refer to the repository's pull 
 - Controls added in code: `panel.Controls.Add(new UserControl(args))`, `Clear`, `RemoveAt`, `Count` over `vm.<panel>.controls` rendered by the new `WfDynamicHost`; constructor arguments become the component's props; such user controls join the generated scope; a user control's `Load` runs once on mount (`WfPanel` `onLoad`).
 - ImageList: the `ImageStream` resource is decoded in managed code (`ImageListDecoder`) to one image per entry, written as `public/images/<unit>/<list>/<key>.png`; `keys`/`urls` in the page model with `Images.Add/Count/Clear/RemoveAt/RemoveByKey/ContainsKey/IndexOfKey/SetKeyName` and `il.Images[k]`; `ImageKey`/`ImageIndex` on tab pages, toolbar and menu items (at generation time) and on tree nodes and list items (`imageList` prop of `WfTreeView` / `WfListView`). IR pseudo-attributes `Images.Keys` / `Images.Data` / `Images.Size` (additive).
 - Routes: standard History API paths (`/`, `/<page-name>`, `/pages`) from a generated `src/lib/router.ts`; `<base href>` + Vite `base: './'` make asset URLs and links relative (icons are now `icons/…`, not `/icons/…`).
+- Resources: `resources.ir.json` carries the referenced images of the project's `Resources.resx` (`Properties.Resources.X`), written to `public/images/resources/`; `--images <folder>` supplies images by name; the entry form's icon becomes the app's favicon (`<link rel="icon">`).
+- Translator: `ref` arguments to methods that never assign the parameter, expression-bodied lambdas as arrow functions and common LINQ calls (`Where`, `Select`, `FirstOrDefault`, `Any`, `All`, `Count`, `OrderBy`, `Sum`, ...), `grid.DataSource = list` (and `== null`), `e.RowIndex` / `e.ColumnIndex` in grid cell handlers, `CellDoubleClick` (library: `onCellDoubleClick`, `WfGridCellEvent`).
+- App shell and viewer: tab page icons from an ImageList show in the visual-only pages.
 
 ## 0.1 (10–13 Oct)
 
