@@ -333,10 +333,12 @@ internal sealed class JsxToAngular
                 while (j < text.Length && text[j] != '"')
                 {
                     if (text[j] == '\\' && j + 1 < text.Length) { literal.Append(text[j]).Append(text[j + 1]); j += 2; continue; }
-                    literal.Append(text[j] == '\'' ? "\\'" : text[j].ToString());
+                    literal.Append(text[j]);
                     j++;
                 }
-                sb.Append('\'').Append(literal).Append('\'');
+                // A literal with a single quote inside keeps its double quotes (as an entity in the attribute); otherwise single quotes read better.
+                var q = literal.ToString().Contains('\'') ? "&quot;" : "'";
+                sb.Append(q).Append(literal).Append(q);
                 i = j;
             }
             else sb.Append(text[i]);
