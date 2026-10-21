@@ -13,6 +13,7 @@
     <ProjectReference Include="..\Migrator.Source.WinForms\Migrator.Source.WinForms.csproj" />
     <ProjectReference Include="..\Migrator.Source.Backend\Migrator.Source.Backend.csproj" />
     <ProjectReference Include="..\Migrator.Target.React\Migrator.Target.React.csproj" />
+    <ProjectReference Include="..\Migrator.Target.Angular\Migrator.Target.Angular.csproj" />
   </ItemGroup>
 
 </Project>

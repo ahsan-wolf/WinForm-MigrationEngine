@@ -12,8 +12,15 @@ public sealed record TscDiagnostic(string File, int Line, int Column, string Cod
 /// </summary>
 public static partial class CompileGate
 {
-    [GeneratedRegex(@"^(?<file>.+?)\((?<line>\d+),(?<col>\d+)\): error (?<code>TS\d+): (?<msg>.*)$", RegexOptions.Multiline)]
+    [GeneratedRegex(@"^(?<file>.+?)\((?<line>\d+),(?<col>\d+)\): error (?<code>(?:TS|NG)\d+): (?<msg>.*)$", RegexOptions.Multiline)]
     private static partial Regex DiagnosticRegex();
+
+    /// <summary>The Angular compiler ignores `--pretty false` and prints `file:line:col - error TS1234: message` with colour codes.</summary>
+    [GeneratedRegex(@"^(?<file>[^\s:][^:]*?):(?<line>\d+):(?<col>\d+) - error (?<code>(?:TS|NG)\d+): (?<msg>.*)$", RegexOptions.Multiline)]
+    private static partial Regex PrettyDiagnosticRegex();
+
+    [GeneratedRegex("\u001b\\[[0-9;]*m")]
+    private static partial Regex AnsiRegex();
 
     public static string TscPath(string appDir) => Path.Combine(appDir, "node_modules", "typescript", "bin", "tsc");
 
@@ -51,9 +58,15 @@ public static partial class CompileGate
     }
 
     /// <summary>Null when tsc cannot run (dependencies not installed or node missing); otherwise every error it reports.</summary>
-    public static List<TscDiagnostic>? RunTsc(string appDir)
+    public static List<TscDiagnostic>? RunTsc(string appDir) => RunChecker(appDir, TscPath(appDir), "--noEmit", "--pretty", "false");
+
+    /// <summary>
+    /// Runs a node-based compiler script with the given arguments in the app folder and parses `file(line,col): error CODE: message` lines. Used for `tsc` and for
+    /// the Angular compiler (`ngc`), which also type-checks the templates.
+    /// </summary>
+    public static List<TscDiagnostic>? RunChecker(string appDir, string scriptPath, params string[] arguments)
     {
-        if (!CanRun(appDir)) return null;
+        if (!File.Exists(scriptPath)) return null;
 
         var psi = new ProcessStartInfo("node")
         {
@@ -62,15 +75,16 @@ public static partial class CompileGate
             RedirectStandardError = true,
             UseShellExecute = false
         };
-        foreach (var a in new[] { TscPath(appDir), "--noEmit", "--pretty", "false" }) psi.ArgumentList.Add(a);
+        foreach (var a in new[] { scriptPath }.Concat(arguments)) psi.ArgumentList.Add(a);
 
         try
         {
             using var proc = Process.Start(psi)!;
             var stdout = proc.StandardOutput.ReadToEndAsync();
-            proc.StandardError.ReadToEndAsync();
+            var stderr = proc.StandardError.ReadToEndAsync();
             if (!proc.WaitForExit(TimeSpan.FromMinutes(5))) { proc.Kill(true); return null; }
-            return DiagnosticRegex().Matches(stdout.Result).Select(m => new TscDiagnostic(
+            var output = AnsiRegex().Replace(stdout.Result + "\n" + stderr.Result, "");
+            return DiagnosticRegex().Matches(output).Concat(PrettyDiagnosticRegex().Matches(output)).Select(m => new TscDiagnostic(
                 m.Groups["file"].Value.Replace('\\', '/'), int.Parse(m.Groups["line"].Value), int.Parse(m.Groups["col"].Value),
                 m.Groups["code"].Value, m.Groups["msg"].Value.Trim())).ToList();
         }

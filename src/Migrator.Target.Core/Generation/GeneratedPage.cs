@@ -10,6 +10,9 @@ public sealed class GeneratedPage
 
     /// <summary>The code-behind file (`&lt;Component&gt;.code.tsx`): model, handlers, translated methods and the event wiring table. Empty for visual-only pages. `MethodRanges` refer to this file.</summary>
     public string CodeSource { get; init; } = "";
+
+    /// <summary>The component class file, for frameworks that keep one besides the markup and the code-behind (Angular). Empty otherwise.</summary>
+    public string ComponentSource { get; init; } = "";
     public string LegacySource { get; init; } = "";
     public List<GenerationIssue> Issues { get; } = new();
     public int Controls { get; init; }

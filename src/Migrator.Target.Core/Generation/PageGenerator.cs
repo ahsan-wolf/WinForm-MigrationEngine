@@ -42,14 +42,18 @@ public sealed partial class PageGenerator : IPageGenerator
     private readonly TranslationEnv? _translation;
     private readonly bool _preview;
 
+    /// <summary>How a page becomes files for a framework other than React; null writes the React pair (markup + code-behind hook).</summary>
+    private readonly IPageAssembler? _assembler;
+
     /// <summary>App shell only: a visual-only page still opens the forms its buttons and menu items open (and closes itself), through the dialog service. Nothing else runs.</summary>
     private readonly bool _previewNavigation;
 
     /// <summary>Helpers of the generated `src/lib/csharp.ts`, imported by whichever file calls them.</summary>
 
     /// <param name="preview">Visual-only pages for the component viewer: controls and layout as designed with placeholder data; no handlers, model, dialogs, translation or imports other than the UI library.</param>
-    public PageGenerator(SpecCatalog spec, IReadOnlyDictionary<string, UnitIr> units, IReadOnlyDictionary<string, string> components, ISet<string> generated, TranslationEnv? translation = null, bool preview = false, bool previewNavigation = false)
+    public PageGenerator(SpecCatalog spec, IReadOnlyDictionary<string, UnitIr> units, IReadOnlyDictionary<string, string> components, ISet<string> generated, TranslationEnv? translation = null, bool preview = false, bool previewNavigation = false, IPageAssembler? assembler = null)
     {
+        _assembler = assembler;
         _preview = preview;
         _previewNavigation = previewNavigation;
         _translation = translation;
@@ -195,6 +199,43 @@ public sealed partial class PageGenerator : IPageGenerator
             if (Regex.IsMatch(text + "\n" + (usesFields ? fieldText : ""), @"\bWfTreeNode\b")) c.LibTypes.Add("WfTreeNode");
         }
 
+        if (_assembler is not null)
+        {
+            var input = new PageAssemblyInput
+            {
+                UnitName = unit.Name,
+                RelativePath = unit.Page.RelativePath ?? "n/a",
+                Component = component,
+                View = jsx,
+                HandlerCode = handlerCode,
+                TopLevel = c.TopLevel,
+                CtorProps = c.Translation?.CtorProps ?? new List<CtorProp>(),
+                UsedProps = !usesFields ? new List<CtorProp>() : (c.Translation?.CtorProps ?? new List<CtorProp>()).Where(p => c.Translation!.FieldInitials.Values.Any(v => v == p.Local)).ToList(),
+                CtorNotes = c.Translation?.CtorNotes ?? new List<string>(),
+                UsesDialog = c.UsesDialog,
+                UsesModel = c.UsesModel,
+                UsesFields = usesFields,
+                Model = c.Model.Select(kv => new ModelEntry(kv.Key, kv.Value.ToList())).ToList(),
+                ModelComments = c.ModelComments,
+                FieldInitials = usesFields ? c.Translation!.FieldInitials.ToList() : new List<KeyValuePair<string, string>>(),
+                Wiring = c.Handlers.Values.OrderBy(h => h.ControlId, StringComparer.Ordinal).ThenBy(h => h.Event, StringComparer.Ordinal)
+                    .Select(h => new WiringEntry(h.ControlId, h.Event, h.Name, h.Member.Name, h.Source)).ToList(),
+                Lib = c.Lib,
+                LibTypes = c.LibTypes,
+                PageImports = c.PageImports.Keys.ToList(),
+                TypeImports = typeImports,
+                ServiceImport = serviceImport,
+                ServiceInstance = _translation?.Vocabulary.InstanceName ?? "",
+                TypesImportPath = _translation?.Vocabulary.TypesImport ?? "",
+                FixturesImportPath = c.Translation?.FixturesImport ?? "",
+                NeedsFixtures = c.Translation is { FixturesImport.Length: > 0 } fixtures && usesFields && fixtures.CtorProps.Any(p => p.Default != null && p.Default.Contains("fixtures.") && fixtures.FieldInitials.Values.Contains(p.Local)),
+                SupportClasses = _translation?.Support?.Classes.Keys.ToList() ?? new List<string>()
+            };
+            var files = _assembler.Assemble(input);
+            c.Issues.AddRange(input.Issues);
+            return FinishPage(c, unit, component, root, files.View, files.Code, files.Component);
+        }
+
         // ---- the page is two files, like the WinForms original: the JSX ("Designer") and the code-behind hook that holds model, handlers and event wiring.
         var ctorProps = c.Translation?.CtorProps ?? new List<CtorProp>();
         // Only props that seed a field are destructured (an unused binding fails lint); all stay in the interface.
@@ -321,12 +362,19 @@ public sealed partial class PageGenerator : IPageGenerator
         sb.AppendLine("  );");
         sb.AppendLine("}");
 
+        return FinishPage(c, unit, component, root, sb.ToString(), code.ToString(), "");
+    }
+
+    /// <summary>The page object: its files (as the framework wrote them), the counts the report needs and the method ranges the compile gate maps errors through.</summary>
+    private GeneratedPage FinishPage(Ctx c, UnitIr unit, string component, ControlNodeIr root, string source, string codeSource, string componentSource)
+    {
         var navHandlers = c.Handlers.Values.Count(h => unit.Page.Navigations.Any(n => n.SourceControlId == h.ControlId && n.TriggerEvent == h.Event));
         var page = new GeneratedPage
         {
             ComponentName = component,
-            Source = sb.ToString(),
-            CodeSource = code.ToString(),
+            Source = source,
+            CodeSource = codeSource,
+            ComponentSource = componentSource,
             LegacySource = BuildLegacy(unit),
             Controls = Walk(root).Count(),
             Handlers = c.Handlers.Count,
