@@ -16,7 +16,7 @@ public static partial class CompileGate
     private static partial Regex DiagnosticRegex();
 
     /// <summary>The Angular compiler ignores `--pretty false` and prints `file:line:col - error TS1234: message` with colour codes.</summary>
-    [GeneratedRegex(@"^(?<file>[^\s:][^:]*?):(?<line>\d+):(?<col>\d+) - error (?<code>(?:TS|NG)\d+): (?<msg>.*)$", RegexOptions.Multiline)]
+    [GeneratedRegex(@"^(?<file>[^\s:][^:\r\n]*?):(?<line>\d+):(?<col>\d+) - error (?<code>(?:TS|NG)\d+): (?<msg>.*)$", RegexOptions.Multiline)]
     private static partial Regex PrettyDiagnosticRegex();
 
     [GeneratedRegex("\u001b\\[[0-9;]*m")]
@@ -66,6 +66,9 @@ public static partial class CompileGate
     /// </summary>
     public static List<TscDiagnostic>? RunChecker(string appDir, string scriptPath, params string[] arguments)
     {
+        // The process runs in the app folder, so a relative script path must not be resolved there a second time.
+        appDir = Path.GetFullPath(appDir);
+        scriptPath = Path.GetFullPath(scriptPath);
         if (!File.Exists(scriptPath)) return null;
 
         var psi = new ProcessStartInfo("node")
@@ -84,9 +87,12 @@ public static partial class CompileGate
             var stderr = proc.StandardError.ReadToEndAsync();
             if (!proc.WaitForExit(TimeSpan.FromMinutes(5))) { proc.Kill(true); return null; }
             var output = AnsiRegex().Replace(stdout.Result + "\n" + stderr.Result, "");
-            return DiagnosticRegex().Matches(output).Concat(PrettyDiagnosticRegex().Matches(output)).Select(m => new TscDiagnostic(
+            if (Environment.GetEnvironmentVariable("WFM_GATE_LOG") == "1") File.WriteAllText(Path.Combine(appDir, "gate-output.log"), $"exit {proc.ExitCode}\n{output}");
+            var found = DiagnosticRegex().Matches(output).Concat(PrettyDiagnosticRegex().Matches(output)).Select(m => new TscDiagnostic(
                 m.Groups["file"].Value.Replace('\\', '/'), int.Parse(m.Groups["line"].Value), int.Parse(m.Groups["col"].Value),
                 m.Groups["code"].Value, m.Groups["msg"].Value.Trim())).ToList();
+            // A failing compiler that reported no error we can read did not really check anything (a crash, a bad path): that is "could not run", never "no errors".
+            return found.Count == 0 && proc.ExitCode != 0 ? null : found;
         }
         catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
         {

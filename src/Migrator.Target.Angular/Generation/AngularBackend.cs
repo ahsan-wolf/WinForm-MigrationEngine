@@ -17,6 +17,7 @@ public sealed class AngularBackend : ITargetBackend
     public string Key => "angular-app";
     public string UiSpecPath => _options.UiSpecPath;
     public string UiLibraryPath => _options.UiLibraryPath;
+    public string UiLibraryPackage => "@wfm/ui-angular";
     public string BypassRulesPath => _options.BypassRulesPath;
     public string ServerBoundRulesPath => _options.ServerBoundRulesPath;
 

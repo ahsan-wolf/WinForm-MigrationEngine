@@ -30,7 +30,11 @@ internal sealed class JsxToAngular
     {
         _supported = supported;
         _arity = arity;
+        _root = this;
     }
+
+    /// <summary>The converter the whole page started with: nested conversions (`@if` blocks, a context menu's markup) number their inline handlers through it.</summary>
+    private JsxToAngular _root;
 
     public List<string> Convert(IEnumerable<string> jsxLines)
     {
@@ -90,13 +94,10 @@ internal sealed class JsxToAngular
             var inner = trimmed[cond.Length..^1];
             Emit($"@if ({cond.Groups["cond"].Value}) {{");
             _depth++;
-            var nested = new JsxToAngular(_supported, _arity);
-            nested._depth = _depth;
-            nested._src = inner;
+            var nested = new JsxToAngular(_supported, _arity) { _root = _root, _depth = _depth, _src = inner };
             nested.Children(null);
             _out.AddRange(nested._out);
             foreach (var c in nested.Components) Components.Add(c);
-            Inlines.AddRange(nested.Inlines);
             Unsupported.AddRange(nested.Unsupported);
             _depth--;
             Emit("}");
@@ -235,11 +236,10 @@ internal sealed class JsxToAngular
         if (inner.StartsWith("<>", StringComparison.Ordinal) && inner.EndsWith("</>", StringComparison.Ordinal)) inner = inner[2..^3];
         Emit("<div menu style=\"display: contents\">");
         _depth++;
-        var nested = new JsxToAngular(_supported, _arity) { _depth = _depth, _src = inner };
+        var nested = new JsxToAngular(_supported, _arity) { _root = _root, _depth = _depth, _src = inner };
         nested.Children(null);
         _out.AddRange(nested._out);
         foreach (var c in nested.Components) Components.Add(c);
-        Inlines.AddRange(nested.Inlines);
         Unsupported.AddRange(nested.Unsupported);
         _depth--;
         Emit("</div>");
@@ -323,8 +323,8 @@ internal sealed class JsxToAngular
         var body = arrow.Groups["body"].Value.Trim();
         body = body.StartsWith('{') && body.EndsWith('}') ? body[1..^1].Trim() : body.TrimEnd(';') + ";";
         var types = PayloadTypes(tag, reactName, parameters.Count);
-        var handler = new InlineHandler($"inline{Inlines.Count + 1}", arrow.Groups["async"].Success, parameters.Select((p, i) => (p, types[i])).ToList(), body);
-        Inlines.Add(handler);
+        var handler = new InlineHandler($"inline{_root.Inlines.Count + 1}", arrow.Groups["async"].Success, parameters.Select((p, i) => (p, types[i])).ToList(), body);
+        _root.Inlines.Add(handler);
         var args = parameters.Count switch { 0 => "", 1 => "$event", _ => "...$event" };
         return $"({angularName})=\"{handler.Name}({args})\"";
     }

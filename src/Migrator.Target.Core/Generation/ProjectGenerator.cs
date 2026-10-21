@@ -74,7 +74,7 @@ public sealed class ProjectGenerator
             supportRegistry.ColorAsync(vocabulary);
         }
         var env = translate
-            ? new TranslationEnv { Vocabulary = vocabulary, Components = components, Units = ir.Units, Generated = generated, Support = supportRegistry, Resources = new ResourceImages(ir.Resources, options.ImagesFolder), Bypass = BypassRules.Load(_backend.BypassRulesPath), ServerBound = serverRules }
+            ? new TranslationEnv { Vocabulary = vocabulary, Components = components, Units = ir.Units, Generated = generated, Support = supportRegistry, Resources = new ResourceImages(ir.Resources, options.ImagesFolder), UiLibraryPackage = _backend.UiLibraryPackage, Bypass = BypassRules.Load(_backend.BypassRulesPath), ServerBound = serverRules }
             : null;
         SupportBuild? support = null;
         if (env is not null && supportRegistry is not null)

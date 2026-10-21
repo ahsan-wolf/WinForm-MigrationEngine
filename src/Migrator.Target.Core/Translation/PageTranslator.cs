@@ -20,6 +20,9 @@ public sealed class TranslationEnv
 
     /// <summary>Images by name (`Properties.Resources.X`): the project's resource file and the `--images` folder.</summary>
     public ResourceImages Resources { get; init; } = ResourceImages.Empty;
+
+    /// <summary>The UI library package the generated code imports library types and helpers from (`@wfm/ui-react`, `@wfm/ui-angular`).</summary>
+    public string UiLibraryPackage { get; init; } = "@wfm/ui-react";
 }
 
 /// <summary>Where an event handler method is wired: first control + event that uses it.</summary>

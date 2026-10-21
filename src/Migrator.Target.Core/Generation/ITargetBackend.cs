@@ -22,6 +22,9 @@ public interface ITargetBackend
     string Key { get; }
     string UiSpecPath { get; }
     string UiLibraryPath { get; }
+
+    /// <summary>The package generated code imports library types and helpers from (`@wfm/ui-react`, `@wfm/ui-angular`).</summary>
+    string UiLibraryPackage { get; }
     string BypassRulesPath { get; }
     string ServerBoundRulesPath { get; }
 

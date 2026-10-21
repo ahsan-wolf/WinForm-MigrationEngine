@@ -17,6 +17,7 @@ public sealed class ReactBackend : ITargetBackend
     public string Key => "react-app";
     public string UiSpecPath => _options.UiSpecPath;
     public string UiLibraryPath => _options.UiLibraryPath;
+    public string UiLibraryPackage => "@wfm/ui-react";
     public string BypassRulesPath => _options.BypassRulesPath;
     public string ServerBoundRulesPath => _options.ServerBoundRulesPath;
 
