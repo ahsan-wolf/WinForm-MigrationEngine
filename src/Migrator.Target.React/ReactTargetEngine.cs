@@ -5,6 +5,7 @@ using Migrator.Target.Core.Spec;
 using WebFormsMigrator.IR.Contracts;
 using WebFormsMigrator.IR.Models;
 using Migrator.Target.Core.Ir;
+using Migrator.Target.Core.Generation;
 
 namespace Migrator.Target.React;
 

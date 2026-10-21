@@ -10,7 +10,7 @@ using WebFormsMigrator.IR.Models;
 using Migrator.Target.Core.Ir;
 using Migrator.Target.Core.Generation;
 
-namespace Migrator.Target.React.Generation;
+namespace Migrator.Target.Core.Generation;
 
 /// <summary>
 /// Turns one unit's IR into a React component that imports only `Wf*` components from the UI library. Markup, state, wiring and
