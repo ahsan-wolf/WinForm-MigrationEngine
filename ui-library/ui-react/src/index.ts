@@ -1,4 +1,4 @@
-import './wf.css';
+import '@wfm/ui-core/wf.css';
 
 export * from '@wfm/ui-core';
 export { MnemonicText } from './mnemonic';
