@@ -211,6 +211,7 @@ static int Migrate(string[] args)
             AppShell = appShell,
             ContractFiles = OptionValues(args, "--contract"),
             ContractScope = OptionValue(args, "--contract-scope") ?? "used",
+            ImagesFolder = OptionValue(args, "--images"),
             Translate = OptionValue(args, "--translate") ?? "none",
             CompileGate = args.Contains("--compile-gate"),
             NoCompileGate = args.Contains("--no-compile-gate")

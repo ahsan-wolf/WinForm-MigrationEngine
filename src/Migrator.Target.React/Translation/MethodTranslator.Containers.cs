@@ -9,6 +9,19 @@ internal sealed partial class MethodTranslator
 {
     // ------------------------------------------------------------------------------------------------ image lists
 
+    /// <summary>`Properties.Resources.Name` (or `Resources.Name`): the web path of the image file written for it.</summary>
+    private string? ResourceImage(MemberAccessExpressionSyntax ma)
+    {
+        var isResources = ma.Expression is IdentifierNameSyntax { Identifier.ValueText: "Resources" } && !IsKnownName("Resources")
+                          || ma.Expression is MemberAccessExpressionSyntax { Name.Identifier.ValueText: "Resources", Expression: IdentifierNameSyntax { Identifier.ValueText: "Properties" } };
+        if (!isResources) return null;
+        var name = ma.Name.Identifier.ValueText;
+        if (_scope.Resources.WebPath(name) is not { } path)
+            throw new Untranslatable($"resource {name} is not an image the engine extracted (string and file resources are not read; --images <folder> can supply images by name)");
+        _scope.Output.ResourceRefs.Add(name);
+        return Str(path);
+    }
+
     private string? ImageListOf(ExpressionSyntax e) =>
         e is MemberAccessExpressionSyntax { Name.Identifier.ValueText: "Images" } m && ControlOf(m.Expression) is { } id && _scope.ImageLists.Contains(id) ? id : null;
 

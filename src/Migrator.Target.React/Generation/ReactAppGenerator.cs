@@ -71,7 +71,7 @@ public sealed class ReactAppGenerator
             supportRegistry.ColorAsync(vocabulary);
         }
         var env = translate
-            ? new TranslationEnv { Vocabulary = vocabulary, Components = components, Units = ir.Units, Generated = generated, Support = supportRegistry, Bypass = BypassRules.Load(_options.BypassRulesPath), ServerBound = serverRules }
+            ? new TranslationEnv { Vocabulary = vocabulary, Components = components, Units = ir.Units, Generated = generated, Support = supportRegistry, Resources = new ResourceImages(ir.Resources, options.ImagesFolder), Bypass = BypassRules.Load(_options.BypassRulesPath), ServerBound = serverRules }
             : null;
         SupportBuild? support = null;
         if (env is not null && supportRegistry is not null)
@@ -105,8 +105,19 @@ public sealed class ReactAppGenerator
         result.SkippedUnits.AddRange(skippedOutOfScope);
 
         if (components.TryGetValue(entry, out var entryComponent) && result.GeneratedUnits.Contains(entry))
+        {
+            // The entry form's icon is the app's favicon.
+            string? favicon = null;
+            var entryAttributes = ir.Units[entry].Page.RootControl?.Attributes;
+            if (entryAttributes is not null && entryAttributes.TryGetValue("Icon.Data", out var iconData) && entryAttributes.TryGetValue("Icon.Format", out var iconFormat)
+                && IconConverter.ToWeb(Convert.FromBase64String(iconData), iconFormat) is { } icon)
+            {
+                favicon = $"favicon.{icon.Extension}";
+                AppWriter.PutBytes(outputDirectory, "public/" + favicon, icon.Data, result.Files);
+            }
             AppWriter.Write(outputDirectory, "migrated-" + Naming.Camel(Naming.StripPrefix(entry)).ToLowerInvariant(), entryComponent,
-                Path.GetFullPath(_options.UiLibraryPath), result.Files);
+                Path.GetFullPath(_options.UiLibraryPath), result.Files, favicon);
+        }
 
         var gate = translate ? RunCompileGate(outputDirectory, options, generator, ir, pages, result, support) : new GateSummary();
 

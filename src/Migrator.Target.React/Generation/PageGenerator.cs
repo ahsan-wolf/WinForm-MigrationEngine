@@ -198,6 +198,11 @@ public sealed partial class PageGenerator
         List<string> typeImports = new();
         if (c.Translation is { } tr)
         {
+            foreach (var name in tr.ResourceRefs)
+                if (_translation!.Resources.WebPath(name) is { } resourcePath && _translation.Resources.TryGet(name, out var resourceData, out var resourceFormat)
+                    && IconConverter.ToWeb(resourceData, resourceFormat) is { } resource)
+                    c.Assets.Add(("public/" + resourcePath, resource.Data));
+
             // Everything the page declares or imports is decided from the text that is actually emitted: a method demoted by the
             // compile gate, or a statement that fell back, must not leave an unused `dialog`, `vm`, import or type behind.
             var fieldText = string.Join("\n", tr.FieldInitials.Values);
@@ -815,6 +820,9 @@ public sealed partial class PageGenerator
             {
                 var key = i < names.Count ? names[i] : "";
                 var web = i < data.Count ? IconConverter.ToWeb(System.Convert.FromBase64String(data[i]), "bmp") : null;
+                // An image the stream could not give: a file named after its key in the --images folder.
+                if (web is null && key.Length > 0 && _translation?.Resources.TryGet(Path.GetFileNameWithoutExtension(key), out var fileData, out var fileFormat) == true)
+                    web = IconConverter.ToWeb(fileData, fileFormat);
                 var url = PlaceholderIcon;
                 if (web is not null)
                 {
@@ -1066,6 +1074,7 @@ public sealed partial class PageGenerator
     private void AddGrid(ControlNodeIr node, Ctx c, List<string> attrs)
     {
         c.LibTypes.Add("WfGridColumn");
+        c.LibTypes.Add("WfGridCellEvent");
         var baseName = Naming.StateName(node.Id);
         var colsName = c.Names.Unique(baseName + "Columns");
         var (defs, fields, designerColumns) = GridColumns(node, placeholders: _preview || c.ListGrids.Contains(node.Id));
