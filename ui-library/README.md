@@ -7,7 +7,8 @@ Independent of the migration engine and of any IR (CLAUDE.md §5). Generated app
 | `ui-spec` (`@wfm/ui-spec`) | `controls.json` (names, WinForms types, prop/event mapping, a11y, example) + `tokens.css` | 0.3.0 |
 | `ui-core` (`@wfm/ui-core`) | Framework-free TypeScript shared by the implementations: grid model, image list, tree nodes, list items, mnemonics. Build it first | 0.3.0 |
 | `ui-react` (`@wfm/ui-react`) | React 18 + TS implementation of the spec (re-exports `ui-core`) | 0.3.0 |
-| `ui-angular`, `ui-html` | later (P2 continues) | not started |
+| `ui-angular` (`@wfm/ui-angular`) | Angular 21 standalone components implementing the spec; consumed as TypeScript source through tsconfig paths (selectors `wf-*`, outputs `wf` + event name) | 0.4.0 |
+| `ui-html` | later | not started |
 
 MVP control set = what the pilot startup form needs: `WfForm`, `WfMenuBar`/`WfMenuItem`/`WfSeparator`, `WfToolbar`/`WfToolbarButton`, `WfStatusBar`,
 `WfPanel`, `WfGroupBox` (fieldset + legend), `WfTabs`/`WfTabPage` (hidden / disabled pages, page icons), `WfDynamicHost` (user controls added in code, with `wfDynamicControl`), `wfImageList*` helpers (image resources by key or index for tree, list and tab icons), `WfDateTimePicker` (native date/time input, optional min/max), `WfRadioButton` (grouped), `WfNumericUpDown`, `WfLinkLabel`, `WfSplit`/`WfSplitPane`, `WfLabel`, `WfButton`, `WfTextBox`, `WfComboBox`, `WfCheckBox`, `WfProgress`, `WfPictureBox`, `WfDataGrid`,

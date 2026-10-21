@@ -39,7 +39,7 @@ public sealed class AngularTargetEngine : IProjectTargetEngine
     public AngularTargetEngine(AngularTargetOptions options) => _options = options;
 
     public string Id => "angular-app";
-    public Version Version { get; } = new(0, 3, 0);
+    public Version Version { get; } = new(0, 4, 0);
     public Version SchemaVersion { get; } = Version.Parse(IrSchema.Version);
     public string UiLibraryPackage => "@wfm/ui-angular";
     public IReadOnlyList<string> RequiredSpecVersion { get; } = new[] { "^0.3" };

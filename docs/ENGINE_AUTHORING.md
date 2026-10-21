@@ -149,6 +149,9 @@ Generated pages import only `@wfm/ui-react`.
 Known limits: `Show()` opens as a dialog (no router yet); no auth; TreeView/Tabs/RadioGroup/DatePicker have no library component yet
 (they become `WfUnsupported`); the generated app links the local `@wfm/ui-react` with `file:` (Vite `resolve.dedupe` keeps a single React).
 
+## Angular target (`Migrator.Target.Angular`) and the shared target core
+`Migrator.Target.Core` holds everything a target shares: `IrFolder`, the ui-spec catalog, `PageGenerator` (decides markup, model, handlers, wiring and imports), the translator, contracts and support module emission, `ProjectGenerator` (scope, pipeline, compile-gate loop, report). A target supplies an `ITargetBackend` (how pages are created and written, the app skeleton, the type checker, the library package name) and, when its pages are not React's file pair, an `IPageAssembler` that receives a `PageAssemblyInput`. Angular's assembler converts the generator's neutral JSX-like markup with `JsxToAngular` (tags to `wf-*`, `name={expr}` to `[name]`, `onX` to `(wfX)`, `&&` blocks to `@if`, arrow handlers lifted into the code-behind with typed parameters) and writes `x.page.ts`, `x.page.html`, `x.page.code.ts`. The library is consumed as TypeScript source through tsconfig `paths`; the gate is `ngc --noEmit` (strict templates, so template errors are found too; they are reported, not demoted). Adding a control: component in `ui-angular`, its name in `AngularPageAssembler.Supported`, its event payload types in `JsxToAngular.PayloadTypes`. Details: `docs/guide/v0.4/09-angular.md`.
+
 ## Assembly contract (`migrator contract`)
 `migrator contract --assembly <dll> --out <dir>` reads a managed assembly's **public API from metadata only** (`System.Reflection.Metadata`; the file is parsed,
 never loaded or executed, method bodies are not read) and writes `<dir>/<name>/contract.json` (types, kinds, base types, properties, method signatures, enum

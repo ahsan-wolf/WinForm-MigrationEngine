@@ -1,6 +1,6 @@
 {
   "name": "@wfm/ui-core",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Framework-free helpers and types shared by the @wfm/ui-* packages (grid model, image list, tree nodes, list items, mnemonics). Independent of the migration engine and of any IR.",
   "type": "module",
   "private": true,
