@@ -25,7 +25,7 @@ It produces a **minimum working application**: it builds, screens render, contro
 
 ```bash
 dotnet build WinFormsMigrator.sln
-cd ui-library/ui-react && npm ci && npm run build && cd ../..
+cd ui-library/ui-core && npm ci && npm run build && cd ../ui-react && npm ci && npm run build && cd ../..
 ```
 `engines.json` lists the enabled engines (`winforms` source, `react-app` target) and where the `ui-spec` and the library live. Only listed engines load.
 
@@ -169,7 +169,7 @@ What to click through: the menu and toolbar, each dialog from the entry form, li
 |---|---|
 | `engines.json not found` | Run from the repo root or pass `--config <path>` |
 | Plugin DLL ignored | A DLL in `plugins/` that is not listed in `engines.json` is reported and never executed — list it |
-| `Cannot find @wfm/ui-react` or blank styles | Build the library first: `cd ui-library/ui-react && npm ci && npm run build` |
+| `Cannot find @wfm/ui-react` or blank styles | Build the libraries first: `cd ui-library/ui-core && npm ci && npm run build`, then `cd ../ui-react && npm ci && npm run build` |
 | `npm run` fails on a path containing `&` or spaces | The generated scripts call `node ./node_modules/<tool>/bin/...` for that reason; do not replace them with `.bin` shims |
 | Compile gate does nothing | Dependencies are not installed: pass `--compile-gate` (installs) or run `npm install` first |
 | Page is blank in the browser | Hard refresh; open `/<page-name>` to see the render error; check the console |

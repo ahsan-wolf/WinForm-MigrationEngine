@@ -93,6 +93,7 @@ WinFormsMigrator/                         # standalone repo + solution (NOT insi
 │  └─ Migrator.Cli/                       # thin console entry point (args -> Engine)
 ├─ ui-library/                            # INDEPENDENT of engine + IR (own build, own versions)
 │  ├─ ui-spec/                            # framework-neutral control contract (JSON) + design tokens
+│  ├─ ui-core/                            # @wfm/ui-core: framework-free helpers and types shared by the ui-* packages (grid model, image list, tree nodes, list items, mnemonics)
 │  ├─ ui-react/                           # @wfm/ui-react
 │  ├─ ui-angular/                         # @wfm/ui-angular
 │  └─ ui-html/                            # @wfm/ui-html (HTML/CSS/vanilla JS + jQuery adapter)
@@ -340,7 +341,8 @@ dotnet run --project src/Migrator.Cli -- backend --source <dir>... [--wsdl <dir>
 dotnet run --project src/Migrator.Cli -- migrate --source <path> --out <dir> --preview   # EXISTS: component viewer -> <out>/react-viewer: a visual-only page per form and user control + a sidebar shell (no handlers, data or logic)
 dotnet run --project src/Migrator.Cli -- migrate --source <path> --out <dir> --appshell  # EXISTS: WinForms-style app shell -> <out>/react-appshell: bordered host window, hyperlink navigation on the left, the selected unit in a form-style frame on the right (visual-only pages, same as --preview)
 set WFM_LLM_TARGET=react-app                                                   # opt-in LLM translation
-cd ui-library/ui-react && npm ci && npm run build && npm run lint
+cd ui-library/ui-core && npm ci && npm run build && npm run lint   # first: ui-react and generated apps import it
+cd ../ui-react && npm ci && npm run build && npm run lint
 ```
 (Adjust CLI verbs to what exists; if a command doesn't exist yet, add it in `Migrator.Cli` as a thin wrapper over the Engine.)
 
