@@ -149,6 +149,7 @@ internal sealed class JsxToAngular
 
         var attrs = new List<(string Name, string? Value, bool Braced)>();
         var comments = new List<string>();
+        string? contextMenu = null;
         var selfClosing = false;
         while (More)
         {
@@ -199,7 +200,12 @@ internal sealed class JsxToAngular
         var element = isComponent ? Kebab(tag) : tag;
         if (isComponent) Components.Add(tag);
         var rendered = new List<string>();
-        foreach (var (name, value, braced) in attrs) rendered.AddRange(Attribute(tag, isComponent, name, value, braced));
+        foreach (var (name, value, braced) in attrs)
+        {
+            // WfContextMenu takes its menu as markup: it becomes a child projected into the menu slot.
+            if (tag == "WfContextMenu" && name == "menu" && value is not null) { contextMenu = value; continue; }
+            rendered.AddRange(Attribute(tag, isComponent, name, value, braced));
+        }
 
         // The two panes of a split are told apart by an attribute the template projects on.
         if (tag == "WfSplitPane") rendered.Add(_splitPane++ % 2 == 0 ? "first" : "second");
@@ -213,12 +219,31 @@ internal sealed class JsxToAngular
 
         Emit(open + ">");
         _depth++;
+        if (contextMenu is not null) MenuSlot(contextMenu);
         Children(tag);
         _depth--;
         Emit($"</{element}>");
     }
 
     private int _splitPane;
+
+    /// <summary>The `menu={(&lt;&gt; ... &lt;/&gt;)}` markup of a context menu, as a `[menu]` child of the element.</summary>
+    private void MenuSlot(string markup)
+    {
+        var inner = markup.Trim();
+        if (inner.StartsWith('(') && inner.EndsWith(')')) inner = inner[1..^1].Trim();
+        if (inner.StartsWith("<>", StringComparison.Ordinal) && inner.EndsWith("</>", StringComparison.Ordinal)) inner = inner[2..^3];
+        Emit("<div menu style=\"display: contents\">");
+        _depth++;
+        var nested = new JsxToAngular(_supported, _arity) { _depth = _depth, _src = inner };
+        nested.Children(null);
+        _out.AddRange(nested._out);
+        foreach (var c in nested.Components) Components.Add(c);
+        Inlines.AddRange(nested.Inlines);
+        Unsupported.AddRange(nested.Unsupported);
+        _depth--;
+        Emit("</div>");
+    }
 
     /// <summary>Skips the children and the closing tag of an element whose opening tag was just read.</summary>
     private void SkipChildren()
@@ -314,6 +339,15 @@ internal sealed class JsxToAngular
             ("WfComboBox", "onSelectionChange") => new[] { "string" },
             ("WfCheckBox" or "WfRadioButton", "onCheckedChange") => new[] { "boolean" },
             ("WfTabs", "onSelectionChange") => new[] { "number" },
+            ("WfMaskedTextBox" or "WfRichTextBox" or "WfMonthCalendar", "onValueChange") => new[] { "string" },
+            ("WfListBox" or "WfDomainUpDown" or "WfCheckedListBox", "onSelectionChange") => new[] { "string" },
+            ("WfTrackBar" or "WfScrollBar", "onValueChange") => new[] { "number" },
+            ("WfListView", "onSelectionChange") => new[] { "number[]" },
+            ("WfListView", "onItemCheckedChange") => new[] { "number", "boolean" },
+            ("WfCheckedListBox", "onItemCheck") => new[] { "number", "boolean" },
+            ("WfDataGrid", "onRowSelect") => new[] { "Record<string, unknown>[]" },
+            ("WfDataGrid", "onCellEdit") => new[] { "WfGridCellEdit" },
+            ("WfTreeView", "onSelectionChange") => new[] { "WfTreeNode" },
             _ => Array.Empty<string>()
         };
         return Enumerable.Range(0, count).Select(i => i < known.Length ? known[i] : "unknown").ToArray();
