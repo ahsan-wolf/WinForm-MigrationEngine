@@ -3,9 +3,9 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using Migrator.Engine.Assemblies;
 using Migrator.Engine.Contracts;
-using Migrator.Target.React.Generation;
+using Migrator.Target.Core.Ir;
 
-namespace Migrator.Target.React.Contracts;
+namespace Migrator.Target.Core.Contracts;
 
 public sealed class ContractEmitResult
 {
@@ -135,7 +135,7 @@ public static partial class ServiceEmitter
             types.AppendLine("}");
             types.AppendLine();
         }
-        AppWriter.Put(appDir, $"{dir}/types.ts", types.ToString(), files);
+        OutputFiles.Put(appDir, $"{dir}/types.ts", types.ToString(), files);
 
         // fixtures.ts
         var fixtures = new StringBuilder(header + "\n// Deterministic sample rows (shape only; values are fake).\n\n");
@@ -158,7 +158,7 @@ public static partial class ServiceEmitter
             fixtures.AppendLine("};");
         }
         else fixtures.AppendLine("export const fixtures = {};");
-        AppWriter.Put(appDir, $"{dir}/fixtures.ts", fixtures.ToString(), files);
+        OutputFiles.Put(appDir, $"{dir}/fixtures.ts", fixtures.ToString(), files);
 
         // service.ts
         var iface = new StringBuilder();
@@ -198,7 +198,7 @@ public static partial class ServiceEmitter
         service.AppendLine($"}} as unknown as {ident}Service;");
         service.AppendLine();
         service.AppendLine($"export const {LowerLeadingWord(ident)}: {ident}Service = mock{ident}Service;");
-        AppWriter.Put(appDir, $"{dir}/service.ts", service.ToString(), files);
+        OutputFiles.Put(appDir, $"{dir}/service.ts", service.ToString(), files);
 
         result.Notes.AddRange(mapper.Notes);
         return result;

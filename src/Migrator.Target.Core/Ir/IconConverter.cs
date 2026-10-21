@@ -1,6 +1,6 @@
 using System.IO.Compression;
 
-namespace Migrator.Target.React.Generation;
+namespace Migrator.Target.Core.Ir;
 
 /// <summary>
 /// Turns image bytes taken from a designer resource into a file a browser can show, in managed code only (no System.Drawing, no Windows API):

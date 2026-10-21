@@ -1,9 +1,10 @@
 using System.Text;
 using System.Text.Json;
 using Migrator.Engine.Contracts;
-using Migrator.Target.React.Contracts;
-using Migrator.Target.React.Translation;
-using Migrator.Target.React.Spec;
+using Migrator.Target.Core.Contracts;
+using Migrator.Target.Core.Translation;
+using Migrator.Target.Core.Spec;
+using Migrator.Target.Core.Ir;
 
 namespace Migrator.Target.React.Generation;
 
@@ -395,7 +396,7 @@ public sealed class ReactAppGenerator
     }
 
     private static IEnumerable<string> CreatedUserControls(IrFolder ir, UnitIr unit) =>
-        System.Text.RegularExpressions.Regex.Matches(Translation.ContainerUsage.CodeOf(unit), @"\bnew\s+(\w+)\s*\(")
+        System.Text.RegularExpressions.Regex.Matches(Migrator.Target.Core.Translation.ContainerUsage.CodeOf(unit), @"\bnew\s+(\w+)\s*\(")
             .Select(m => m.Groups[1].Value).Distinct(StringComparer.Ordinal)
             .Where(n => ir.Units.TryGetValue(n, out var u) && u.IsUserControl);
 

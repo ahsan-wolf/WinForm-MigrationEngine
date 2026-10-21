@@ -1,10 +1,10 @@
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using Migrator.Target.React.Contracts;
-using Migrator.Target.React.Generation;
+using Migrator.Target.Core.Contracts;
+using Migrator.Target.Core.Ir;
 using WebFormsMigrator.IR.Models;
 
-namespace Migrator.Target.React.Translation;
+namespace Migrator.Target.Core.Translation;
 
 public enum TranslationStatus { Complete, Partial, NotTranslated }
 

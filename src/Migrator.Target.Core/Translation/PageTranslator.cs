@@ -2,10 +2,10 @@ using Migrator.Engine.Projections;
 using System.Text.RegularExpressions;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using Migrator.Target.React.Generation;
+using Migrator.Target.Core.Ir;
 using WebFormsMigrator.IR.Models;
 
-namespace Migrator.Target.React.Translation;
+namespace Migrator.Target.Core.Translation;
 
 /// <summary>What translation may reference outside the page itself.</summary>
 public sealed class TranslationEnv

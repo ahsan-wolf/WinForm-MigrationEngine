@@ -1,4 +1,5 @@
 namespace Migrator.Target.React.Generation;
+using Migrator.Target.Core.Ir;
 
 /// <summary>
 /// Files of the WinForms-style app shell (`migrate --appshell`): a bordered host window, a left pane of hyperlinks, and a right container that

@@ -1,8 +1,8 @@
 using System.Text.RegularExpressions;
 using Migrator.Engine.Assemblies;
-using Migrator.Target.React.Generation;
+using Migrator.Target.Core.Ir;
 
-namespace Migrator.Target.React.Contracts;
+namespace Migrator.Target.Core.Contracts;
 
 /// <summary>What the generated forms actually use from a contract: data types they mention and static facade methods they call.</summary>
 public sealed class ContractUsage

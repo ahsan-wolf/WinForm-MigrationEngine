@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using System.Text.RegularExpressions;
 
-namespace Migrator.Target.React.Translation;
+namespace Migrator.Target.Core.Translation;
 
 public sealed record TscDiagnostic(string File, int Line, int Column, string Code, string Message);
 

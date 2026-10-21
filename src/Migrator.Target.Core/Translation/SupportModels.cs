@@ -3,7 +3,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Migrator.Engine.Support;
 using WebFormsMigrator.IR.Models;
 
-namespace Migrator.Target.React.Translation;
+namespace Migrator.Target.Core.Translation;
 
 /// <summary>One extracted support class and what pages/other classes may reference on it.</summary>
 public sealed class SupportClassInfo
@@ -132,7 +132,7 @@ public sealed class SupportModule
 /// </summary>
 public static class SupportPruner
 {
-    public static SupportFileIr Reachable(SupportFileIr all, IEnumerable<Migrator.Target.React.Generation.UnitIr> units, ServerBoundRules rules, List<string> serverBound)
+    public static SupportFileIr Reachable(SupportFileIr all, IEnumerable<Migrator.Target.Core.Ir.UnitIr> units, ServerBoundRules rules, List<string> serverBound)
     {
         var byName = all.Classes.GroupBy(c => c.Name).ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
         var reached = new HashSet<string>(StringComparer.Ordinal);

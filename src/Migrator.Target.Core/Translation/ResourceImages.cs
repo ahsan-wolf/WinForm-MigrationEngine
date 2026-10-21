@@ -1,7 +1,7 @@
 using System.Text.RegularExpressions;
 using Migrator.Engine.Support;
 
-namespace Migrator.Target.React.Translation;
+namespace Migrator.Target.Core.Translation;
 
 /// <summary>
 /// Images by name for `Properties.Resources.Name` and for image-list entries the IR could not carry: first the project's resource file as extracted into

@@ -5,10 +5,10 @@ using System.Text.RegularExpressions;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using Migrator.Target.React.Generation;
+using Migrator.Target.Core.Ir;
 using WebFormsMigrator.IR.Models;
 
-namespace Migrator.Target.React.Translation;
+namespace Migrator.Target.Core.Translation;
 
 /// <summary>
 /// Syntax-directed C# -> TypeScript for one method body. Deterministic and conservative: any statement it cannot translate faithfully

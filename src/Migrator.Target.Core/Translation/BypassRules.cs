@@ -2,7 +2,7 @@ using System.Text.Json;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
-namespace Migrator.Target.React.Translation;
+namespace Migrator.Target.Core.Translation;
 
 /// <summary>
 /// Windows-specific APIs a browser app cannot call (registry, clipboard, directory services, process start, ...), loaded from a data file

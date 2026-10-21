@@ -3,7 +3,7 @@ using Migrator.Engine.Projections;
 using Migrator.Engine.Support;
 using WebFormsMigrator.IR.Models;
 
-namespace Migrator.Target.React.Generation;
+namespace Migrator.Target.Core.Ir;
 
 public sealed record UnitIr(string Name, string Kind, PageIr Page, IReadOnlyDictionary<string, ControlLayout> Layout)
 {

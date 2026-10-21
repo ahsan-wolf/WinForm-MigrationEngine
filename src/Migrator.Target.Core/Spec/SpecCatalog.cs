@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace Migrator.Target.React.Spec;
+namespace Migrator.Target.Core.Spec;
 
 public sealed record SpecProp(string Name, string Type, string[] From, string? Transform);
 public sealed record SpecEvent(string Name, string From, string React);

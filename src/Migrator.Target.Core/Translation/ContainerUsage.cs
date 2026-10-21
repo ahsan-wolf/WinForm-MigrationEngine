@@ -1,9 +1,9 @@
 using System.Text.RegularExpressions;
 using Migrator.Engine.Projections;
-using Migrator.Target.React.Generation;
+using Migrator.Target.Core.Ir;
 using WebFormsMigrator.IR.Models;
 
-namespace Migrator.Target.React.Translation;
+namespace Migrator.Target.Core.Translation;
 
 /// <summary>
 /// Which containers of a page the code-behind adds controls to at run time (`panel.Controls.Add(...)`) and which tab controls it drives

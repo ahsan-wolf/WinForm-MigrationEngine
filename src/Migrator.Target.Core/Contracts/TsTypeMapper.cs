@@ -1,6 +1,6 @@
 using Migrator.Engine.Assemblies;
 
-namespace Migrator.Target.React.Contracts;
+namespace Migrator.Target.Core.Contracts;
 
 public enum TsKind { String, Guid, Date, Number, Boolean, Dto, Enum, Array, Record, Void, Unknown }
 
@@ -46,7 +46,7 @@ public sealed class TsTypeMapper
         if (_taken.Contains(candidate))
         {
             var ns = fullName.Contains('.') ? fullName[..fullName.LastIndexOf('.')] : "";
-            candidate = Generation.Naming.Pascal(ns[(ns.LastIndexOf('.') + 1)..]) + simple;
+            candidate = Ir.Naming.Pascal(ns[(ns.LastIndexOf('.') + 1)..]) + simple;
         }
         for (var i = 2; !_taken.Add(candidate); i++) candidate = simple + i;
         _names[fullName] = candidate;

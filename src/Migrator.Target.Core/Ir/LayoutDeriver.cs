@@ -1,7 +1,7 @@
 using Migrator.Engine.Projections;
 using WebFormsMigrator.IR.Models;
 
-namespace Migrator.Target.React.Generation;
+namespace Migrator.Target.Core.Ir;
 
 /// <summary>Controls of one container, grouped the way CSS can express them. Never carries pixel positions (Skill 4).</summary>
 public sealed class Arrangement

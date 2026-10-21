@@ -4,9 +4,10 @@ using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Migrator.Engine.Contracts;
-using Migrator.Target.React.Translation;
-using Migrator.Target.React.Spec;
+using Migrator.Target.Core.Translation;
+using Migrator.Target.Core.Spec;
 using WebFormsMigrator.IR.Models;
+using Migrator.Target.Core.Ir;
 
 namespace Migrator.Target.React.Generation;
 
@@ -77,7 +78,6 @@ public sealed partial class PageGenerator
     private readonly bool _previewNavigation;
 
     /// <summary>Helpers of the generated `src/lib/csharp.ts`, imported by whichever file calls them.</summary>
-    internal static readonly string[] CsharpHelpers = { "formatString", "tryParseInt", "tryParseNumber", "pathCombine", "getFileName", "getFileNameWithoutExtension", "getDirectoryName", "getExtension" };
 
     /// <param name="preview">Visual-only pages for the component viewer: controls and layout as designed with placeholder data; no handlers, model, dialogs, translation or imports other than the UI library.</param>
     public PageGenerator(SpecCatalog spec, IReadOnlyDictionary<string, UnitIr> units, IReadOnlyDictionary<string, string> components, ISet<string> generated, TranslationEnv? translation = null, bool preview = false, bool previewNavigation = false)
@@ -317,7 +317,7 @@ public sealed partial class PageGenerator
         codeLib.AddRange(c.LibTypes.Where(t => Regex.IsMatch(codeText, $@"\b{Regex.Escape(t)}\b")).Select(t => "type " + t));
         if (codeLib.Count > 0) code.AppendLine($"import {{ {string.Join(", ", codeLib)} }} from '@wfm/ui-react';");
         foreach (var (comp, file) in c.PageImports.Where(p => UsesComponent(codeText, p.Key))) code.AppendLine($"import {{ {comp} }} from './{file}';");
-        var csharpHelpers = CsharpHelpers.Where(h => Regex.IsMatch(codeText, $@"\b{h}\(")).ToList();
+        var csharpHelpers = CsharpRuntime.Helpers.Where(h => Regex.IsMatch(codeText, $@"\b{h}\(")).ToList();
         if (csharpHelpers.Count > 0) code.AppendLine($"import {{ {string.Join(", ", csharpHelpers)} }} from '../lib/csharp';");
         // Only code counts for the support classes: a model key or a column field with the same name as a class is not a use.
         var supportCode = SupportUsed(Code(handlerCode

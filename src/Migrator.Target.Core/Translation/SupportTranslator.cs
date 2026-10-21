@@ -4,7 +4,7 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using WebFormsMigrator.IR.Models;
 
-namespace Migrator.Target.React.Translation;
+namespace Migrator.Target.Core.Translation;
 
 /// <summary>
 /// Emits the project's own non-UI classes (static helper modules, data classes, enums) as one TypeScript module, <c>src/support/index.ts</c>:
@@ -57,7 +57,7 @@ internal static class SupportTranslator
         var typeImports = output.TypeImports.Where(t => Regex.IsMatch(code, $@"(?<![\w.]){Regex.Escape(t)}\b")).ToList();
         if (typeImports.Count > 0) header.Add($"import type {{ {string.Join(", ", typeImports)} }} from '{env.Vocabulary.TypesImport}';");
         if (Regex.IsMatch(code, @"\bfixtures\.") && output.FixturesImport.Length > 0) header.Add($"import {{ fixtures }} from '{output.FixturesImport}';");
-        var csharpHelpers = Migrator.Target.React.Generation.PageGenerator.CsharpHelpers.Where(h => Regex.IsMatch(code, $@"\b{h}\(")).ToList();
+        var csharpHelpers = CsharpRuntime.Helpers.Where(h => Regex.IsMatch(code, $@"\b{h}\(")).ToList();
         if (csharpHelpers.Count > 0) header.Add($"import {{ {string.Join(", ", csharpHelpers)} }} from '../lib/csharp';");
         var uiImports = new List<string>();
         if (Regex.IsMatch(code, @"\bWfListItem\b")) uiImports.Add("type WfListItem");

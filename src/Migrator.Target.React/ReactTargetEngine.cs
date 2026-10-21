@@ -1,9 +1,10 @@
 using Migrator.Engine.Contracts;
 using Migrator.Engine.Projections;
 using Migrator.Target.React.Generation;
-using Migrator.Target.React.Spec;
+using Migrator.Target.Core.Spec;
 using WebFormsMigrator.IR.Contracts;
 using WebFormsMigrator.IR.Models;
+using Migrator.Target.Core.Ir;
 
 namespace Migrator.Target.React;
 

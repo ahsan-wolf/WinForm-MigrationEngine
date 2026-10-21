@@ -1,4 +1,4 @@
-namespace Migrator.Target.React.Translation;
+namespace Migrator.Target.Core.Translation;
 
 /// <summary>
 /// Statement-level demotion for the compile gate: when `tsc` rejects one simple statement of a translated method, only that statement becomes a

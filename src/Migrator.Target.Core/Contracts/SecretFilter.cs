@@ -1,7 +1,7 @@
 using System.Text.RegularExpressions;
 using Migrator.Engine.Assemblies;
 
-namespace Migrator.Target.React.Contracts;
+namespace Migrator.Target.Core.Contracts;
 
 /// <summary>
 /// Secrets must never reach browser code. Anything whose name or type looks like a credential, key, license or connection string is

@@ -86,6 +86,7 @@ WinFormsMigrator/                         # standalone repo + solution (NOT insi
 ├─ src/
 │  ├─ Migrator.Engine/                    # HOST: pipeline, engine registry, plugin loader, config, CLI services
 │  ├─ Migrator.Source.WinForms/           # SOURCE ENGINE: project analyzer, designer parser, extractors
+│  ├─ Migrator.Target.Core/               # SHARED by every target: IR folder loading, ui-spec catalog, C# -> TypeScript translation, contract services, naming, layout, icons
 │  ├─ Migrator.Target.React/              # TARGET ENGINE: IIrGenerator -> react-app
 │  ├─ Migrator.Target.Angular/            # TARGET ENGINE: IIrGenerator -> angular-app
 │  ├─ Migrator.Target.Html/               # TARGET ENGINE: IIrGenerator -> html-jquery-app
@@ -106,6 +107,7 @@ WinFormsMigrator/                         # standalone repo + solution (NOT insi
 ### 2.1 Dependency direction (enforced)
 ```
 Cli -> Engine -> (Source.* , Target.*) -> IR + IR.Contracts
+Target.React / Target.Angular -> Target.Core -> Engine   # the framework-neutral part lives once, in Target.Core
 Target.* -> ui-spec (read-only, as data)          # never imports ui-react/angular/html code
 ui-library/*  -> nothing from src/ (zero knowledge of IR, WinForms, or the engine)
 Source.* ✗ Target.*   Target.* ✗ Target.*   Source.* ✗ Source.*   (engines never reference each other)

@@ -1,7 +1,7 @@
 using System.Text;
 using System.Text.RegularExpressions;
 
-namespace Migrator.Target.React.Generation;
+namespace Migrator.Target.Core.Ir;
 
 /// <summary>CLAUDE.md §8: strip Hungarian prefixes; btnSave -> handleSaveClick; txtFirstName -> state firstName.</summary>
 public static partial class Naming
