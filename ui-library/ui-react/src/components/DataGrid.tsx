@@ -10,7 +10,11 @@ export interface WfGridColumn {
 export type GridRow = Record<string, unknown>;
 export interface WfGridCellEdit { row: GridRow; field: string; rowIndex: number; value: unknown }
 /** A click or double click on a cell: the counterpart of DataGridViewCellEventArgs (`RowIndex`, `ColumnIndex`). */
-export interface WfGridCellEvent { row: GridRow; field: string; rowIndex: number; columnIndex: number }
+export interface WfGridCellEvent {
+  row: GridRow; field: string; rowIndex: number; columnIndex: number;
+  /** Only in `onCellFormatting`: the cell's value, which the handler may replace (DataGridViewCellFormattingEventArgs.Value). */
+  value?: unknown;
+}
 
 export interface WfDataGridProps {
   rows: GridRow[];
@@ -31,6 +35,8 @@ export interface WfDataGridProps {
   onRowSelect?: (rows: GridRow[]) => void;
   onCellClick?: (e: WfGridCellEvent) => void;
   onCellDoubleClick?: (e: WfGridCellEvent) => void;
+  /** Called for every cell shown, before it is drawn; the handler may replace `e.value` (CellFormatting). Keep it free of side effects: it runs on every render. */
+  onCellFormatting?: (e: WfGridCellEvent) => void;
   /** An edited cell: the grid never changes `rows`; the parent applies the value. Without this callback the edit is kept inside the grid. */
   onCellEdit?: (e: WfGridCellEdit) => void;
   id?: string;
@@ -51,7 +57,7 @@ const compare = (x: unknown, y: unknown): number =>
   x === y ? 0 : typeof x === 'number' && typeof y === 'number' ? x - y : String(x ?? '') < String(y ?? '') ? -1 : 1;
 
 export function WfDataGrid({
-  rows, columns, selectionMode = 'single', sortable = true, readOnly, rowKey, pageSize, resizable = true, onRowSelect, onCellClick, onCellDoubleClick, onCellEdit, id, className,
+  rows, columns, selectionMode = 'single', sortable = true, readOnly, rowKey, pageSize, resizable = true, onRowSelect, onCellClick, onCellDoubleClick, onCellFormatting, onCellEdit, id, className,
 }: WfDataGridProps) {
   const keyOf = (row: GridRow): unknown => (rowKey ? row[rowKey] : row);
   const [selected, setSelected] = useState<ReadonlySet<unknown>>(new Set());
@@ -157,6 +163,12 @@ export function WfDataGrid({
               <tr key={rowKey ? String(row[rowKey]) : i} aria-selected={isSelected} className={isSelected ? 'wf-row-selected' : undefined} onClick={e => pick(i, e.ctrlKey || e.metaKey)}>
                 {columns.map((c, ci) => {
                   const value = cellValue(row, c.field);
+                  let shown = value;
+                  if (onCellFormatting) {
+                    const formatting: WfGridCellEvent = { row, field: c.field, rowIndex: i, columnIndex: ci, value };
+                    onCellFormatting(formatting);
+                    shown = formatting.value;
+                  }
                   const isEditing = editing !== null && editing.key === keyOf(row) && editing.col === ci;
                   return (
                     <td key={`${ci}:${c.field}`} onClick={() => { setActiveField(c.field); onCellClick?.({ row, field: c.field, rowIndex: i, columnIndex: ci }); }} onDoubleClick={() => { onCellDoubleClick?.({ row, field: c.field, rowIndex: i, columnIndex: ci }); beginEdit(row, c, ci); }}>
@@ -167,7 +179,7 @@ export function WfDataGrid({
                                onBlur={() => commit(row, i, ci, parse(c, editing.draft, value))} />
                       ) : typeof value === 'boolean' && canEdit(c) ? (
                         <input type="checkbox" checked={value} onClick={e => e.stopPropagation()} onChange={e => apply(row, i, c, e.target.checked)} aria-label={c.header} />
-                      ) : (c.formatter ? c.formatter(value, row) : formatCell(value, c.format))}
+                      ) : (c.formatter ? c.formatter(shown, row) : formatCell(shown, c.format))}
                     </td>
                   );
                 })}

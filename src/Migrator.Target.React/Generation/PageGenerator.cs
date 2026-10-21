@@ -77,7 +77,7 @@ public sealed partial class PageGenerator
     private readonly bool _previewNavigation;
 
     /// <summary>Helpers of the generated `src/lib/csharp.ts`, imported by whichever file calls them.</summary>
-    internal static readonly string[] CsharpHelpers = { "formatString", "pathCombine", "getFileName", "getFileNameWithoutExtension", "getDirectoryName", "getExtension" };
+    internal static readonly string[] CsharpHelpers = { "formatString", "tryParseInt", "tryParseNumber", "pathCombine", "getFileName", "getFileNameWithoutExtension", "getDirectoryName", "getExtension" };
 
     /// <param name="preview">Visual-only pages for the component viewer: controls and layout as designed with placeholder data; no handlers, model, dialogs, translation or imports other than the UI library.</param>
     public PageGenerator(SpecCatalog spec, IReadOnlyDictionary<string, UnitIr> units, IReadOnlyDictionary<string, string> components, ISet<string> generated, TranslationEnv? translation = null, bool preview = false, bool previewNavigation = false)

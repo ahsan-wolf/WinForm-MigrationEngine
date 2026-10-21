@@ -221,6 +221,16 @@ public static class AppWriter
               return format.replace(/\{(\d+)(?::[^}]*)?\}/g, (_match, index: string) => String(args[Number(index)] ?? ''));
             }
 
+            /** int.TryParse: the integer a string holds (digits with an optional sign), or null when it is not one. */
+            export function tryParseInt(text: string): number | null {
+              return /^\s*[+-]?\d+\s*$/.test(text) ? Number(text) : null;
+            }
+
+            /** double.TryParse / decimal.TryParse (invariant format), or null. */
+            export function tryParseNumber(text: string): number | null {
+              return /^\s*[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?\s*$/.test(text) ? Number(text) : null;
+            }
+
             // System.IO.Path on plain strings (no file access): both '/' and '\\' separate, so Windows paths keep working in the browser.
             const separators = /[\\/]/;
             const rooted = (p: string) => /^([\\/]|[A-Za-z]:)/.test(p);

@@ -570,8 +570,10 @@ internal sealed partial class MethodTranslator
         var left = ma.Expression;
 
         if (ResourceImage(ma) is { } resourceImage) return resourceImage;
-        if (name is "RowIndex" or "ColumnIndex" && left is IdentifierNameSyntax eventArgument && IsGridEventArgument(eventArgument.Identifier.ValueText))
+        if (name is "RowIndex" or "ColumnIndex" or "Value" && left is IdentifierNameSyntax eventArgument && IsGridEventArgument(eventArgument.Identifier.ValueText))
             return $"{eventArgument.Identifier.ValueText}.{char.ToLowerInvariant(name[0])}{name[1..]}";
+        if (name is "CellStyle" or "FormattingApplied" or "DesiredType" && left is IdentifierNameSyntax styleArgument && IsGridEventArgument(styleArgument.Identifier.ValueText))
+            throw new Dropped($"e.{name} is appearance-only");
         if (ImageListMember(ma) is { } imageListMember) return imageListMember;
         if (TabCount(ma) is { } tabCount) return tabCount;
         if (HostCount(ma) is { } hostCount) return hostCount;
@@ -1567,6 +1569,18 @@ internal sealed partial class MethodTranslator
             var kept = string.Join(", ", sig.Keep.Select(i => all[i]));
             _scope.Output.UsesService = true;
             return Await($"{_scope.Vocabulary.InstanceName}.{type}.{method}({kept})", top);
+        }
+
+        // int.TryParse(text, out value): value takes the parsed number (0 when it is not one) and the call is true when it parsed.
+        if (method == "TryParse" && type is "int" or "Int32" or "long" or "Int64" or "short" or "Int16" or "double" or "Double" or "decimal" or "Decimal" or "float" or "Single"
+            && inv.ArgumentList.Arguments.Count == 2 && inv.ArgumentList.Arguments[1] is { RefKindKeyword.RawKind: (int)SyntaxKind.OutKeyword, Expression: IdentifierNameSyntax outTarget }
+            && !_poisoned.Contains(outTarget.Identifier.ValueText))
+        {
+            var parser = type is "int" or "Int32" or "long" or "Int64" or "short" or "Int16" ? "tryParseInt" : "tryParseNumber";
+            var source = Ex(inv.ArgumentList.Arguments[0].Expression);
+            var target = Ex(outTarget);
+            if (ReferenceEquals(inv, _statementCall)) return $"{target} = {parser}(String({source})) ?? 0"; // the result is unused: only the assignment
+            return $"(({target} = {parser}(String({source})) ?? 0), {parser}(String({source})) !== null)";
         }
 
         if (IsLoggingMethod(method)) return $"console.error({string.Join(", ", Args(inv))})";

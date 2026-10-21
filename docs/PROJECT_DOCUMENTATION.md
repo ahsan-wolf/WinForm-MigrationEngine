@@ -35,7 +35,7 @@ Dependency rule: `Cli → Engine → (Source.*, Target.*) → IR`; engines never
 | `src/Migrator.Target.React` | Target engine: spec catalog, page generator, layout deriver, naming, app writer, compile gate, contract-to-service emitter, rule translator, support-module emitter, report |
 | `src/Migrator.Cli` | Thin console (`engines`, `ir`, `contract`, `migrate`) and composition root |
 | `ui-library/ui-spec` | `controls.json` (control contract: WinForms types, props, events, a11y, examples) and `tokens.css` |
-| `ui-library/ui-react` | `@wfm/ui-react` 0.2.0 (36 WinForms-mapped controls, dialog service, `useWfModel`) |
+| `ui-library/ui-react` | `@wfm/ui-react` 0.3.0 (36 WinForms-mapped controls, dialog service, `useWfModel`) |
 | `build/IrReference.props` | The only place that decides how the shared IR is consumed |
 | `docs/`, `CLAUDE.md`, `SKILLS.md` | Documentation (this set) |
 | `local-inputs/`, `local-outputs/` | Git-ignored: backend DLLs and derived contracts. Never committed |
