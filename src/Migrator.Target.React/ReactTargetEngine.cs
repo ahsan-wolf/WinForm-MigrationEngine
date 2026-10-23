@@ -45,7 +45,7 @@ public sealed class ReactTargetEngine : IProjectTargetEngine
     public ReactTargetEngine(ReactTargetOptions options) => _options = options;
 
     public string Id => "react-app";
-    public Version Version { get; } = new(0, 4, 0);
+    public Version Version { get; } = new(0, 5, 0);
     public Version SchemaVersion { get; } = Version.Parse(IrSchema.Version);
     public string UiLibraryPackage => "@wfm/ui-react";
     public IReadOnlyList<string> RequiredSpecVersion { get; } = new[] { "^0.3" };

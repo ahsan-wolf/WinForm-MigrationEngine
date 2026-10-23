@@ -680,3 +680,37 @@ Every addition is done on a **new branch**, committed locally, **not pushed**; f
 
 ### Angular target (built: `angular-app`)
 Mapping in practice (`docs/guide/v0.4/09-angular.md`): every `Wf*` control is a standalone component `wf-*` with the same props and the canonical events as `wf` + name outputs (`(wfClick)`, `(wfValueChange)`); an element id is `controlId`; events with two values emit a tuple. A page is `x.page.ts` (component), `x.page.html` (template) and `x.page.code.ts` (factory `createXCode(dialog, props)` with `vm`, `f`, handlers, translated methods, `wiring`). The model is a plain object: zone.js re-renders after handlers. Routes use the Angular router (`/`, `/<page>`, `/pages`). The compile gate is `ngc --noEmit` with strict templates. To support a control in Angular: add the component to `ui-library/ui-angular/src`, list its class name in `AngularPageAssembler.Supported`, and add its event payload types to `JsxToAngular.PayloadTypes`.
+
+---
+
+## Skill 19 — Archetype Controls (grid, tree, menu, toolbar) for units code never opens
+
+A user control can be loaded at run time (menu data, a permission check, a database row, `Activator.CreateInstance`) so no `new X()` / `ShowDialog()` reaches it. The generator classifies each generated unit and builds the matching control; `docs/guide/v0.5/10-archetypes.md` has the details.
+
+### 19.1 Classification (designer first, name second)
+| Designer content (`inputThreshold` = 6 inputs at most) | Archetype | Primary control |
+|---|---|---|
+| `DataGridView` | Grid | `WfDataGrid` |
+| `TreeView` (no grid) | Tree | `WfTreeView` |
+| `MenuStrip` as the only content | Menu | `WfMenuBar` |
+| `ToolStrip` as the only content | Toolbar | `WfToolbar` |
+| `ListView` / `ListBox` | List | `WfListView` / `WfListBox` |
+| anything else (edit form, filter, dialog) | Form | as before |
+
+When the designer cannot decide (empty, or no data control and few inputs, in a user control), `rules/control-archetypes.json` name patterns apply, first match wins: `ucEmployeeGridControls` → Grid, `ucResourceTreeViewer` → Tree, `MainMenuStripControl` → Menu, `ToolStripControl` → Toolbar. Patterns are generic words, never application names.
+
+### 19.2 What is inferred where the designer is silent
+| Archetype | From the code | Else |
+|---|---|---|
+| Grid columns | `Columns.Add("name", "Header")`, `DataPropertyName = "x"`, `Columns["x"]`, `Cells["x"]`; properties of the row type of `DataSource` | 3 generic columns (only for a grid the pass added) |
+| Tree nodes | `new TreeNode("x")`, `Nodes.Add("x")` (top level) | generic sample tree, `// MOCK` |
+| Menu items | `new ToolStripMenuItem("x")`, `Items.Add("x")`, `DropDownItems.Add("x")` | `Menu 1..3`, marked |
+| Toolbar buttons | `new ToolStripButton("x")`, `Items.Add("x")` | `Button 1..3`, marked |
+
+A designer grid keeps its columns; code that adds columns at run time is translated as before (never duplicated). Everything inferred is listed under "Archetypes" in `MIGRATION_REPORT.md`.
+
+### 19.3 Hosting
+`--catalog` (implied by `--units all`) writes `/modules`: the units no code opens, grouped by archetype, opened in a content area (React `Modules.tsx`, Angular `modules.component.ts`). The original loading or permission logic is not translated (it stays commented C#).
+
+### 19.4 Adding a pattern
+Copy `rules/control-archetypes.json` outside the repo, add `{ "archetype": "grid|tree|menu|toolbar|list", "pattern": "<regex>" }`, pass `--archetypes <copy>`. No rebuild.
