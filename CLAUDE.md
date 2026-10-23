@@ -1,7 +1,7 @@
 # CLAUDE.md — WinForms Migration Engine (standalone, modular)
 
 Project guidance for Claude (and any agent). Read this first, then `SKILLS.md` for control-by-control mappings.
-Humans: `README.md` → `docs/USER_GUIDE.md` (run it) · `docs/PROJECT_DOCUMENTATION.md` (as-built architecture) · `docs/ENGINE_AUTHORING.md` (extend it) · `docs/PROJECT_PLAN.md` (status & roadmap).
+Humans: `README.md` → `docs/handbook/` (summary and detailed workflow) · `docs/USER_GUIDE.md` (option reference) · `docs/PROJECT_DOCUMENTATION.md` (as-built architecture) · `docs/ENGINE_AUTHORING.md` (extend it) · `docs/PROJECT_PLAN.md` (status & roadmap).
 This repo is a **separate project** from `WebFormsMigrator`. It reuses the same IR schema and contracts, but owns its own solution, engines, and UI library.
 
 ---
