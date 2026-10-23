@@ -69,7 +69,7 @@ internal static class AngularAppWriter
                     },
                     "serve": {
                       "builder": "@angular/build:dev-server",
-                      "options": { "buildTarget": "app:build" }
+                      "options": { "buildTarget": "app:build", "prebundle": false }
                     }
                   }
                 }
