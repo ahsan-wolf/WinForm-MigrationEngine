@@ -17,6 +17,9 @@ public sealed class AngularTargetOptions
 
     /// <summary>Markers of server-side code (data access, file system, configuration) that is left out of the browser app (data file).</summary>
     public string ServerBoundRulesPath { get; set; } = "rules/server-bound.json";
+
+    /// <summary>Name patterns that classify user controls the designer cannot: grid, tree, menu, toolbar, list (data file).</summary>
+    public string ArchetypeRulesPath { get; set; } = "rules/control-archetypes.json";
 }
 
 public sealed class AngularTargetModule : IEngineModule
@@ -26,7 +29,7 @@ public sealed class AngularTargetModule : IEngineModule
     public AngularTargetModule(EngineOptions options)
     {
         var bound = options.Bind<AngularTargetOptions>();
-        _options = new AngularTargetOptions { UiSpecPath = options.ResolvePath(bound.UiSpecPath), UiLibraryPath = options.ResolvePath(bound.UiLibraryPath), BypassRulesPath = options.ResolvePath(bound.BypassRulesPath), ServerBoundRulesPath = options.ResolvePath(bound.ServerBoundRulesPath) };
+        _options = new AngularTargetOptions { UiSpecPath = options.ResolvePath(bound.UiSpecPath), UiLibraryPath = options.ResolvePath(bound.UiLibraryPath), BypassRulesPath = options.ResolvePath(bound.BypassRulesPath), ServerBoundRulesPath = options.ResolvePath(bound.ServerBoundRulesPath), ArchetypeRulesPath = options.ResolvePath(bound.ArchetypeRulesPath) };
     }
 
     public void Register(IEngineRegistry registry) => registry.RegisterTarget(new AngularTargetEngine(_options));
@@ -39,7 +42,7 @@ public sealed class AngularTargetEngine : IProjectTargetEngine
     public AngularTargetEngine(AngularTargetOptions options) => _options = options;
 
     public string Id => "angular-app";
-    public Version Version { get; } = new(0, 4, 0);
+    public Version Version { get; } = new(0, 5, 0);
     public Version SchemaVersion { get; } = Version.Parse(IrSchema.Version);
     public string UiLibraryPackage => "@wfm/ui-angular";
     public IReadOnlyList<string> RequiredSpecVersion { get; } = new[] { "^0.3" };

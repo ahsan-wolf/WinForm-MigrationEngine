@@ -56,7 +56,7 @@ git branch -d <branch>
 - Behaviour comes from **structure** (base types such as `SoapHttpClientProtocol`, attributes such as `[WebMethod]`, static mutable state, API usage) or from **data**: the loaded contract, the IR, and an optional per-project profile/rules file that lives **with the project, outside this repo** (source paths, WSDL files, overrides, extra bypass rules). Defaults must work with no profile.
 - Rule lists (Windows-specific calls to bypass, name hints) are data files that can be extended without a rebuild, like `llm-config`.
 - Check before finishing a slice: `grep -rnE "<pilot names>" src ui-library` finds nothing outside comments; the pilot result is unchanged; when feasible, also run a second, different application.
-- Rule lists (`rules/windows-bypass.json`, `rules/server-bound.json`, `ui-spec/fallbacks.json`) are data: extend a copy per project, never hard-code application names in them.
+- Rule lists (`rules/windows-bypass.json`, `rules/server-bound.json`, `rules/control-archetypes.json`, `ui-spec/fallbacks.json`) are data: extend a copy per project, never hard-code application names in them.
 - Backend code (class libraries, ASMX/WCF services), WSDLs, URLs, credentials and connection strings of an application are **inputs**: read-only, kept in git-ignored folders, never committed, never emitted to browser code.
 
 ---
@@ -237,6 +237,11 @@ Rules:
 - Designer statements the parser does not understand are listed in `project.ir.json` `Shared.Unsupported` (`"{Unit}: {statement}"`, capped at 50 per unit) — never silently dropped.
 - Generators consume IR only. If something is missing from IR, **fix the extractor**, not the generator.
 
+### 4.2a Archetype controls (target side, no IR change)
+- A user control that code never opens (loaded dynamically or by permission logic) is classified by `ControlArchetypes` as Grid / Tree / Menu / Toolbar / List / Form: **designer content first, name patterns second** (`rules/control-archetypes.json`, data; generic words only, extend a copy per project with `--archetypes`).
+- A missing primary control, or its columns / nodes / items, is inferred from the designer, then from literals in the code, then from the row type of the data source, else marked generic placeholders; inferred parts carry the target-side pseudo-attributes `Archetype.*`, are marked `// MOCK` where they are data, and are listed under "Archetypes" in `MIGRATION_REPORT.md`. The IR files never contain them.
+- `--catalog` (implied by `--units all`) writes a `/modules` page in each target listing the units no code opens, by archetype. The loading / permission logic itself is not translated.
+
 ### 4.3 Known extractor limitations (carry into every report)
 - Handlers in a third partial-class file aren't resolved.
 - Only direct method calls become workflow steps (not 2+ levels deep); steps follow **call order** (implemented).
@@ -338,6 +343,7 @@ dotnet run --project src/Migrator.Cli -- ir --source <path> --out <dir>      # E
 dotnet run --project src/Migrator.Cli -- migrate --source <path> --out <dir> [--target react-app] [--entry <form>] [--depth <n|all>] [--contract <contract.json>]... [--translate none|rules|llm] [--images <folder>] [--compile-gate]   # EXISTS: ir step + app into <out>/react-app; rules = deterministic C#->TS (llm tier planned)
 dotnet run --project src/Migrator.Cli -- contract --assembly <dll> --out <dir>   # EXISTS: public API of a managed assembly from metadata only (never executed); use a git-ignored folder
 dotnet run --project src/Migrator.Cli -- backend --source <dir>... [--wsdl <dir>...] --out <dir>   # EXISTS: read-only survey of backend code (class libraries, ASMX) -> BACKEND_ANALYSIS.md; rules in rules/backend-patterns.json; git-ignored --out
+dotnet run --project src/Migrator.Cli -- migrate --source <path> --out <dir> --units all [--catalog] [--archetypes <rules.json>]   # EXISTS: also units no code opens; classifies grid/tree/menu/toolbar/list controls and writes the /modules catalog (react-app and angular-app)
 dotnet run --project src/Migrator.Cli -- migrate --source <path> --out <dir> --preview   # EXISTS: component viewer -> <out>/react-viewer: a visual-only page per form and user control + a sidebar shell (no handlers, data or logic)
 dotnet run --project src/Migrator.Cli -- migrate --source <path> --out <dir> --appshell  # EXISTS: WinForms-style app shell -> <out>/react-appshell: bordered host window, hyperlink navigation on the left, the selected unit in a form-style frame on the right (visual-only pages, same as --preview)
 set WFM_LLM_TARGET=react-app                                                   # opt-in LLM translation

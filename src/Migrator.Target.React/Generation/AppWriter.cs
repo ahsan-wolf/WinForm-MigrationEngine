@@ -11,8 +11,9 @@ public static class AppWriter
     private static readonly JsonSerializerOptions Pretty = new() { WriteIndented = true };
 
     /// <param name="entryComponent">The entry form's component; null for the viewer app, which writes its own entry point and needs no C# helpers.</param>
-    public static void Write(string appDir, string appName, string? entryComponent, string uiLibraryDir, List<string> files, string? favicon = null)
+    public static void Write(string appDir, string appName, string? entryComponent, string uiLibraryDir, List<string> files, string? favicon = null, IReadOnlyList<CatalogEntry>? catalog = null)
     {
+        var modules = catalog is { Count: > 0 };
         var uiRelative = Path.GetRelativePath(appDir, uiLibraryDir).Replace('\\', '/');
         var package = new Dictionary<string, object>
         {
@@ -128,7 +129,7 @@ public static class AppWriter
             import '@wfm/ui-react/styles.css';
             import './app.css';
             import { {{entryComponent}} } from './pages/{{entryComponent}}';
-            import { navigate, routeFor, routeUrl, usePath } from './lib/router';
+            import { navigate, routeFor, routeUrl, usePath } from './lib/router';{{ModulesImport(modules)}}
 
             // One route per generated page: `/` is the entry form, `/<page-name>` opens any other page on its own (with mock data), `/pages` lists them all.
             // Forms the entry form opens through ShowDialog() are normally reached from it, but those whose constructor arguments
@@ -153,7 +154,7 @@ public static class AppWriter
 
             function Index() {
               return (
-                <ul>
+                <ul>{{ModulesLink(modules)}}
                   {pages.map((p) => <li key={p.name}><a href={routeUrl(p.route)} onClick={(e) => { e.preventDefault(); navigate(p.route); } }>{p.name}</a></li>)}
                 </ul>
               );
@@ -162,7 +163,7 @@ public static class AppWriter
             function App() {
               const path = usePath();
               const selected = pages.find((p) => p.route === path);
-              const view = path === '' ? <{{entryComponent}} /> : path === 'pages' ? <Index /> : selected ? <Suspense fallback={null}><selected.Page /></Suspense> : <Index />;
+              const view = path === '' ? <{{entryComponent}} /> : path === 'pages' ? <Index /> : {{ModulesRoute(modules)}}selected ? <Suspense fallback={null}><selected.Page /></Suspense> : <Index />;
               return <Boundary key={path}>{view}</Boundary>;
             }
 
@@ -173,6 +174,8 @@ public static class AppWriter
               </StrictMode>,
             );
             """, files);
+
+        if (modules) Put(appDir, "src/Modules.tsx", ModulesSource(catalog!), files);
 
         // Routes on the History API and the URL API, no router package: a route is a path relative to the document base.
         Put(appDir, "src/lib/router.ts", """
@@ -230,6 +233,65 @@ public static class AppWriter
             .wfm-main { display: flex; gap: 8px; flex: 1 1 auto; min-height: 0; }
             .wfm-fill { flex: 1 1 auto; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
             """, files);
+    }
+
+    private static string ModulesImport(bool on) => on ? "\nimport { ModulesPage } from './Modules';" : "";
+    private static string ModulesRoute(bool on) => on ? "path === 'modules' ? <ModulesPage /> : " : "";
+    private static string ModulesLink(bool on) => on ? "\n                  <li><a href={routeUrl('modules')} onClick={(e) => { e.preventDefault(); navigate('modules'); } }><b>Modules</b> (units the original opens dynamically)</a></li>" : "";
+
+    /// <summary>
+    /// The `/modules` page: the units the original loads dynamically (or by permission logic), listed by archetype; the selected one opens in the content area.
+    /// </summary>
+    private static string ModulesSource(IReadOnlyList<CatalogEntry> catalog)
+    {
+        var entries = string.Join(",\n  ", catalog.Select(e => $"{{ unit: {JsonSerializer.Serialize(e.Unit)}, component: {JsonSerializer.Serialize(e.Component)}, archetype: {JsonSerializer.Serialize(e.Archetype.ToString())}, title: {JsonSerializer.Serialize(e.Title)} }}"));
+        return $$$"""
+            import { Component, Suspense, lazy, useState, type ComponentType, type ReactNode } from 'react';
+
+            // The units the original opens dynamically (a menu tree, a permission check, a database row): every one the entry form never opens by code,
+            // grouped by what it is (grid, tree, menu, toolbar, list or form). Selecting one opens it here, standing in for the original loading logic.
+            const modules = [
+              {{{entries}}},
+            ];
+            const loaders = import.meta.glob(['./pages/*.tsx', '!./pages/*.code.tsx']) as Record<string, () => Promise<Record<string, unknown>>>;
+            const views: Record<string, ComponentType<object>> = Object.fromEntries(modules.map((m) => [
+              m.component,
+              lazy(async () => ({ default: (await loaders[`./pages/${m.component}.tsx`]())[m.component] as ComponentType<object> })),
+            ]));
+
+            class Boundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+              state = { error: null as Error | null };
+              static getDerivedStateFromError(error: Error) { return { error }; }
+              render() { return this.state.error ? <pre role="alert">{String(this.state.error.stack ?? this.state.error)}</pre> : this.props.children; }
+            }
+
+            export function ModulesPage() {
+              const [selected, setSelected] = useState<string | null>(null);
+              const archetypes = [...new Set(modules.map((m) => m.archetype))];
+              const View = selected ? views[selected] : null;
+              return (
+                <div className="wfm-modules" style={{ display: 'flex', height: '100%', gap: 8 }}>
+                  <nav aria-label="Modules" style={{ width: 280, overflow: 'auto', flex: '0 0 auto', borderRight: '1px solid var(--wf-border, #ccc)', padding: 8 }}>
+                    {archetypes.map((a) => (
+                      <section key={a}>
+                        <h3>{a} ({modules.filter((m) => m.archetype === a).length})</h3>
+                        <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+                          {modules.filter((m) => m.archetype === a).map((m) => (
+                            <li key={m.component}>
+                              <button type="button" aria-current={selected === m.component} onClick={() => setSelected(m.component)} style={{ all: 'unset', cursor: 'pointer', fontWeight: selected === m.component ? 700 : 400 }}>{m.unit}</button>
+                            </li>
+                          ))}
+                        </ul>
+                      </section>
+                    ))}
+                  </nav>
+                  <main style={{ flex: '1 1 auto', minWidth: 0, overflow: 'auto', padding: 8 }}>
+                    {View ? <Boundary key={selected}><Suspense fallback={null}><View /></Suspense></Boundary> : <p>Select a module.</p>}
+                  </main>
+                </div>
+              );
+            }
+            """;
     }
 
     /// <summary>`<link rel="icon">` for the form icon (relative, so it resolves against the app base); empty when the entry form has no icon.</summary>

@@ -64,6 +64,8 @@ Use an output folder **outside the repository**. Never commit generated output d
 | `--entry <form>` | Entry form (default: the startup form from `Program.cs`) |
 | `--no-external-projects` | Do not follow `ProjectReference`s that point outside the source folder (by default their classes are included as typed API shapes) |
 | `--units all` | Generate every form and user control, not only the ones reachable from the entry form (use for shells that open screens from menu data) |
+| `--catalog` | Also write a `/modules` page (React and Angular) that lists the units no code opens (loaded dynamically or by permission logic in the original) by archetype and opens the selected one; generates those units. Implied by `--units all` |
+| `--archetypes <file>` | A copy of `rules/control-archetypes.json` with project-specific name patterns that classify grid, tree, menu, toolbar and list controls when the designer cannot (kept with the project, outside this repository) |
 | `--depth <n\|all>` | How many `Show/ShowDialog` hops from the entry form to generate (default 1; `all` = everything reachable) |
 | `--translate none\|rules\|llm` | `none`: handlers stay commented C#. `rules`: deterministic C# -> TypeScript. `llm` currently behaves like `rules` (LLM tier planned) |
 | `--compile-gate` | Run `npm install` if needed, then `tsc`; methods that do not compile are demoted back to commented C# and the page is regenerated (up to 5 rounds). Without the flag the gate runs only if dependencies already exist; `--no-compile-gate` skips it |
@@ -98,6 +100,7 @@ Colours and fonts are CSS variables at the top of `src/appshell.css` (system-sty
 
 ### 6.1 The report (`MIGRATION_REPORT.md`)
 - **Translation table** — per form: methods, complete, partial, not translated. *Complete* = every statement translated. *Partial* = some statements stayed as commented C# with a TODO. *Not translated* = the whole method stays commented (a typed stub keeps callers compiling).
+- **Archetypes** — what each unit is for (grid, tree, menu, toolbar, list or form), what decided it (designer, name or both), which controls, columns, nodes and items were inferred from the code, and how many units the `/modules` catalog lists. Inferred parts are marked; check them against the original.
 - **Most common reasons** — the fastest way to see what blocks more automation (for example `ref`/`out` arguments, `ConfigurationManager`).
 - **Project classes** — the same for `src/support/index.ts`.
 - **Manual work by category** — controls with no library component, navigation that needs a decision, grids whose columns are created in code, non-visual components, contract notes, compile errors outside translated methods.

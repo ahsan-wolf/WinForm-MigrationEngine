@@ -43,5 +43,6 @@ Angular 21 needs Node 20.19, 22.12 or newer (Angular 22 needs 22.22+; the genera
 ## 9.6 Limits
 - Viewer and app shell: React only.
 - The tree's lazy loading shows the children when the handler fills them (no "Loading…" row); the grid keeps a local copy of an edited cell and also emits `wfCellEdit`.
+- The dev server (`npm start`) runs with `prebundle: false` in `angular.json`: with prebundling the library sources and the app end up with two copies of Angular and the page stays blank (NG0203).
 - `base href` is `/`; to host under a sub-path build with `ng build --base-href /app/`.
 - Same translator residue as React (see the roadmap).

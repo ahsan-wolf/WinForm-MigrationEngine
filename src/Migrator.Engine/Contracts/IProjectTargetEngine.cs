@@ -24,6 +24,15 @@ public sealed class GenerationOptions
     /// <summary>Generate every form and user control of the project, not only those reachable from the entry form by Show/ShowDialog (needed for shells that open modules dynamically).</summary>
     public bool AllUnits { get; init; }
 
+    /// <summary>
+    /// Generate a `/modules` catalog page: every unit that code never opens (loaded dynamically or by permission logic in the original) listed by archetype
+    /// (grid, tree, menu, toolbar, list, form) and opened in a content area. Implies generating those units, like <see cref="AllUnits"/>; on by default with it.
+    /// </summary>
+    public bool Catalog { get; init; }
+
+    /// <summary>Name patterns that decide a unit's archetype when its designer cannot (data file, `rules/control-archetypes.json`); null = the target's default.</summary>
+    public string? ArchetypeRulesPath { get; init; }
+
     /// <summary>contract.json files (from `migrator contract`) of binary-only dependencies the app calls; the target emits typed mock services from them.</summary>
     public IReadOnlyList<string> ContractFiles { get; init; } = Array.Empty<string>();
 
