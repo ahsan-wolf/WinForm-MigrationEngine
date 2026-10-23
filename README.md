@@ -13,6 +13,7 @@ Output is a starting point, not a finished product: data is mock, translated log
 
 | Read | For |
 |---|---|
+| [docs/handbook/README.md](docs/handbook/README.md) | **Start here:** the handbook — summary, setup, the Migrator UI and the command line, the detailed workflow, every option, reading the results, troubleshooting |
 | [docs/USER_GUIDE.md](docs/USER_GUIDE.md) | Running a migration, reading the results, troubleshooting |
 | [docs/PROJECT_DOCUMENTATION.md](docs/PROJECT_DOCUMENTATION.md) | As-built architecture, pipeline, IR, translation, results |
 | [docs/PROJECT_PLAN.md](docs/PROJECT_PLAN.md) | Status, scope, plan, risks, roadmap |

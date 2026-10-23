@@ -1,5 +1,7 @@
 # User guide — running the WinForms Migration Engine
 
+> **New:** the [handbook](handbook/README.md) is the task-oriented guide (summary, setup, UI and CLI, step-by-step workflow, options, results, troubleshooting). This file stays as the single-file reference.
+
 This guide is for the person who runs a migration: you point the tool at a legacy WinForms project and get a React app, an intermediate model (the IR) and a report of what still needs manual work.
 For architecture see `PROJECT_DOCUMENTATION.md`; for rules and git workflow see `CLAUDE.md`; for control mappings see `SKILLS.md`.
 
