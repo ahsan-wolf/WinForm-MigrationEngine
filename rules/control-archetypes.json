@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "note": "Archetypes of user controls (grid, tree, menu, toolbar, list). The designer decides first: a unit whose visual content is mainly a DataGridView / TreeView / MenuStrip / ToolStrip / ListView is that archetype. These name patterns apply only when the designer cannot decide (an empty or near-empty designer, or no data control with only a few inputs), e.g. a control that builds its grid, tree or menu in code. A unit with more than inputThreshold input controls is an edit form and keeps its designer. Patterns are case-insensitive regular expressions tried against the class name and against the name without its Hungarian prefix, in order; first match wins. Data only: extend a copy per project (generic words only, no application names) and point --archetypes at it.",
+  "inputThreshold": 6,
+  "names": [
+    { "archetype": "menu", "pattern": "Menu(Strip|Bar)?(Control)?$" },
+    { "archetype": "toolbar", "pattern": "Tool(Strip|Bar)(Control)?$" },
+    { "archetype": "tree", "pattern": "Tree(View|Viewer|Control)?$" },
+    { "archetype": "grid", "pattern": "Grid(View|Viewer|Control)?s?$|DataGrid" },
+    { "archetype": "list", "pattern": "List(View|Viewer|Control)?$" }
+  ]
+}

@@ -1,4 +1,5 @@
 using System.Text;
+using Migrator.Target.Core.Generation;
 using System.Text.Json;
 using Migrator.Target.Core.Ir;
 
@@ -12,7 +13,7 @@ internal static class AngularAppWriter
 {
     private static readonly JsonSerializerOptions Pretty = new() { WriteIndented = true };
 
-    public static void Write(string appDir, string appName, string entryComponent, string uiAngularDir, IReadOnlyList<PageEntry> pages, List<string> files, string? favicon)
+    public static void Write(string appDir, string appName, string entryComponent, string uiAngularDir, IReadOnlyList<PageEntry> pages, List<string> files, string? favicon, IReadOnlyList<CatalogEntry> catalog)
     {
         var uiAngular = Rel(appDir, uiAngularDir);
         var uiCoreDir = Path.GetFullPath(Path.Combine(uiAngularDir, "..", "ui-core"));
@@ -192,16 +193,20 @@ internal static class AngularAppWriter
         var routes = new StringBuilder();
         routes.AppendLine("import type { Routes } from '@angular/router';");
         routes.AppendLine("import { PagesComponent } from './pages.component';");
+        if (catalog.Count > 0) routes.AppendLine("import { ModulesComponent } from './modules.component';");
         routes.AppendLine();
         routes.AppendLine("export const routes: Routes = [");
         routes.AppendLine($"  {{ path: '', pathMatch: 'full', loadComponent: () => import('../pages/{pages.FirstOrDefault(p => p.Component == entryComponent)?.FileBase ?? "entry"}.page').then((m) => m.{entryComponent}) }},");
         routes.AppendLine("  { path: 'pages', component: PagesComponent },");
+        if (catalog.Count > 0) routes.AppendLine("  { path: 'modules', component: ModulesComponent },");
         foreach (var page in pages.OrderBy(p => p.FileBase, StringComparer.Ordinal))
             routes.AppendLine($"  {{ path: '{page.FileBase}', loadComponent: () => import('../pages/{page.FileBase}.page').then((m) => m.{page.Component}) }},");
         routes.AppendLine("  { path: '**', component: PagesComponent },");
         routes.AppendLine("];");
         OutputFiles.Put(appDir, "src/app/app.routes.ts", routes.ToString(), files);
 
+        var modulesLink = catalog.Count > 0 ? "<li><a routerLink=\"/modules\"><b>Modules</b> (units the original opens dynamically)</a></li>" : "";
+        if (catalog.Count > 0) OutputFiles.Put(appDir, "src/app/modules.component.ts", ModulesSource(catalog, pages), files);
         var list = string.Join(", ", pages.OrderBy(p => p.FileBase, StringComparer.Ordinal).Select(p => $"{{ name: '{p.Component}', route: '/{p.FileBase}' }}"));
         OutputFiles.Put(appDir, "src/app/pages.component.ts", $$$"""
             import { Component } from '@angular/core';
@@ -212,7 +217,7 @@ internal static class AngularAppWriter
               selector: 'app-pages',
               standalone: true,
               imports: [RouterLink],
-              template: `<ul>@for (page of pages; track page.route) { <li><a [routerLink]="page.route">{{ page.name }}</a></li> }</ul>`,
+              template: `<ul>{{{modulesLink}}}@for (page of pages; track page.route) { <li><a [routerLink]="page.route">{{ page.name }}</a></li> }</ul>`,
             })
             export class PagesComponent {
               protected readonly pages = [{{{list}}}];
@@ -240,6 +245,64 @@ internal static class AngularAppWriter
             """, files);
 
         OutputFiles.Put(appDir, "src/lib/csharp.ts", Migrator.Target.Core.Translation.CsharpRuntime.Source, files);
+    }
+
+    /// <summary>
+    /// The `/modules` page: the units the original loads dynamically (or by permission logic), listed by archetype; the selected one opens in the content area.
+    /// </summary>
+    private static string ModulesSource(IReadOnlyList<CatalogEntry> catalog, IReadOnlyList<PageEntry> pages)
+    {
+        var entries = string.Join(",\n  ", catalog.Select(e =>
+        {
+            var file = pages.FirstOrDefault(p => p.Component == e.Component)?.FileBase ?? "";
+            return $"{{ unit: {System.Text.Json.JsonSerializer.Serialize(e.Unit)}, archetype: {System.Text.Json.JsonSerializer.Serialize(e.Archetype.ToString())}, load: () => import('../pages/{file}.page').then((m) => m.{e.Component}) }}";
+        }));
+        return $$$"""
+            import { Component, signal, type Type } from '@angular/core';
+            import { NgComponentOutlet } from '@angular/common';
+
+            interface Module { unit: string; archetype: string; load: () => Promise<Type<unknown>> }
+
+            // The units the original opens dynamically (a menu tree, a permission check, a database row): every one the entry form never opens by code,
+            // grouped by what it is (grid, tree, menu, toolbar, list or form). Selecting one opens it here, standing in for the original loading logic.
+            const modules: Module[] = [
+              {{{entries}}},
+            ];
+
+            @Component({
+              selector: 'app-modules',
+              standalone: true,
+              imports: [NgComponentOutlet],
+              template: `<div class="wfm-modules" style="display: flex; height: 100%; gap: 8px">
+                <nav aria-label="Modules" style="width: 280px; overflow: auto; flex: 0 0 auto; padding: 8px">
+                  @for (a of archetypes; track a) {
+                    <section>
+                      <h3>{{ a }} ({{ of(a).length }})</h3>
+                      <ul style="list-style: none; margin: 0; padding: 0">
+                        @for (m of of(a); track m.unit) {
+                          <li><button type="button" style="all: unset; cursor: pointer" [style.font-weight]="selected()?.unit === m.unit ? 700 : 400" (click)="open(m)">{{ m.unit }}</button></li>
+                        }
+                      </ul>
+                    </section>
+                  }
+                </nav>
+                <main style="flex: 1 1 auto; min-width: 0; overflow: auto; padding: 8px">
+                  @if (view(); as v) { <ng-container *ngComponentOutlet="v" /> } @else { <p>Select a module.</p> }
+                </main>
+              </div>`,
+            })
+            export class ModulesComponent {
+              protected readonly archetypes = [...new Set(modules.map((m) => m.archetype))];
+              protected readonly selected = signal<Module | null>(null);
+              protected readonly view = signal<Type<unknown> | null>(null);
+              protected of(archetype: string): Module[] { return modules.filter((m) => m.archetype === archetype); }
+              protected async open(m: Module): Promise<void> {
+                this.view.set(null);
+                this.selected.set(m);
+                this.view.set(await m.load());
+              }
+            }
+            """;
     }
 
     private static string Rel(string fromDir, string toDir) => Path.GetRelativePath(fromDir, toDir).Replace('\\', '/');

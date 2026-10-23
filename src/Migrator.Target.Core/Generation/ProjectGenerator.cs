@@ -5,6 +5,7 @@ using Migrator.Target.Core.Contracts;
 using Migrator.Target.Core.Ir;
 using Migrator.Target.Core.Spec;
 using Migrator.Target.Core.Translation;
+using WebFormsMigrator.IR.Models;
 
 namespace Migrator.Target.Core.Generation;
 
@@ -28,7 +29,8 @@ public sealed class ProjectGenerator
         if (!ir.Units.ContainsKey(entry)) throw new InvalidOperationException($"Entry form '{entry}' is not in project.ir.json.");
 
         var scope = Reachable(ir, entry, options.Depth);
-        if (options.AllUnits)
+        var opened = new HashSet<string>(scope.Keys, StringComparer.Ordinal);
+        if (options.AllUnits || options.Catalog)
             foreach (var name in ir.Units.Keys.OrderBy(n => n, StringComparer.Ordinal)) scope.TryAdd(name, 99);
         var components = new Dictionary<string, string>(StringComparer.Ordinal);
         var taken = new NameScope(Array.Empty<string>());
@@ -36,6 +38,13 @@ public sealed class ProjectGenerator
 
         var result = new GenerationResult { OutputDirectory = outputDirectory };
         var scopeUnits = scope.Keys.Select(n => ir.Units[n]).ToList();
+
+        // Archetypes: what each unit is for (grid, tree, menu, toolbar, list or an ordinary form), by designer first and name second. A unit whose designer
+        // under-specifies its archetype gets the missing control or its columns / nodes / items inferred from its code before any page is generated.
+        var archetypeRules = ArchetypeRules.Load(options.ArchetypeRulesPath ?? _backend.ArchetypeRulesPath);
+        var archetypes = ControlArchetypes.Classify(scope.Keys.ToDictionary(n => n, n => ir.Units[n], StringComparer.Ordinal), archetypeRules);
+        foreach (var (name, info) in archetypes) ControlArchetypes.Synthesize(ir.Units[name], info, type => ir.Support?.Classes
+            .FirstOrDefault(k => k.Name == type && k.Kind != "enum")?.Members.Where(m => m.Kind == MemberKind.Property && m.Visibility == Visibility.Public && !m.IsStatic).Select(m => m.Name).ToList());
 
         // Only the project classes the generated pages reach (directly or through each other) become part of the app.
         var serverRules = ServerBoundRules.Load(_backend.ServerBoundRulesPath);
@@ -118,8 +127,14 @@ public sealed class ProjectGenerator
                 favicon = $"favicon.{icon.Extension}";
                 OutputFiles.PutBytes(outputDirectory, "public/" + favicon, icon.Data, result.Files);
             }
+            // The catalog lists what the original opens dynamically: every generated unit that no Show / ShowDialog / `new` reaches from the entry form.
+            var catalog = (options.Catalog || options.AllUnits)
+                ? pages.Where(p => !opened.Contains(p.Unit) && p.Unit != entry)
+                    .Select(p => new CatalogEntry(p.Unit, p.Page.ComponentName, archetypes.TryGetValue(p.Unit, out var a) ? a.Archetype : ControlArchetype.Form, ir.Units[p.Unit].Title, false, ir.Units[p.Unit].IsUserControl))
+                    .OrderBy(e => e.Archetype).ThenBy(e => e.Unit, StringComparer.Ordinal).ToList()
+                : new List<CatalogEntry>();
             _backend.WriteApp(outputDirectory, "migrated-" + Naming.Camel(Naming.StripPrefix(entry)).ToLowerInvariant(), entryComponent,
-                Path.GetFullPath(_backend.UiLibraryPath), result.Files, favicon);
+                Path.GetFullPath(_backend.UiLibraryPath), result.Files, favicon, catalog);
         }
 
         var gate = translate ? RunCompileGate(outputDirectory, options, generator, ir, pages, result, support) : new GateSummary();
@@ -143,7 +158,7 @@ public sealed class ProjectGenerator
             }
         }
 
-        OutputFiles.Put(outputDirectory, "MIGRATION_REPORT.md", Report(ir, entry, options, spec, pages, result, skippedOutOfScope, contracts, translate, gate, support?.Module, serverBound), result.Files);
+        OutputFiles.Put(outputDirectory, "MIGRATION_REPORT.md", Report(ir, entry, options, spec, pages, result, skippedOutOfScope, contracts, translate, gate, support?.Module, serverBound, archetypes, opened, options.Catalog || options.AllUnits), result.Files);
         return result;
     }
 
@@ -314,8 +329,45 @@ public sealed class ProjectGenerator
             .Select(m => m.Groups[1].Value).Distinct(StringComparer.Ordinal)
             .Where(n => ir.Units.TryGetValue(n, out var u) && u.IsUserControl);
 
+    /// <summary>Archetypes of the generated units, what was inferred for the ones the designer under-specifies, and the `/modules` catalog.</summary>
+    private static void ArchetypeSection(StringBuilder sb, IEnumerable<string> generated, Dictionary<string, ArchetypeInfo> archetypes, HashSet<string> opened, string entry, bool catalog)
+    {
+        var infos = generated.Where(archetypes.ContainsKey).Select(u => archetypes[u]).ToList();
+        var special = infos.Where(i => i.Archetype != ControlArchetype.Form).ToList();
+        if (special.Count == 0 && !catalog) return;
+        sb.AppendLine();
+        sb.AppendLine("## Archetypes");
+        sb.AppendLine();
+        sb.AppendLine("What each unit is for, by its designer first and its name second (`rules/control-archetypes.json`): "
+            + string.Join(", ", infos.GroupBy(i => i.Archetype).OrderBy(g => g.Key).Select(g => $"**{g.Count()}** {g.Key.ToString().ToLowerInvariant()}")) + ".");
+        if (special.Count > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine("| Unit | Archetype | Decided by | Primary control | Opened by code |");
+            sb.AppendLine("|---|---|---|---|---|");
+            foreach (var i in special) sb.AppendLine($"| {i.Unit} | {i.Archetype} | {i.Source} | {(i.Primary is null ? "added" : $"`{i.Primary}`")} | {(opened.Contains(i.Unit) ? "yes" : "no")} |");
+        }
+        var inferred = infos.SelectMany(i => i.Inferred.Select(t => (i.Unit, t))).ToList();
+        if (inferred.Count > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine("Inferred where the designer is silent (the generated controls are marked; check them against the original):");
+            sb.AppendLine();
+            foreach (var (unit, text) in inferred) sb.AppendLine($"- **{unit}**: {text}");
+        }
+        if (catalog)
+        {
+            var catalogued = infos.Where(i => !opened.Contains(i.Unit) && i.Unit != entry).ToList();
+            sb.AppendLine();
+            sb.AppendLine(catalogued.Count == 0
+                ? "Every generated unit is opened by code; the `/modules` catalog is not written."
+                : $"**{catalogued.Count}** unit(s) are never opened by code in the original (loaded dynamically or by permission logic): they are listed in the app at `/modules` by archetype and open in a content area. The permission or loading logic itself is not translated.");
+        }
+    }
+
     private string Report(IrFolder ir, string entry, GenerationOptions options, SpecCatalog spec,
-        List<(string Unit, int Depth, GeneratedPage Page)> pages, GenerationResult result, List<string> outOfScope, List<ContractEmitResult> contracts, bool translate, GateSummary gate, SupportModule? supportModule, List<string> serverBound)
+        List<(string Unit, int Depth, GeneratedPage Page)> pages, GenerationResult result, List<string> outOfScope, List<ContractEmitResult> contracts, bool translate, GateSummary gate, SupportModule? supportModule, List<string> serverBound,
+        Dictionary<string, ArchetypeInfo> archetypes, HashSet<string> opened, bool catalog)
     {
         var sb = new StringBuilder();
         sb.AppendLine($"# Migration report — {_backend.Key}");
@@ -334,6 +386,8 @@ public sealed class ProjectGenerator
         sb.AppendLine("|---|---|---:|---:|---:|---:|---:|");
         foreach (var (unit, depth, page) in pages)
             sb.AppendLine($"| {unit} | `{page.ComponentName}` | {depth} | {page.Controls} | {page.Handlers} | {page.NavigationHandlers} | {page.Issues.Count + page.NonVisual.Count} |");
+
+        ArchetypeSection(sb, pages.Select(p => p.Unit), archetypes, opened, entry, catalog);
 
         var extracted = pages.Sum(p => p.Page.IconsExtracted);
         var converted = pages.Sum(p => p.Page.IconsConverted);

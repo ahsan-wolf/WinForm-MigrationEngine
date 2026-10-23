@@ -922,9 +922,12 @@ public sealed partial class PageGenerator : IPageGenerator
         foreach (var id in c.TreeViewIds)
         {
             if (Regex.IsMatch(code, $@"\bvm\.{Regex.Escape(id)}\.nodes(\.(push|splice)\b|\s*=[^=])")) continue;
-            c.Model[id]["nodes"] = SampleTree + " as WfTreeNode[]";
+            // Node names the archetype pass read from the code (`new TreeNode("Reports")`) beat the generic sample.
+            var named = c.ById.TryGetValue(id, out var treeNode) && treeNode.Attributes.TryGetValue("Archetype.Nodes", out var json)
+                ? JsonSerializer.Deserialize<List<string>>(json) : null;
+            c.Model[id]["nodes"] = (named is { Count: > 0 } ? "[" + string.Join(", ", named.Select(t => $"wfTreeNode({Str(t)})")) + "]" : SampleTree) + " as WfTreeNode[]";
             c.Lib.Add("wfTreeNode");
-            c.ModelComments.Add($"// MOCK — {id} nodes are sample data: the original fills it in code that is not translated; replace with real implementation");
+            c.ModelComments.Add($"// MOCK — {id} nodes are sample data{(named is { Count: > 0 } ? " (names read from the original code)" : "")}: the original fills it in code that is not translated; replace with real implementation");
         }
     }
 

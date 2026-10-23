@@ -20,6 +20,7 @@ public sealed class ReactBackend : ITargetBackend
     public string UiLibraryPackage => "@wfm/ui-react";
     public string BypassRulesPath => _options.BypassRulesPath;
     public string ServerBoundRulesPath => _options.ServerBoundRulesPath;
+    public string ArchetypeRulesPath => _options.ArchetypeRulesPath;
 
     public IPageGenerator CreatePageGenerator(SpecCatalog spec, IReadOnlyDictionary<string, UnitIr> units, IReadOnlyDictionary<string, string> components, ISet<string> generated, TranslationEnv? env) =>
         new PageGenerator(spec, units, components, generated, env);
@@ -34,8 +35,8 @@ public sealed class ReactBackend : ITargetBackend
 
     public string CodeFilePath(GeneratedPage page) => $"src/pages/{page.ComponentName}.code.tsx";
 
-    public void WriteApp(string appDir, string appName, string entryComponent, string uiLibraryDir, List<string> files, string? favicon) =>
-        AppWriter.Write(appDir, appName, entryComponent, uiLibraryDir, files, favicon);
+    public void WriteApp(string appDir, string appName, string entryComponent, string uiLibraryDir, List<string> files, string? favicon, IReadOnlyList<CatalogEntry> catalog) =>
+        AppWriter.Write(appDir, appName, entryComponent, uiLibraryDir, files, favicon, catalog);
 
     public bool CanRunTypeCheck(string appDir) => CompileGate.CanRun(appDir);
     public bool TryInstall(string appDir, out string error) => CompileGate.TryInstall(appDir, out error);

@@ -20,6 +20,9 @@ public sealed class ReactTargetOptions
 
     /// <summary>Markers of server-side code (data access, file system, configuration) that is left out of the browser app (data file).</summary>
     public string ServerBoundRulesPath { get; set; } = "rules/server-bound.json";
+
+    /// <summary>Name patterns that classify user controls the designer cannot: grid, tree, menu, toolbar, list (data file).</summary>
+    public string ArchetypeRulesPath { get; set; } = "rules/control-archetypes.json";
 }
 
 public sealed class ReactTargetModule : IEngineModule
@@ -29,7 +32,7 @@ public sealed class ReactTargetModule : IEngineModule
     public ReactTargetModule(EngineOptions options)
     {
         var bound = options.Bind<ReactTargetOptions>();
-        _options = new ReactTargetOptions { UiSpecPath = options.ResolvePath(bound.UiSpecPath), UiLibraryPath = options.ResolvePath(bound.UiLibraryPath), BypassRulesPath = options.ResolvePath(bound.BypassRulesPath), ServerBoundRulesPath = options.ResolvePath(bound.ServerBoundRulesPath) };
+        _options = new ReactTargetOptions { UiSpecPath = options.ResolvePath(bound.UiSpecPath), UiLibraryPath = options.ResolvePath(bound.UiLibraryPath), BypassRulesPath = options.ResolvePath(bound.BypassRulesPath), ServerBoundRulesPath = options.ResolvePath(bound.ServerBoundRulesPath), ArchetypeRulesPath = options.ResolvePath(bound.ArchetypeRulesPath) };
     }
 
     public void Register(IEngineRegistry registry) => registry.RegisterTarget(new ReactTargetEngine(_options));

@@ -28,6 +28,9 @@ public interface ITargetBackend
     string BypassRulesPath { get; }
     string ServerBoundRulesPath { get; }
 
+    /// <summary>`rules/control-archetypes.json`: name patterns that classify user controls the designer cannot (data file).</summary>
+    string ArchetypeRulesPath { get; }
+
     IPageGenerator CreatePageGenerator(SpecCatalog spec, IReadOnlyDictionary<string, UnitIr> units, IReadOnlyDictionary<string, string> components, ISet<string> generated, TranslationEnv? env);
 
     /// <summary>Writes the page's files (markup, code-behind, legacy copy, assets).</summary>
@@ -37,7 +40,8 @@ public interface ITargetBackend
     string CodeFilePath(GeneratedPage page);
 
     /// <summary>Package, build config, entry point, routes and base styles.</summary>
-    void WriteApp(string appDir, string appName, string entryComponent, string uiLibraryDir, List<string> files, string? favicon);
+    /// <param name="catalog">The units of the `/modules` catalog page (empty = no catalog page).</param>
+    void WriteApp(string appDir, string appName, string entryComponent, string uiLibraryDir, List<string> files, string? favicon, IReadOnlyList<CatalogEntry> catalog);
 
     bool CanRunTypeCheck(string appDir);
     bool TryInstall(string appDir, out string error);
@@ -45,3 +49,6 @@ public interface ITargetBackend
     /// <summary>Null when the checker cannot run; otherwise every error it reports.</summary>
     List<TscDiagnostic>? RunTypeCheck(string appDir);
 }
+
+/// <summary>One unit of the `/modules` catalog: its component, archetype, title and whether code (a Show / ShowDialog / `new` of it) opens it at all.</summary>
+public sealed record CatalogEntry(string Unit, string Component, ControlArchetype Archetype, string Title, bool OpenedByCode, bool IsUserControl);

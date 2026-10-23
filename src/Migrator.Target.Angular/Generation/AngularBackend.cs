@@ -20,6 +20,7 @@ public sealed class AngularBackend : ITargetBackend
     public string UiLibraryPackage => "@wfm/ui-angular";
     public string BypassRulesPath => _options.BypassRulesPath;
     public string ServerBoundRulesPath => _options.ServerBoundRulesPath;
+    public string ArchetypeRulesPath => _options.ArchetypeRulesPath;
 
     public IPageGenerator CreatePageGenerator(SpecCatalog spec, IReadOnlyDictionary<string, UnitIr> units, IReadOnlyDictionary<string, string> components, ISet<string> generated, TranslationEnv? env) =>
         new PageGenerator(spec, units, components, generated, env, assembler: new AngularPageAssembler());
@@ -37,8 +38,8 @@ public sealed class AngularBackend : ITargetBackend
 
     public string CodeFilePath(GeneratedPage page) => $"src/pages/{AngularPageAssembler.FileBase(page.ComponentName)}.page.code.ts";
 
-    public void WriteApp(string appDir, string appName, string entryComponent, string uiLibraryDir, List<string> files, string? favicon) =>
-        AngularAppWriter.Write(appDir, appName, entryComponent, uiLibraryDir, _pages.Values.ToList(), files, favicon);
+    public void WriteApp(string appDir, string appName, string entryComponent, string uiLibraryDir, List<string> files, string? favicon, IReadOnlyList<CatalogEntry> catalog) =>
+        AngularAppWriter.Write(appDir, appName, entryComponent, uiLibraryDir, _pages.Values.ToList(), files, favicon, catalog);
 
     private static string NgcPath(string appDir) => Path.Combine(appDir, "node_modules", "@angular", "compiler-cli", "bundles", "src", "bin", "ngc.js");
 
