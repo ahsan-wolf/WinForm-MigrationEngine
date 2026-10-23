@@ -46,6 +46,9 @@ npm run dev          # http://localhost:5173
 ```
 Use an output folder **outside the repository**. Never commit generated output derived from a customer application.
 
+### Prefer a window to a command line?
+`pwsh tools/migrator-ui/start.ps1` opens the **Migrator UI** (a local web app built with `@wfm/ui-react`): pick the source and output folders, choose IR only / working app / app shell / component viewer and the target, set the scope and translation options, press Run, watch the log, read the report and install / start the generated app from the same page (the equivalent command line is shown above the Run button). Details: `tools/migrator-ui/README.md`.
+
 ## 5. Command reference
 
 | Command | Purpose |

@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>MigratorUi.Host</RootNamespace>
+    <AssemblyName>migrator-ui</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The CLI is referenced only so that migrator.dll, the engines and their dependencies land next to the host; the host runs it as a child process
+         (log streaming, cancel, failure isolation). It is not part of WinFormsMigrator.sln. -->
+    <ProjectReference Include="..\..\..\src\Migrator.Cli\Migrator.Cli.csproj" />
+  </ItemGroup>
+
+</Project>

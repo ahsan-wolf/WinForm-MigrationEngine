@@ -1,0 +1,18 @@
+html, body, #root { height: 100%; margin: 0; }
+.mu-shell { display: flex; flex-direction: column; height: 100%; }
+.mu-header { padding: 8px 16px; border-bottom: 1px solid var(--wf-border, #c8c8c8); display: flex; align-items: baseline; gap: 16px; }
+.mu-header h1 { font-size: 18px; margin: 0; }
+.mu-main { display: flex; flex: 1 1 auto; min-height: 0; gap: 12px; padding: 12px; }
+.mu-form { width: 460px; flex: 0 0 auto; overflow: auto; display: flex; flex-direction: column; gap: 10px; }
+.mu-result { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.mu-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.mu-row > .wf-textbox { flex: 1 1 200px; min-width: 0; }
+.mu-field { display: grid; grid-template-columns: 110px 1fr; gap: 6px 8px; align-items: center; }
+.mu-modes { display: flex; flex-direction: column; gap: 4px; }
+.mu-log { flex: 1 1 auto; min-height: 200px; margin: 0; padding: 8px; overflow: auto; background: #111; color: #ddd; font: 12px/1.4 Consolas, monospace; white-space: pre-wrap; }
+.mu-report { flex: 1 1 auto; margin: 0; padding: 8px; overflow: auto; font: 12px/1.4 Consolas, monospace; white-space: pre-wrap; border: 1px solid var(--wf-border, #c8c8c8); }
+.mu-cmd { font: 12px Consolas, monospace; padding: 6px 8px; background: #f3f3f3; border: 1px solid #ddd; white-space: pre-wrap; word-break: break-all; }
+.mu-tabs { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.mu-status-ok { color: #1a7f37; } .mu-status-bad { color: #b3261e; }
+.mu-picker { width: 560px; max-width: 90vw; display: flex; flex-direction: column; gap: 8px; padding: 12px; }
+.mu-hint { color: #666; font-size: 12px; }
