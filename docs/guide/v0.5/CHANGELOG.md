@@ -7,6 +7,7 @@ Reconstructed from the merged slices (PR numbers refer to the repository's pull 
 - `/modules` catalog page for React (`src/Modules.tsx`) and Angular (`modules.component.ts`): units no code opens, grouped by archetype, opened in a content area; `--catalog`, implied by `--units all`; `ITargetBackend.WriteApp` takes the catalog entries.
 - Report section "Archetypes". Generated pages of every existing sample and pilot are byte-identical; only reports gain the section and `--units all` apps gain the catalog.
 - Versions: React and Angular targets 0.5.0. Guide chapter [10-archetypes.md](10-archetypes.md).
+- `tools/migrator-ui` (host + web), guide chapter [11-ui.md](11-ui.md): a window to choose IR / working app / app shell / viewer, run it, read the log and report, install and start the generated app.
 
 ## 0.2 — controls, popups, icons, app shell dialogs (14–17 Oct)
 - #30 Docs: versioned guide v0.1.

@@ -14,6 +14,7 @@ Complete working guide for engine release **0.5** (WinForms source engine 0.3.0,
 | [08-roadmap.md](08-roadmap.md) | The next slices with size, risk and the backend gateway to-do |
 | [09-angular.md](09-angular.md) | The Angular target: run it, how it works, generated files, conventions, verification, limits |
 | [10-archetypes.md](10-archetypes.md) | Grid / tree / menu / toolbar controls inferred from the designer and the code, and the `/modules` catalog for units the original loads dynamically |
+| [11-ui.md](11-ui.md) | The Migrator UI: run migrations and generated apps from a window |
 | [CHANGELOG.md](CHANGELOG.md) | What was built, in order |
 | [VERSIONING.md](VERSIONING.md) | Version policy and how to cut `v0.6` |
 
@@ -25,6 +26,7 @@ A WinForms project goes in; out come an IR folder, a React + TypeScript app that
 ## What changed since v0.4
 - **Archetypes:** every generated unit is classified as Grid, Tree, Menu, Toolbar, List or Form, by its designer first and its name second (`rules/control-archetypes.json`, data); where the designer is silent the grid columns, tree nodes, menu items and toolbar buttons are inferred from literals in the code or from the row type of the data source, else marked generic ones.
 - **`/modules` catalog:** `--catalog` (implied by `--units all`) writes a page, in the React and the Angular app, that lists the units no code opens (loaded dynamically or by permission logic in the original) by archetype and opens the selected one in a content area. See [10-archetypes.md](10-archetypes.md).
+- **Migrator UI:** `tools/migrator-ui` (see [11-ui.md](11-ui.md)).
 - **Report:** new section "Archetypes" with the table of the non-form units, what was inferred and the catalog count.
 - **Versions:** React and Angular target engines 0.5.0; the libraries (`@wfm/ui-core`, `ui-react`, `ui-angular` 0.4.0), `ui-spec` (0.3.0), the source engine (0.3.0) and the IR schema (0.1.0) did not change.
 
