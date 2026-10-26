@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 namespace Migrator.Target.Core.Spec;
 
@@ -31,7 +32,25 @@ public sealed class SpecCatalog
 
     public SpecControl? ByName(string componentName) => _byName.GetValueOrDefault(componentName);
 
-    public SpecFallback? FindFallback(string winformsType) => _fallbacks.GetValueOrDefault(winformsType);
+    private readonly List<(Regex Pattern, SpecFallback Fallback)> _patternFallbacks = new();
+    private readonly List<Regex> _nonVisualPatterns = new();
+
+    /// <summary>The fallback for a type: an exact entry, else (third-party and custom types only, never `System.*`) the first name pattern that matches its simple name.</summary>
+    public SpecFallback? FindFallback(string winformsType)
+    {
+        if (_fallbacks.TryGetValue(winformsType, out var exact)) return exact;
+        if (winformsType.StartsWith("System.", StringComparison.Ordinal)) return null;
+        var simple = SimpleName(winformsType);
+        foreach (var (pattern, fallback) in _patternFallbacks)
+            if (pattern.IsMatch(simple)) return fallback;
+        return null;
+    }
+
+    /// <summary>A third-party or custom type that is a helper without a visual of its own (a provider, a controller, a generated report class): listed, never rendered.</summary>
+    public bool IsNonVisual(string winformsType) =>
+        !winformsType.StartsWith("System.", StringComparison.Ordinal) && _nonVisualPatterns.Any(p => p.IsMatch(SimpleName(winformsType)));
+
+    private static string SimpleName(string type) => type[(type.LastIndexOf('.') + 1)..];
 
     public static SpecCatalog Load(string path)
     {
@@ -68,6 +87,12 @@ public sealed class SpecCatalog
                     f.TryGetProperty("note", out var n) ? n.GetString() : null);
                 foreach (var type in Strings(f, "winformsTypes")) _fallbacks[type] = fallback;
             }
+        if (doc.RootElement.TryGetProperty("namePatterns", out var patterns))
+            foreach (var p in patterns.EnumerateArray())
+                _patternFallbacks.Add((new Regex(p.GetProperty("pattern").GetString()!, RegexOptions.Compiled), new SpecFallback(p.GetProperty("use").GetString()!,
+                    Map(p, "propertyAliases"), Map(p, "eventAliases"), p.TryGetProperty("note", out var pn) ? pn.GetString() : null)));
+        if (doc.RootElement.TryGetProperty("nonVisualPatterns", out var nonVisual))
+            foreach (var p in nonVisual.EnumerateArray()) _nonVisualPatterns.Add(new Regex(p.GetString()!, RegexOptions.Compiled));
         if (doc.RootElement.TryGetProperty("default", out var def))
         {
             if (def.TryGetProperty("withChildren", out var wc)) DefaultWithChildren = wc.GetString() ?? DefaultWithChildren;

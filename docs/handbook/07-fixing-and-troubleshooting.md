@@ -18,6 +18,7 @@ After a fix: regenerate, check `0 TS error(s) remain`, build and lint ([workflow
 ## 7.2 Common problems
 | Symptom | Cause and fix |
 |---|---|
+| `0 form(s), 0 user control(s)` on an old project whose forms have no `.Designer.cs` | Supported since 0.5: a class that declares `InitializeComponent` itself is found as a unit. If you still get 0 units, check that the source folder is the project folder and that the forms derive from `Form` / `UserControl` (directly or through your own base classes) |
 | `engines.json not found` | Run from the repository root or pass `--config <path>` |
 | `Target engine 'x' is not loaded or cannot generate a whole project` | The engine is missing or disabled in `engines.json`; run `migrator engines` for diagnostics |
 | An engine DLL in `plugins/` is ignored | Only engines listed in `engines.json` load; list it |
@@ -45,6 +46,8 @@ After a fix: regenerate, check `0 TS error(s) remain`, build and lint ([workflow
 **Can I use the generated app as the new product?** It is a starting point: mock data, no real services or authentication. Plan the backend (the [backend survey](04-workflow.md#44-step-4-optional-backend-inputs) shows what is needed) and review the translated logic.
 
 **Why are some screens missing?** The default scope is the entry form and what it opens directly. Use `--depth all`, and `--units all` for screens loaded dynamically ([step 3](04-workflow.md#43-step-3-choose-the-scope)).
+
+**My project has no `*.Designer.cs` files (the designer code is inside each form's `.cs`). Does it work?** Yes. Such single-file forms, including decompiled sources, are units like any other (`MainMenu` / `MenuItem` menus and the old `DataGrid` are mapped too). Third-party controls are drawn by the closest library component through name patterns (listed as fallbacks in the report); data access with OleDb is left to the backend. Check the *fallback* and *server-only* parts of the report.
 
 **Can I run it on an application without source?** Binary-only input is members-first and lossy, with no event wiring unless wired with `+=` in code; prefer source.
 

@@ -675,6 +675,9 @@ Reads the IR folder (including `support.ir.json`) + `ui-spec`; pages import only
 | `IUnsupportedReporter` | unhandled constructs -> `project.ir.json` | designer statements |
 | `ISupportSourceEngine` | the project's own non-UI classes -> `ir/support.ir.json` | `main`, `Preferences`, enums, data classes |
 
+### 18.3a Old projects (single-file forms, decompiled sources)
+`InitializeComponent` may sit in the form's own `.cs` (no Designer.cs): the unit's designer and code-behind are one file. Decompiled style is read as well: `base.X`, `Control.ControlCollection c = base.Controls; Control[] a = new Control[]{...}; c.AddRange(a)`. Old controls: `MainMenu`/`MenuItem` -> `WfMenuBar`/`WfMenuItem` (text `-` = separator), `DataGrid` + table style columns -> `WfDataGrid`. Third-party controls: `fallbacks.json` `namePatterns` (text, numeric, date, combo, grid, tree, button) and `nonVisualPatterns` (provider, controller, generated report classes).
+
 ### 18.4 Branch & report reminder
 Every addition is done on a **new branch**, committed locally, **not pushed**; finish with the push + fetch/update command block from `CLAUDE.md` §0.2.
 

@@ -17,11 +17,11 @@
       "a11y": "Renders a landscape region labelled by title; Enter/Escape click the accept/cancel button by id.",
       "example": "<WfForm title=\"Navigator\" onLoad={handleLoad}>…</WfForm>" },
 
-    { "name": "WfMenuBar", "winformsTypes": ["System.Windows.Forms.MenuStrip"], "container": true,
+    { "name": "WfMenuBar", "winformsTypes": ["System.Windows.Forms.MenuStrip", "System.Windows.Forms.MainMenu"], "container": true,
       "props": [], "events": [],
       "a11y": "role=menubar; children are WfMenuItem / WfSeparator; arrow-free hover/click model in 0.1.",
       "example": "<WfMenuBar><WfMenuItem text=\"&File\">…</WfMenuItem></WfMenuBar>" },
-    { "name": "WfMenuItem", "winformsTypes": ["System.Windows.Forms.ToolStripMenuItem"], "container": true,
+    { "name": "WfMenuItem", "winformsTypes": ["System.Windows.Forms.ToolStripMenuItem", "System.Windows.Forms.MenuItem"], "container": true,
       "props": [
         { "name": "text", "type": "string", "from": ["Text"], "transform": "mnemonic" },
         { "name": "shortcut", "type": "string", "from": ["ShortcutKeyDisplayString", "ShortcutKeys"] },
@@ -153,7 +153,7 @@
       "events": [ { "name": "click", "from": "Click", "react": "onClick" } ],
       "a11y": "img; provide alt.", "example": "<WfPictureBox src=\"/logo.png\" alt=\"Logo\" />" },
 
-    { "name": "WfDataGrid", "winformsTypes": ["System.Windows.Forms.DataGridView"], "container": true,
+    { "name": "WfDataGrid", "winformsTypes": ["System.Windows.Forms.DataGridView", "System.Windows.Forms.DataGrid"], "container": true,
       "props": [
         { "name": "rows", "type": "Row[]" },
         { "name": "columns", "type": "WfGridColumn[]", "note": "Built from child column nodes: HeaderText -> header, DataPropertyName -> field, Width -> width, DefaultCellStyle.Format -> format." },
