@@ -88,6 +88,9 @@ The **`/modules`** page (with `--catalog` or `--units all`) lists the units no c
 
 Details and limits: [../guide/v0.5/10-archetypes.md](../guide/v0.5/10-archetypes.md).
 
+## 6.4a Third-party controls
+A control from a vendor or a custom library (not `System.*`) is drawn by the closest library component, chosen by **name patterns** in `ui-library/ui-spec/fallbacks.json` (data; extend a copy per project). Typical results: numeric boxes become the text box with a number rule (`allowFloat` / `allowNegative` read from the designer), text-only boxes the text box with a letters rule, date / time / date-time editors the date picker with the matching kind, grids (also hierarchical and flex grids) the data grid, combos and look-ups the drop-down (the library also has a multi-column grid drop-down for hand-written use and for code that supplies rows), colour and font editors the colour and font pickers. Each one is listed in the report as a *fallback* with its pattern note; a control that matches no pattern shows as a label with its type name.
+
 ## 6.5 How to judge quality
 | Look at | Healthy | Worry when |
 |---|---|---|
