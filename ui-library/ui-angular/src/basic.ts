@@ -1,5 +1,5 @@
 import { Component, computed, input, output } from '@angular/core';
-import { parseMnemonic } from '@wfm/ui-core';
+import { parseMnemonic, wfFilterInput, type WfInputRule } from '@wfm/ui-core';
 
 /** Host elements add no box of their own: the inner element takes part in the parent's layout as if it were a direct child. */
 const HOST = { style: 'display: contents' } as const;
@@ -82,7 +82,7 @@ export class WfLinkLabel {
     } @else {
       <input [type]="password() ? 'password' : 'text'" [attr.id]="controlId()" [attr.title]="tooltip()" [attr.placeholder]="placeholder()" [readOnly]="!!readOnly()"
              [disabled]="!!disabled()" [attr.maxlength]="maxLength()" [value]="value() ?? ''" [class]="cls('wf-textbox', className())"
-             (input)="wfValueChange.emit($any($event.target).value)" (keydown)="$event.key === 'Enter' && wfEnter.emit()" />
+             (input)="onInput($event)" (keydown)="$event.key === 'Enter' && wfEnter.emit()" />
     }`,
 })
 export class WfTextBox {
@@ -92,6 +92,10 @@ export class WfTextBox {
   password = input<boolean | undefined>(false);
   multiline = input<boolean | undefined>(false);
   maxLength = input<number | undefined>();
+  /** `letters` accepts only letters and spaces; `number` accepts digits, plus one decimal point with `allowFloat` and a minus sign with `allowNegative`. */
+  inputRule = input<WfInputRule | undefined>();
+  allowFloat = input<boolean | undefined>(false);
+  allowNegative = input<boolean | undefined>(false);
   disabled = input<boolean | undefined>(false);
   controlId = input<string | undefined>();
   className = input<string | undefined>();
@@ -99,6 +103,15 @@ export class WfTextBox {
   wfValueChange = output<string>();
   wfEnter = output<void>();
   protected cls = cls;
+
+  protected onInput(event: Event): void {
+    const box = event.target as HTMLInputElement;
+    if (this.inputRule()) {
+      const kept = wfFilterInput(this.inputRule(), box.value, { allowFloat: !!this.allowFloat(), allowNegative: !!this.allowNegative() });
+      if (kept !== box.value) box.value = kept;
+    }
+    this.wfValueChange.emit(box.value);
+  }
 }
 
 @Component({

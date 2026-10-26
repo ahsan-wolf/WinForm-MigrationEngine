@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { wfFilterInput, type WfInputRule } from '@wfm/ui-core';
 import { MnemonicText, parseMnemonic } from '../mnemonic';
 
 interface Common { id?: string; className?: string; tooltip?: string; disabled?: boolean }
@@ -21,15 +22,23 @@ export function WfButton({ text, variant = 'default', onClick, disabled, id, cla
 
 export interface WfTextBoxProps extends Common {
   value?: string; placeholder?: string; readOnly?: boolean; password?: boolean; multiline?: boolean; maxLength?: number;
+  /** Input rule: `letters` accepts only letters and spaces; `number` accepts digits, plus one decimal point with `allowFloat` and a minus sign with `allowNegative`. Typing and pasting follow it. */
+  inputRule?: WfInputRule; allowFloat?: boolean; allowNegative?: boolean;
   onValueChange?: (value: string) => void; onEnter?: () => void;
 }
-export function WfTextBox({ value, placeholder, readOnly, password, multiline, maxLength, onValueChange, onEnter, disabled, id, className, tooltip }: WfTextBoxProps) {
+export function WfTextBox({ value, placeholder, readOnly, password, multiline, maxLength, inputRule, allowFloat, allowNegative, onValueChange, onEnter, disabled, id, className, tooltip }: WfTextBoxProps) {
   // Controlled when someone listens for changes; otherwise `value` is only the starting text and the user can still type (a preview or an unwired field).
   const common = {
     id, title: tooltip, placeholder, readOnly, disabled, maxLength,
     ...(onValueChange ? { value: value ?? '' } : { defaultValue: value ?? '' }),
     className: cls('wf-textbox', className),
-    onChange: (e: { target: { value: string } }) => onValueChange?.(e.target.value),
+    onChange: (e: { target: { value: string } }) => {
+      if (inputRule) {
+        const kept = wfFilterInput(inputRule, e.target.value, { allowFloat, allowNegative });
+        if (kept !== e.target.value) e.target.value = kept; // an uncontrolled box shows what the rule keeps
+      }
+      onValueChange?.(e.target.value);
+    },
   };
   if (multiline) return <textarea {...common} rows={4} />;
   return <input {...common} type={password ? 'password' : 'text'} onKeyDown={e => { if (e.key === 'Enter') onEnter?.(); }} />;

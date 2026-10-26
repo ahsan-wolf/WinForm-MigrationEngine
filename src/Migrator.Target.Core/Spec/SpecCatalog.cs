@@ -7,7 +7,7 @@ public sealed record SpecProp(string Name, string Type, string[] From, string? T
 public sealed record SpecEvent(string Name, string From, string React);
 
 /// <summary>A library component to render instead of a WinForms control that has none: property/event aliases rename WinForms members to the ones that component reads.</summary>
-public sealed record SpecFallback(string Use, IReadOnlyDictionary<string, string> PropertyAliases, IReadOnlyDictionary<string, string> EventAliases, string? Note);
+public sealed record SpecFallback(string Use, IReadOnlyDictionary<string, string> PropertyAliases, IReadOnlyDictionary<string, string> EventAliases, string? Note, IReadOnlyDictionary<string, string>? Attributes = null);
 
 public sealed record SpecControl(string Name, string[] WinformsTypes, bool Container, string[] Slots, SpecProp[] Props, SpecEvent[] Events);
 
@@ -84,13 +84,13 @@ public sealed class SpecCatalog
             foreach (var f in list.EnumerateArray())
             {
                 var fallback = new SpecFallback(f.GetProperty("use").GetString()!, Map(f, "propertyAliases"), Map(f, "eventAliases"),
-                    f.TryGetProperty("note", out var n) ? n.GetString() : null);
+                    f.TryGetProperty("note", out var n) ? n.GetString() : null, Map(f, "attributes"));
                 foreach (var type in Strings(f, "winformsTypes")) _fallbacks[type] = fallback;
             }
         if (doc.RootElement.TryGetProperty("namePatterns", out var patterns))
             foreach (var p in patterns.EnumerateArray())
                 _patternFallbacks.Add((new Regex(p.GetProperty("pattern").GetString()!, RegexOptions.Compiled), new SpecFallback(p.GetProperty("use").GetString()!,
-                    Map(p, "propertyAliases"), Map(p, "eventAliases"), p.TryGetProperty("note", out var pn) ? pn.GetString() : null)));
+                    Map(p, "propertyAliases"), Map(p, "eventAliases"), p.TryGetProperty("note", out var pn) ? pn.GetString() : null, Map(p, "attributes"))));
         if (doc.RootElement.TryGetProperty("nonVisualPatterns", out var nonVisual))
             foreach (var p in nonVisual.EnumerateArray()) _nonVisualPatterns.Add(new Regex(p.GetString()!, RegexOptions.Compiled));
         if (doc.RootElement.TryGetProperty("default", out var def))
