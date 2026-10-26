@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "note": "How server-bound classes (see server-bound.json) are ported into the generated .NET 10 API. Data only: extend a copy per project (no application names) and point the dotnet-api target option apiPortRulesPath at it. The ported code compiles against small shims (MessageBox, ConfigurationManager, DialogResult) that collect messages and read configuration instead of showing windows; provider aliases let OleDb* types compile against the chosen ADO.NET provider.",
+  "provider": "sqlclient",
+  "usings": [
+    "System", "System.Collections", "System.Collections.Generic", "System.Collections.Specialized", "System.ComponentModel",
+    "System.Data", "System.Data.Common", "System.Linq", "System.Text", "System.IO", "System.Threading.Tasks"
+  ],
+  "providers": {
+    "sqlclient": {
+      "package": "Microsoft.Data.SqlClient",
+      "version": "6.*",
+      "namespace": "Microsoft.Data.SqlClient",
+      "aliases": {
+        "OleDbConnection": "SqlConnection", "OleDbCommand": "SqlCommand", "OleDbDataAdapter": "SqlDataAdapter", "OleDbDataReader": "SqlDataReader",
+        "OleDbParameter": "SqlParameter", "OleDbTransaction": "SqlTransaction", "OleDbException": "SqlException", "OleDbCommandBuilder": "SqlCommandBuilder", "OleDbType": "System.Data.SqlDbType"
+      },
+      "stripConnectionStringKeys": ["Provider", "Jet OLEDB:Database Password"]
+    },
+    "oledb": {
+      "package": "System.Data.OleDb",
+      "version": "10.*",
+      "namespace": "System.Data.OleDb",
+      "aliases": {},
+      "stripConnectionStringKeys": []
+    }
+  },
+  "secretSettingPattern": "(pwd|pass(word)?|secret|token|key|user|uid|license|credential|connection)"
+}

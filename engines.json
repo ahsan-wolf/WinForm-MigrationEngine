@@ -8,6 +8,8 @@
     { "id": "react-app", "enabled": true, "assembly": "Migrator.Target.React",
       "options": { "uiSpecPath": "ui-library/ui-spec/controls.json", "uiLibraryPath": "ui-library/ui-react" } },
     { "id": "angular-app", "enabled": true, "assembly": "Migrator.Target.Angular",
-      "options": { "uiSpecPath": "ui-library/ui-spec/controls.json", "uiLibraryPath": "ui-library/ui-angular" } }
+      "options": { "uiSpecPath": "ui-library/ui-spec/controls.json", "uiLibraryPath": "ui-library/ui-angular" } },
+    { "id": "dotnet-api", "enabled": true, "assembly": "Migrator.Target.Api",
+      "options": { "serverBoundRulesPath": "rules/server-bound.json", "apiPortRulesPath": "rules/api-port.json" } }
   ]
 }

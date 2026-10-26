@@ -14,6 +14,7 @@
     <ProjectReference Include="..\Migrator.Source.Backend\Migrator.Source.Backend.csproj" />
     <ProjectReference Include="..\Migrator.Target.React\Migrator.Target.React.csproj" />
     <ProjectReference Include="..\Migrator.Target.Angular\Migrator.Target.Angular.csproj" />
+    <ProjectReference Include="..\Migrator.Target.Api\Migrator.Target.Api.csproj" />
   </ItemGroup>
 
 </Project>

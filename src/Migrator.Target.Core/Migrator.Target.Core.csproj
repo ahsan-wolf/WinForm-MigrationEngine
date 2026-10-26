@@ -19,6 +19,7 @@
     <!-- The target engines use the translator's internal members (MethodTranslator, ContainerUsage, ...). -->
     <InternalsVisibleTo Include="Migrator.Target.React" />
     <InternalsVisibleTo Include="Migrator.Target.Angular" />
+    <InternalsVisibleTo Include="Migrator.Target.Api" />
   </ItemGroup>
 
   <Import Project="$(MSBuildThisFileDirectory)..\..\build\IrReference.props" />
