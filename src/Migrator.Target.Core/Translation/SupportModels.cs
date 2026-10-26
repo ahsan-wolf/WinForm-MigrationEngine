@@ -59,7 +59,7 @@ public sealed class SupportRegistry
     /// A support method is async when it (transitively) calls an async contract facade method or another async support method.
     /// Constructors and property accessors are never async: code that needs it there falls back.
     /// </summary>
-    public void ColorAsync(ContractVocabulary vocabulary)
+    public void ColorAsync(ContractVocabulary vocabulary, IReadOnlyDictionary<string, Migrator.Target.Core.Generation.ServerClass>? apiClasses = null)
     {
         var direct = new HashSet<(string, string)>();
         var calls = new Dictionary<(string, string), HashSet<(string, string)>>();
@@ -71,6 +71,8 @@ public sealed class SupportRegistry
             {
                 var key = (cls.Name, name);
                 var called = calls[key] = new HashSet<(string, string)>();
+                // A method that is a call to the generated API is async by construction.
+                if (apiClasses is not null && apiClasses.TryGetValue(cls.Name, out var serverClass) && serverClass.Methods.Any(m => m.Name == name && !m.HasByRefParameters)) direct.Add(key);
                 foreach (var m in overloads.Select(o => o.Member).Where(m => m.Body != null))
                 {
                     var root = CSharpSyntaxTree.ParseText("class __W { void __M() " + m.Body + " }").GetRoot();
@@ -132,7 +134,7 @@ public sealed class SupportModule
 /// </summary>
 public static class SupportPruner
 {
-    public static SupportFileIr Reachable(SupportFileIr all, IEnumerable<Migrator.Target.Core.Ir.UnitIr> units, ServerBoundRules rules, List<string> serverBound)
+    public static SupportFileIr Reachable(SupportFileIr all, IEnumerable<Migrator.Target.Core.Ir.UnitIr> units, ServerBoundRules rules, List<string> serverBound, ISet<string>? apiClasses = null)
     {
         var byName = all.Classes.GroupBy(c => c.Name).ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
         var reached = new HashSet<string>(StringComparer.Ordinal);
@@ -143,6 +145,7 @@ public static class SupportPruner
         // A class where at least ClassThreshold of its methods use data access / file system / configuration is server-side code: not generated, not followed.
         string? ServerMarker(SupportClassIr cls)
         {
+            if (apiClasses?.Contains(cls.Name) == true) return null; // runs behind the generated API: its methods are calls
             if (excluded.TryGetValue(cls.Name, out var known)) return known;
             var methods = cls.Members.Where(m => m.Kind == WebFormsMigrator.IR.Models.MemberKind.Method && m.Name != ".ctor" && m.Body != null).ToList();
             var marked = methods.Select(m => rules.Match(m.Body)).Where(x => x is not null).ToList();

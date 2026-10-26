@@ -8,7 +8,7 @@ export interface RunInfo {
 export interface Browse { path: string; parent: string | null; dirs: string[]; files: string[] }
 export interface MigrateForm {
   source: string; out: string; mode: 'ir' | 'app' | 'appshell' | 'viewer'; target: string; entry: string; depth: string; allUnits: boolean; catalog: boolean;
-  noExternalProjects: boolean; translate: string; compileGate: boolean; contracts: string; contractScope: string; images: string; archetypes: string;
+  noExternalProjects: boolean; translate: string; compileGate: boolean; contracts: string; contractScope: string; images: string; archetypes: string; api: boolean; dbProvider: string;
 }
 
 async function check(res: Response): Promise<Response> {
@@ -29,7 +29,7 @@ export const getReport = (dir: string): Promise<string> => fetch('api/report?dir
 export function startMigration(f: MigrateForm): Promise<RunInfo> {
   return post('api/migrate', {
     source: f.source, out: f.out, mode: f.mode, target: f.target, entry: f.entry, depth: f.depth, allUnits: f.allUnits, catalog: f.catalog,
-    noExternalProjects: f.noExternalProjects, translate: f.translate, compileGate: f.compileGate, contractScope: f.contractScope, images: f.images, archetypes: f.archetypes,
+    noExternalProjects: f.noExternalProjects, translate: f.translate, compileGate: f.compileGate, contractScope: f.contractScope, images: f.images, archetypes: f.archetypes, api: f.api, dbProvider: f.dbProvider,
     contracts: f.contracts.split(/\r?\n/).map(s => s.trim()).filter(Boolean),
   }).then(r => r.json());
 }

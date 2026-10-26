@@ -679,6 +679,9 @@ Reads the IR folder (including `support.ir.json`) + `ui-spec`; pages import only
 ### 18.3a Old projects (single-file forms, decompiled sources)
 `InitializeComponent` may sit in the form's own `.cs` (no Designer.cs): the unit's designer and code-behind are one file. Decompiled style is read as well: `base.X`, `Control.ControlCollection c = base.Controls; Control[] a = new Control[]{...}; c.AddRange(a)`. Old controls: `MainMenu`/`MenuItem` -> `WfMenuBar`/`WfMenuItem` (text `-` = separator), `DataGrid` + table style columns -> `WfDataGrid`. Third-party controls: `fallbacks.json` `namePatterns` (text, numeric, date, combo, grid, tree, button) and `nonVisualPatterns` (provider, controller, generated report classes).
 
+### 18.3b Data access behind an API
+Server-bound classes (data access, files, configuration) are ported to a .NET 10 minimal API by `--target dotnet-api` (operations `POST /api/<Class>/<Method>` with `{ state, args }`; shims for `MessageBox` / `ConfigurationManager`; `OleDb*` aliased to the provider; `dotnet build` gate). In the web app, `--api` turns their public methods into async calls (`api.call('<Class>', '<Route>', this, [args], [state members])`); callers become async; server messages open as popups. Details: `docs/guide/v0.5/12-api.md`.
+
 ### 18.4 Branch & report reminder
 Every addition is done on a **new branch**, committed locally, **not pushed**; finish with the push + fetch/update command block from `CLAUDE.md` §0.2.
 

@@ -88,6 +88,7 @@ WinFormsMigrator/                         # standalone repo + solution (NOT insi
 │  ├─ Migrator.Source.WinForms/           # SOURCE ENGINE: project analyzer, designer parser, extractors
 │  ├─ Migrator.Target.Core/               # SHARED by every target: IR folder loading, ui-spec catalog, C# -> TypeScript translation, contract services, naming, layout, icons
 │  ├─ Migrator.Target.React/              # TARGET ENGINE: IIrGenerator -> react-app
+│  ├─ Migrator.Target.Api/                # TARGET ENGINE: IProjectTargetEngine -> dotnet-api (server-bound data classes -> .NET 10 minimal API; reads the IR folder only)
 │  ├─ Migrator.Target.Angular/            # TARGET ENGINE: IProjectTargetEngine -> angular-app (standalone components, ngc gate)
 │  ├─ Migrator.Target.Html/               # TARGET ENGINE: IIrGenerator -> html-jquery-app
 │  └─ Migrator.Cli/                       # thin console entry point (args -> Engine)
@@ -244,6 +245,11 @@ Rules:
 - Framework controls written without their namespace (`new TextBox()`) are qualified to `System.Windows.Forms.X` (`WinFormsTypeResolver.Qualify`) unless the project declares a class of that name. The startup form is found from `Application.Run(new X())` in any file, not only `Program.cs`.
 - Third-party and custom controls are mapped by **name patterns** in `ui-spec/fallbacks.json` (`namePatterns`, generic words such as `...Grid`, `...Combo`, `...Numeric...`; applied only to types outside `System.*`), and helpers without a visual (`...Provider`, `...Controller`, generated `rpt...` report classes) by `nonVisualPatterns`. Data only: extend a copy per project, no application names.
 
+### 4.2c Server-bound classes and the generated API
+- A support class where at least `classThreshold` of its methods use a server-side marker (`rules/server-bound.json`: data access, file system, configuration) is **server-bound**. Without `--api` it is left out of the web app (calls stay TODOs, listed as backend work).
+- `migrate --target dotnet-api` writes `<out>/dotnet-api`: the server-bound classes (and the project classes they reach) ported to C# from `support.ir.json` with the original bodies, shims for `MessageBox` / `ConfigurationManager`, provider aliases (`rules/api-port.json`, data), one `POST /api/<Class>/<Method>` per public method (body `{state,args}`, reply `{result,state,messages}`), `dotnet build` as the gate, `API_REPORT.md` (SQL-concatenation, Windows-only and secret findings). Never emit connection strings or passwords; settings come from configuration/environment.
+- `--api` on a web target keeps those classes in the app as TypeScript classes whose public methods are async calls (`src/lib/api.ts`); `ServerOperations` (Core) is the single list both sides use. No application names in `rules/api-port.json`.
+
 ### 4.2a Archetype controls (target side, no IR change)
 - A user control that code never opens (loaded dynamically or by permission logic) is classified by `ControlArchetypes` as Grid / Tree / Menu / Toolbar / List / Form: **designer content first, name patterns second** (`rules/control-archetypes.json`, data; generic words only, extend a copy per project with `--archetypes`).
 - A missing primary control, or its columns / nodes / items, is inferred from the designer, then from literals in the code, then from the row type of the data source, else marked generic placeholders; inferred parts carry the target-side pseudo-attributes `Archetype.*`, are marked `// MOCK` where they are data, and are listed under "Archetypes" in `MIGRATION_REPORT.md`. The IR files never contain them.
@@ -353,6 +359,7 @@ dotnet run --project src/Migrator.Cli -- backend --source <dir>... [--wsdl <dir>
 dotnet run --project src/Migrator.Cli -- migrate --source <path> --out <dir> --units all [--catalog] [--archetypes <rules.json>]   # EXISTS: also units no code opens; classifies grid/tree/menu/toolbar/list controls and writes the /modules catalog (react-app and angular-app)
 dotnet run --project src/Migrator.Cli -- migrate --source <path> --out <dir> --preview   # EXISTS: component viewer -> <out>/react-viewer: a visual-only page per form and user control + a sidebar shell (no handlers, data or logic)
 dotnet run --project src/Migrator.Cli -- migrate --source <path> --out <dir> --appshell  # EXISTS: WinForms-style app shell -> <out>/react-appshell: bordered host window, hyperlink navigation on the left, the selected unit in a form-style frame on the right (visual-only pages, same as --preview)
+dotnet run --project src/Migrator.Cli -- migrate --source <path> --out <dir> --target dotnet-api [--db-provider sqlclient|oledb]   # EXISTS: the server side (data-access classes -> .NET 10 minimal API); add --api to the web target run so the app calls it
 pwsh tools/migrator-ui/start.ps1                                              # EXISTS: the Migrator UI (http://127.0.0.1:5280): source/output pickers, mode (IR / app / app shell / viewer), options, run + log + report, install/start the generated app
 set WFM_LLM_TARGET=react-app                                                   # opt-in LLM translation
 cd ui-library/ui-core && npm ci && npm run build && npm run lint   # first: ui-react and generated apps import it

@@ -40,8 +40,9 @@ public interface ITargetBackend
     string CodeFilePath(GeneratedPage page);
 
     /// <summary>Package, build config, entry point, routes and base styles.</summary>
+    /// <param name="api">The app calls the generated dotnet-api (`src/lib/api.ts` exists): messages from the server open as popups.</param>
     /// <param name="catalog">The units of the `/modules` catalog page (empty = no catalog page).</param>
-    void WriteApp(string appDir, string appName, string entryComponent, string uiLibraryDir, List<string> files, string? favicon, IReadOnlyList<CatalogEntry> catalog);
+    void WriteApp(string appDir, string appName, string entryComponent, string uiLibraryDir, List<string> files, string? favicon, IReadOnlyList<CatalogEntry> catalog, bool api);
 
     bool CanRunTypeCheck(string appDir);
     bool TryInstall(string appDir, out string error);

@@ -13,7 +13,7 @@ internal static class AngularAppWriter
 {
     private static readonly JsonSerializerOptions Pretty = new() { WriteIndented = true };
 
-    public static void Write(string appDir, string appName, string entryComponent, string uiAngularDir, IReadOnlyList<PageEntry> pages, List<string> files, string? favicon, IReadOnlyList<CatalogEntry> catalog)
+    public static void Write(string appDir, string appName, string entryComponent, string uiAngularDir, IReadOnlyList<PageEntry> pages, List<string> files, string? favicon, IReadOnlyList<CatalogEntry> catalog, bool api)
     {
         var uiAngular = Rel(appDir, uiAngularDir);
         var uiCoreDir = Path.GetFullPath(Path.Combine(uiAngularDir, "..", "ui-core"));
@@ -224,10 +224,10 @@ internal static class AngularAppWriter
             }
             """, files);
 
-        OutputFiles.Put(appDir, "src/app/app.component.ts", """
+        OutputFiles.Put(appDir, "src/app/app.component.ts", $$"""
             import { Component, inject } from '@angular/core';
             import { Router, RouterOutlet } from '@angular/router';
-            import { WfDialogService } from '@wfm/ui-angular';
+            import { WfDialogService } from '@wfm/ui-angular';{{ApiImport(api)}}
 
             @Component({
               selector: 'app-root',
@@ -239,7 +239,8 @@ internal static class AngularAppWriter
               constructor() {
                 // dialog.close() on a page that is not in a dialog leaves it: back to the entry form.
                 const router = inject(Router);
-                inject(WfDialogService).onRootClose = () => { void router.navigateByUrl('/'); };
+                const dialog = inject(WfDialogService);
+                dialog.onRootClose = () => { void router.navigateByUrl('/'); };{{ApiHook(api)}}
               }
             }
             """, files);
@@ -304,6 +305,11 @@ internal static class AngularAppWriter
             }
             """;
     }
+
+    private static string ApiImport(bool on) => on ? "\nimport { api } from '../lib/api';" : "";
+    private static string ApiHook(bool on) => on
+        ? "\n    // Messages the server collected from the original data classes (MessageBox.Show) open as popups.\n    api.onMessages((messages) => { for (const m of messages) void dialog.alert(m.text, m.caption || undefined); });"
+        : "";
 
     private static string Rel(string fromDir, string toDir) => Path.GetRelativePath(fromDir, toDir).Replace('\\', '/');
 }

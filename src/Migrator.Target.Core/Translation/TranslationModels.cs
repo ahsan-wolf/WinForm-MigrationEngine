@@ -153,6 +153,9 @@ public sealed class PageScope
     /// <summary>Markers of server-side code: such methods of project classes become typed stubs.</summary>
     public ServerBoundRules ServerBound { get; init; } = ServerBoundRules.Empty;
 
+    /// <summary>Server-bound classes whose public methods are API calls (`--api`).</summary>
+    public IReadOnlyDictionary<string, Migrator.Target.Core.Generation.ServerClass> ApiClasses { get; init; } = new Dictionary<string, Migrator.Target.Core.Generation.ServerClass>();
+
     /// <summary>Images by name for `Properties.Resources.X`.</summary>
     public ResourceImages Resources { get; init; } = ResourceImages.Empty;
 

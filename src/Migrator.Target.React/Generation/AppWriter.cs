@@ -11,7 +11,7 @@ public static class AppWriter
     private static readonly JsonSerializerOptions Pretty = new() { WriteIndented = true };
 
     /// <param name="entryComponent">The entry form's component; null for the viewer app, which writes its own entry point and needs no C# helpers.</param>
-    public static void Write(string appDir, string appName, string? entryComponent, string uiLibraryDir, List<string> files, string? favicon = null, IReadOnlyList<CatalogEntry>? catalog = null)
+    public static void Write(string appDir, string appName, string? entryComponent, string uiLibraryDir, List<string> files, string? favicon = null, IReadOnlyList<CatalogEntry>? catalog = null, bool api = false)
     {
         var modules = catalog is { Count: > 0 };
         var uiRelative = Path.GetRelativePath(appDir, uiLibraryDir).Replace('\\', '/');
@@ -123,13 +123,13 @@ public static class AppWriter
         if (entryComponent is not null)
         {
         Put(appDir, "src/main.tsx", $$"""
-            import { Component, StrictMode, Suspense, lazy, type ComponentType, type ReactNode } from 'react';
+            import { Component, StrictMode, Suspense, lazy, {{ApiReactHook(api, "useEffect, ")}}type ComponentType, type ReactNode } from 'react';
             import { createRoot } from 'react-dom/client';
-            import { WfDialogProvider } from '@wfm/ui-react';
+            import { WfDialogProvider{{ApiReactHook(api, ", useWfDialog")}} } from '@wfm/ui-react';
             import '@wfm/ui-react/styles.css';
             import './app.css';
             import { {{entryComponent}} } from './pages/{{entryComponent}}';
-            import { navigate, routeFor, routeUrl, usePath } from './lib/router';{{ModulesImport(modules)}}
+            import { navigate, routeFor, routeUrl, usePath } from './lib/router';{{ModulesImport(modules)}}{{ApiReactHook(api, "\nimport { api } from './lib/api';")}}
 
             // One route per generated page: `/` is the entry form, `/<page-name>` opens any other page on its own (with mock data), `/pages` lists them all.
             // Forms the entry form opens through ShowDialog() are normally reached from it, but those whose constructor arguments
@@ -160,7 +160,7 @@ public static class AppWriter
               );
             }
 
-            function App() {
+            function App() {{{ApiReactHook(api, "\n  const dialog = useWfDialog();\n  // Messages the server collected from the original data classes (MessageBox.Show) open as popups.\n  useEffect(() => api.onMessages((messages) => { for (const m of messages) void dialog.alert(m.text, m.caption || undefined); }), [dialog]);")}}
               const path = usePath();
               const selected = pages.find((p) => p.route === path);
               const view = path === '' ? <{{entryComponent}} /> : path === 'pages' ? <Index /> : {{ModulesRoute(modules)}}selected ? <Suspense fallback={null}><selected.Page /></Suspense> : <Index />;
@@ -235,6 +235,7 @@ public static class AppWriter
             """, files);
     }
 
+    private static string ApiReactHook(bool on, string text) => on ? text : "";
     private static string ModulesImport(bool on) => on ? "\nimport { ModulesPage } from './Modules';" : "";
     private static string ModulesRoute(bool on) => on ? "path === 'modules' ? <ModulesPage /> : " : "";
     private static string ModulesLink(bool on) => on ? "\n                  <li><a href={routeUrl('modules')} onClick={(e) => { e.preventDefault(); navigate('modules'); } }><b>Modules</b> (units the original opens dynamically)</a></li>" : "";

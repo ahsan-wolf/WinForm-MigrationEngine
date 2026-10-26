@@ -18,6 +18,9 @@ public sealed class TranslationEnv
     public BypassRules Bypass { get; init; } = BypassRules.Empty;
     public ServerBoundRules ServerBound { get; init; } = ServerBoundRules.Empty;
 
+    /// <summary>`--api`: the server-bound classes whose public methods are calls to the generated API (by class name); empty without the option.</summary>
+    public IReadOnlyDictionary<string, Migrator.Target.Core.Generation.ServerClass> ApiClasses { get; init; } = new Dictionary<string, Migrator.Target.Core.Generation.ServerClass>();
+
     /// <summary>Images by name (`Properties.Resources.X`): the project's resource file and the `--images` folder.</summary>
     public ResourceImages Resources { get; init; } = ResourceImages.Empty;
 
@@ -192,6 +195,15 @@ public static class PageTranslator
 
     // --------------------------------------------------------------------------------------------------- async
 
+    /// <summary>The project class a field of the page is declared with, when it is an instance class.</summary>
+    private static bool FieldClass(PageScope scope, string name, out SupportClassInfo cls)
+    {
+        cls = null!;
+        if (!scope.Fields.TryGetValue(name, out var field)) return false;
+        var simple = SimpleName(field.Type.Trim());
+        return scope.Support.TryGetValue(simple, out cls!) && !cls.IsEnum && !cls.Ir.IsStatic;
+    }
+
     internal static void ColorAsync(PageScope scope, List<MemberIr> methods)
     {
         var direct = new HashSet<string>(StringComparer.Ordinal);
@@ -206,10 +218,23 @@ public static class PageTranslator
                 .Select(v => v.Identifier.ValueText).ToHashSet(StringComparer.Ordinal);
 
             if (!calls.TryGetValue(m.Name, out var called)) calls[m.Name] = called = new HashSet<string>(StringComparer.Ordinal);
+            // Locals holding an instance of a project class (`Record r = new Record();`): calls on them reach that class's methods.
+            var instanceLocals = new Dictionary<string, SupportClassInfo>(StringComparer.Ordinal);
+            foreach (var v in root.DescendantNodes().OfType<VariableDeclaratorSyntax>())
+            {
+                if (v.Parent is not VariableDeclarationSyntax vd) continue;
+                var declared = vd.Type.IsVar ? (v.Initializer?.Value as ObjectCreationExpressionSyntax)?.Type.ToString() : vd.Type.ToString();
+                if (declared is not null && scope.Support.TryGetValue(SimpleName(declared), out var cls) && !cls.IsEnum && !cls.Ir.IsStatic) instanceLocals[v.Identifier.ValueText] = cls;
+            }
             foreach (var inv in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
             {
                 switch (inv.Expression)
                 {
+                    case MemberAccessExpressionSyntax { Expression: IdentifierNameSyntax iid } ima
+                        when (instanceLocals.TryGetValue(iid.Identifier.ValueText, out var instanceClass) || FieldClass(scope, iid.Identifier.ValueText, out instanceClass))
+                             && instanceClass.Functions.TryGetValue(ima.Name.Identifier.ValueText, out var instanceFns):
+                        if (instanceFns.Any(fn => fn.IsAsync)) direct.Add(m.Name);
+                        break;
                     case IdentifierNameSyntax id when scope.Functions.ContainsKey(id.Identifier.ValueText):
                         called.Add(id.Identifier.ValueText);
                         break;
@@ -255,6 +280,8 @@ public static class PageTranslator
         MemberAccessExpressionSyntax { Expression: IdentifierNameSyntax ns } m when vocabulary.IsNamespaceRoot(ns.Identifier.ValueText) => m.Name.Identifier.ValueText,
         _ => null
     };
+
+    private static string SimpleName(string type) => type[(type.LastIndexOf('.') + 1)..];
 
     private static string Simple(TypeSyntax t) => t switch
     {
@@ -316,6 +343,9 @@ public static class PageTranslator
         lines.Add("");
         t.Lines = lines;
     }
+
+    /// <summary>The TypeScript name of a C# parameter (reserved words get a trailing underscore).</summary>
+    internal static string ParameterName(string name) => JsReserved.Contains(name) ? name + "_" : name;
 
     internal static string Params(PageScope scope, MemberIr m, MemberFunction fn, string bodyText)
     {

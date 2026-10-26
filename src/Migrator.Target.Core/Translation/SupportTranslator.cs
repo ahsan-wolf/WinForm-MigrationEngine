@@ -36,6 +36,7 @@ internal static class SupportTranslator
                 Support = registry.Classes,
                 Bypass = env.Bypass,
                 ServerBound = env.ServerBound,
+                ApiClasses = env.ApiClasses,
                 Output = output
             };
             foreach (var f in cls.Fields.Values) scope.Fields.TryAdd(f.Name, f);
@@ -57,6 +58,7 @@ internal static class SupportTranslator
         var typeImports = output.TypeImports.Where(t => Regex.IsMatch(code, $@"(?<![\w.]){Regex.Escape(t)}\b")).ToList();
         if (typeImports.Count > 0) header.Add($"import type {{ {string.Join(", ", typeImports)} }} from '{env.Vocabulary.TypesImport}';");
         if (Regex.IsMatch(code, @"\bfixtures\.") && output.FixturesImport.Length > 0) header.Add($"import {{ fixtures }} from '{output.FixturesImport}';");
+        if (Regex.IsMatch(code, @"\bapi\.(call|callStatic)\b")) header.Add("import { api } from '../lib/api';");
         var csharpHelpers = CsharpRuntime.Helpers.Where(h => Regex.IsMatch(code, $@"\b{h}\(")).ToList();
         if (csharpHelpers.Count > 0) header.Add($"import {{ {string.Join(", ", csharpHelpers)} }} from '../lib/csharp';");
         var uiImports = new List<string>();
@@ -342,6 +344,13 @@ internal static class SupportTranslator
             Kind = MemberKind.Method, Name = m.Name, Type = m.Type, Body = m.Body, IsStatic = m.IsStatic,
             Parameters = m.Parameters.Select(p => new ParameterIr { Name = p.Name, Type = StripRef(p.Type), DefaultValue = p.DefaultValue }).ToList()
         };
+        // `--api`: a public method of a server-bound class is a call to the generated API (the original body runs on the server).
+        if (scope.ApiClasses.TryGetValue(cls.Name, out var serverClass) && serverClass.Methods.FirstOrDefault(s => s.Name == m.Name && s.Parameters.Count == m.Parameters.Count && !s.HasByRefParameters) is { } operation
+            && m.Visibility == Visibility.Public)
+        {
+            EmitApiCall(cls, fn, operation, serverClass, scope, lines, ranges, module);
+            return;
+        }
         var serverMarker = serverRules.Match(m.Body);
         var translation = TranslateBody(scope, shaped, demoted.Contains(key) || byRef || serverMarker is not null, allowAwait: fn.IsAsync, out var body, out var stub, translationKey: key,
             demotedLines: LineDemotion.For(demoted, key), stubReason: serverMarker is not null ? $"server-side code (uses {serverMarker}): needs the backend" : null);
@@ -358,6 +367,30 @@ internal static class SupportTranslator
         else lines.AddRange(body.Select(l => l.Length == 0 ? l : "    " + l));
         lines.Add("  }");
         ranges.Add((key, start + 1, lines.Count));
+    }
+
+    /// <summary>The TypeScript method of a server operation: it posts the object's data and the arguments to the API and takes back the result and the changed data.</summary>
+    private static void EmitApiCall(SupportClassInfo cls, MemberFunction fn, Migrator.Target.Core.Generation.ServerMethod operation, Migrator.Target.Core.Generation.ServerClass serverClass,
+        PageScope scope, List<string> lines, List<(string Key, int Start, int End)> ranges, SupportModule module)
+    {
+        var m = fn.Member;
+        var key = $"{cls.Name}.{fn.TsName}";
+        var names = m.Parameters.Select(p => PageTranslator.ParameterName(p.Name)).ToList();
+        var returnType = m.Type.Trim();
+        if (returnType.StartsWith("Task<", StringComparison.Ordinal) && returnType.EndsWith(">", StringComparison.Ordinal)) returnType = returnType[5..^1];
+        var tsReturn = returnType is "void" or "Task" ? "void" : scope.Vocabulary.MapType(returnType, scope.Output.TypeImports);
+        var args = $"[{string.Join(", ", names)}]";
+        var call = m.IsStatic || serverClass.IsStatic
+            ? $"api.callStatic<{tsReturn}>('{cls.Name}', '{operation.Route}', {args})"
+            : $"api.call<{tsReturn}>('{cls.Name}', '{operation.Route}', this, {args}, [{string.Join(", ", serverClass.State.Select(s => "'" + s.Name + "'"))}])";
+        var parameters = PageTranslator.Params(scope, m, fn, string.Join(" ", names));
+        var start = lines.Count;
+        lines.Add($"  // API: POST /api/{cls.Name}/{operation.Route} (the original method runs on the server; see the generated dotnet-api)");
+        lines.Add($"  {(m.IsStatic ? "static " : "")}async {Member(fn.TsName)}({parameters}): Promise<{tsReturn}> {{");
+        lines.Add(tsReturn == "void" ? $"    await {call};" : $"    return await {call};");
+        lines.Add("  }");
+        ranges.Add((key, start + 1, lines.Count));
+        module.Methods.Add(new MethodTranslation { Member = m, TsName = fn.TsName, Status = TranslationStatus.Complete });
     }
 
     // -------------------------------------------------------------------------------------------------- shared

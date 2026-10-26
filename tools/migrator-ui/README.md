@@ -30,6 +30,9 @@ UI development: `dotnet run` in `host/` and `npm run dev` in `web/` (Vite proxie
 | `GET /api/runs`, `/api/runs/{id}/log`, `POST /api/runs/{id}/stop` | every run, its output as a stream, cancel / stop (kills the process tree and the port's listener) |
 | `GET /api/report?dir=` | `MIGRATION_REPORT.md` of an output folder |
 
+## The generated API
+Choose the target `dotnet-api` to generate the server side (a .NET 10 minimal API for the data-access classes); *Install* runs `dotnet build`, *Start* runs `dotnet run` on a free port from 5000. Web targets have the option *Call the generated .NET API for data access* (`--api`). See `docs/guide/v0.5/12-api.md`.
+
 ## Safety
 - Bound to `127.0.0.1`. Every POST must carry the header `X-Migrator-UI` (no CORS is enabled, so a page on another origin cannot send it).
 - Only fixed commands run: the migrator CLI, `npm install`, `npm run dev`, `npx ng serve`. App commands run only in a folder whose `package.json` is a generated app (`@wfm/ui-*` dependency or a `migrated-` name).

@@ -47,6 +47,9 @@ internal sealed partial class MethodTranslator
     private readonly bool _constantContext;
     private readonly HashSet<string> _locals = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string> _formLocals = new(StringComparer.Ordinal);
+
+    /// <summary>Locals holding an instance of a project (support) class: `BankMaster m = new BankMaster();` / `var m = new BankMaster();` -> their methods are called on the instance.</summary>
+    private readonly Dictionary<string, string> _supportLocals = new(StringComparer.Ordinal);
     private readonly HashSet<string> _confirmLocals = new(StringComparer.Ordinal);
     private readonly HashSet<string> _catchVars = new(StringComparer.Ordinal);
 
@@ -136,6 +139,9 @@ internal sealed partial class MethodTranslator
                 _locals.Add(v.Identifier.ValueText);
                 if (v.Parent is VariableDeclarationSyntax vd)
                 {
+                    var declared = vd.Type.IsVar ? (v.Initializer?.Value as ObjectCreationExpressionSyntax)?.Type.ToString() : vd.Type.ToString();
+                    if (declared is not null && _scope.Support.TryGetValue(declared[(declared.LastIndexOf('.') + 1)..], out var instanceClass) && !instanceClass.IsEnum && !instanceClass.Ir.IsStatic)
+                        _supportLocals[v.Identifier.ValueText] = instanceClass.Name;
                     if (v.Initializer?.Value is { } rowInit && (vd.Type.IsVar || vd.Type.ToString() == "DataGridViewRow") && GridOfRow(rowInit) is { } rowGrid) _rowLocals[v.Identifier.ValueText] = rowGrid;
                     else if (IsOpaqueType(vd.Type)) _opaqueLocals.Add(v.Identifier.ValueText);
                 }
@@ -743,6 +749,33 @@ internal sealed partial class MethodTranslator
             default:
                 return null;
         }
+    }
+
+    /// <summary>The project class a local or field holds an instance of (`ei` after `BankMaster ei = new BankMaster()`, `this.record` of that type), or null.</summary>
+    private SupportClassInfo? SupportInstanceOf(ExpressionSyntax e)
+    {
+        if (_scope.Support.Count == 0) return null;
+        string? name = e switch
+        {
+            IdentifierNameSyntax id => id.Identifier.ValueText,
+            MemberAccessExpressionSyntax { Expression: ThisExpressionSyntax } m => m.Name.Identifier.ValueText,
+            _ => null
+        };
+        if (name is null) return null;
+        if (_supportLocals.TryGetValue(name, out var local)) return _scope.Support.GetValueOrDefault(local);
+        if (_locals.Contains(name) || _poisoned.Contains(name) || !_scope.Fields.TryGetValue(name, out var field)) return null;
+        var simple = field.Type.Trim();
+        simple = simple[(simple.LastIndexOf('.') + 1)..];
+        return _scope.Support.TryGetValue(simple, out var type) && !type.IsEnum && !type.Ir.IsStatic ? type : null;
+    }
+
+    /// <summary>`instance.Method(args)` on a project class: the method of the generated class (async when it calls the API or something async).</summary>
+    private string CallSupportInstance(SupportClassInfo type, ExpressionSyntax receiver, string method, InvocationExpressionSyntax inv, bool top)
+    {
+        var fn = type.Resolve(method, inv.ArgumentList.Arguments.Count) ?? throw new Untranslatable($"{type.Name}.{method}(...) not found in the extracted class", wireToRealApi: true);
+        if (fn.Member.IsStatic) return CallSupport(type, method, inv, top);
+        var call = $"{Ex(receiver)}.{fn.TsName}({string.Join(", ", Args(inv))})";
+        return fn.IsAsync ? Await(call, top) : call;
     }
 
     private static string SupportMember(SupportClassInfo type, string name)
@@ -1447,6 +1480,7 @@ internal sealed partial class MethodTranslator
         }
 
         if (SupportTypeOf(receiver) is { IsEnum: false } supportClass) return CallSupport(supportClass, method, inv, top);
+        if (SupportInstanceOf(receiver) is { } instanceType) return CallSupportInstance(instanceType, receiver, method, inv, top);
 
         var typeName = StaticTypeName(receiver);
         if (typeName is not null) return StaticCall(typeName, method, inv, top);
