@@ -82,7 +82,7 @@ public sealed class WinFormsControlTreeExtractor : IIrExtractor
             MergeImages(attributes, images, designer.ResourceKeys.GetValueOrDefault(id), "Image");
             MergeImageList(attributes, imageStreams, designer.ResourceKeys.GetValueOrDefault(id));
 
-            var node = new ControlNodeIr { Id = id, TagName = tagName, Attributes = attributes };
+            var node = new ControlNodeIr { Id = id, TagName = _resolver?.Qualify(tagName) ?? tagName, Attributes = attributes };
             Resolve(node);
 
             if (remainingDepth > 0)

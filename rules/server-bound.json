@@ -5,7 +5,7 @@
   "markers": [
     "SqlConnection", "SqlCommand", "SqlDataAdapter", "SqlDataReader", "SqlParameter", "SqlTransaction", "SqlBulkCopy",
     "DbConnection", "DbCommand", "DbDataReader", "DbTransaction", "IDbConnection", "IDbCommand", "DbContext", "DbSet",
-    "OleDbConnection", "OdbcConnection", "OracleConnection", "DatabaseFactory", "ExecuteReader", "ExecuteNonQuery", "ExecuteScalar", "ExecuteDataSet",
+    "OleDbConnection", "OleDbCommand", "OleDbDataAdapter", "OleDbDataReader", "OleDbTransaction", "OleDbParameter", "OdbcConnection", "OdbcCommand", "OdbcDataAdapter", "OracleConnection", "DatabaseFactory", "ExecuteReader", "ExecuteNonQuery", "ExecuteScalar", "ExecuteDataSet",
     "ConfigurationManager", "ConfigurationSettings", "TransactionManager", "TransactionScope",
     "StreamReader", "StreamWriter", "FileStream", "File.ReadAllText", "File.WriteAllText", "File.Exists", "File.Delete", "File.Copy", "File.Move",
     "Directory.GetFiles", "Directory.CreateDirectory", "Directory.Exists", "SmtpClient", "HttpWebRequest", "WebClient", "HttpClient"

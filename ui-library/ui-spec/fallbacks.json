@@ -9,6 +9,21 @@
       "use": "WfTextBox"
     }
   ],
+  "namePatterns": [
+    { "pattern": "(Date|Time)(Edit|Picker|Box)$", "use": "WfDateTimePicker", "note": "third-party or custom date control" },
+    { "pattern": "(Numeric|Number|Currency|Decimal|Spin)(Box|Edit|Text)?$", "use": "WfNumericUpDown", "note": "third-party or custom numeric control" },
+    { "pattern": "Check(Box|Edit)$", "use": "WfCheckBox", "note": "third-party or custom check box" },
+    { "pattern": "(Combo(Box)?|LookUp(Edit)?|DropDown(List|Edit)?)$", "use": "WfComboBox", "note": "third-party or custom drop-down" },
+    { "pattern": "(Data)?Grid(View|Control)?$|FlexGrid$", "use": "WfDataGrid", "note": "third-party or custom grid" },
+    { "pattern": "Tree(View|List)?$", "use": "WfTreeView", "note": "third-party or custom tree" },
+    { "pattern": "Button$", "use": "WfButton", "note": "third-party or custom button" },
+    { "pattern": "(Text|Txt|Memo|Mask)(Box|Edit)?$|Edit$", "use": "WfTextBox", "note": "third-party or custom text editor" }
+  ],
+  "nonVisualPatterns": [
+    "(Provider|Controller|Manager)$",
+    "^rpt[A-Z]",
+    "ReportDocument$|ReportClass$"
+  ],
   "default": {
     "note": "any other control (third-party, owner-drawn, a viewer): a panel when it has children, otherwise a label with its text (or its type name)",
     "withChildren": "WfPanel",

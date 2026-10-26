@@ -406,7 +406,7 @@ public sealed partial class PageGenerator : IPageGenerator
     private List<string>? RenderElement(ControlNodeIr node, Ctx c, bool isRoot = false)
     {
         var type = ShortType(node.Effective());
-        if (!isRoot && NonVisualTypes.Contains(type))
+        if (!isRoot && (NonVisualTypes.Contains(type) || _spec.IsNonVisual(node.Effective())))
         {
             c.NonVisual.Add($"{node.Id} ({type})");
             return null;
@@ -479,7 +479,9 @@ public sealed partial class PageGenerator : IPageGenerator
 
             var effective = node.Effective();
             var shortType = ShortType(effective);
-            if (_spec.Find(effective) is not null || NonVisualTypes.Contains(shortType) || node.Attributes.GetValueOrDefault("ParentSlot") == "Columns") continue;
+            // A pre-ToolStrip menu item whose text is "-" is a separator.
+            if (shortType == "MenuItem" && node.Attributes.GetValueOrDefault("Text") == "-") { node.Attributes[ControlTypes.ResolvedTypeKey] = "System.Windows.Forms.ToolStripSeparator"; continue; }
+            if (_spec.Find(effective) is not null || NonVisualTypes.Contains(shortType) || _spec.IsNonVisual(effective) || node.Attributes.GetValueOrDefault("ParentSlot") == "Columns") continue;
             if (shortType.StartsWith("DataGridView", StringComparison.Ordinal) && shortType.EndsWith("Column", StringComparison.Ordinal)) continue;
             if (effective.EndsWith("UserControl", StringComparison.Ordinal) && node.Children.Count > 0) continue; // inlined user controls render as panels (RenderFallback)
             if (effective.StartsWith("System.", StringComparison.Ordinal) && !effective.StartsWith("System.Windows.Forms.", StringComparison.Ordinal)) continue; // non-visual component

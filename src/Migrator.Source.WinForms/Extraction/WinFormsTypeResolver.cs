@@ -20,7 +20,9 @@ public sealed class WinFormsTypeResolver
         "ListViewItem", "ColumnHeader", "TreeNode", "ImageList", "ToolTip", "BindingSource", "Timer", "ErrorProvider", "OpenFileDialog",
         "SaveFileDialog", "FolderBrowserDialog", "ColorDialog", "FontDialog", "NotifyIcon", "BackgroundWorker", "HelpProvider", "PrintDocument",
         "PrintDialog", "PageSetupDialog", "DataGridViewTextBoxColumn", "DataGridViewCheckBoxColumn", "DataGridViewComboBoxColumn",
-        "DataGridViewButtonColumn", "DataGridViewImageColumn", "DataGridViewLinkColumn", "DataGridViewColumn"
+        "DataGridViewButtonColumn", "DataGridViewImageColumn", "DataGridViewLinkColumn", "DataGridViewColumn",
+        // pre-ToolStrip and pre-DataGridView controls (old projects, decompiled sources)
+        "MainMenu", "MenuItem", "ContextMenu", "DataGrid", "DataGridTextBoxColumn", "DataGridBoolColumn", "DataGridTableStyle", "StatusBar", "ToolBar", "Splitter"
     };
 
     private readonly IReadOnlyDictionary<string, string> _bases;
@@ -59,6 +61,13 @@ public sealed class WinFormsTypeResolver
         }
         return null;
     }
+
+    /// <summary>
+    /// A framework control written without its namespace (`new TextBox()` in a file that has `using System.Windows.Forms;`, as decompiled and single-file sources do)
+    /// is qualified like the designer files of Visual Studio write it, unless the project declares a class of that name.
+    /// </summary>
+    public string Qualify(string typeName) =>
+        !typeName.Contains('.') && !typeName.Contains('<') && Known.Contains(typeName) && !_bases.ContainsKey(typeName) ? Namespace + typeName : typeName;
 
     /// <summary>True when the chain reaches a standard control other than a Form (a reusable control: user control or derived control).</summary>
     public bool IsControlLike(string typeName) =>

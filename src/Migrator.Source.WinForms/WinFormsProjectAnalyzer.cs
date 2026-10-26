@@ -8,7 +8,7 @@ using Migrator.Source.WinForms.Extraction;
 namespace Migrator.Source.WinForms;
 
 /// <summary>
-/// Finds Designer/code-behind pairs under a root folder, classifies each as Form or UserControl by following the
+/// Finds Designer/code-behind pairs (and single-file forms whose InitializeComponent sits in the code-behind itself) under a root folder, classifies each as Form or UserControl by following the
 /// base-type chain across the project, and detects the startup form and target framework. Syntax only.
 /// </summary>
 public sealed partial class WinFormsProjectAnalyzer : IProjectAnalyzer
@@ -31,10 +31,16 @@ public sealed partial class WinFormsProjectAnalyzer : IProjectAnalyzer
         // (BaseForm, BaseUserControl) still resolve.
         var baseOf = new Dictionary<string, string>();
         var filesOf = new Dictionary<string, List<string>>();
+        // Classes that declare InitializeComponent themselves (the designer code lives in the same file as the code-behind: old projects, decompiled sources).
+        var selfDesigned = new List<(string Name, string File, bool ControlCode)>();
+        var pairFiles = new HashSet<string>(pairs.SelectMany(p => new[] { p.Designer, p.CodeBehind }), StringComparer.OrdinalIgnoreCase);
         foreach (var file in new[] { rootPath }.Concat(extraRoots).SelectMany(r => EnumerateFiles(r, "*.cs")))
             foreach (var cls in CSharpSyntaxTree.ParseText(File.ReadAllText(file)).GetCompilationUnitRoot()
                          .DescendantNodes().OfType<ClassDeclarationSyntax>())
             {
+                if (!pairFiles.Contains(file) && IsUnder(file, rootPath)
+                    && cls.Members.OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.ValueText == "InitializeComponent" && m.Body is not null) is { } init)
+                    selfDesigned.Add((cls.Identifier.ValueText, file, init.Body!.ToString().Contains("Controls") || init.Body.ToString().Contains("ClientSize")));
                 if (cls.BaseList?.Types.FirstOrDefault()?.Type.ToString() is { } baseType)
                     baseOf.TryAdd(cls.Identifier.ValueText, baseType);
                 if (!filesOf.TryGetValue(cls.Identifier.ValueText, out var list)) filesOf[cls.Identifier.ValueText] = list = new List<string>();
@@ -49,9 +55,14 @@ public sealed partial class WinFormsProjectAnalyzer : IProjectAnalyzer
             if (cls != null) named.Add((cls.Identifier.Text, designer, codeBehind));
         }
 
+        var resolver = new WinFormsTypeResolver(baseOf);
+        // A single-file unit is a form or control: its base chain reaches a standard control, or its InitializeComponent lays out controls (a vendor base type).
+        foreach (var (name, file, controlCode) in selfDesigned)
+            if (named.All(n => n.Name != name) && (resolver.Resolve(name) is not null || controlCode))
+                named.Add((name, file, file));
+
         var forms = new List<SourceUnit>();
         var userControls = new List<SourceUnit>();
-        var resolver = new WinFormsTypeResolver(baseOf);
         foreach (var (name, designer, codeBehind) in named.OrderBy(n => n.Name, StringComparer.Ordinal))
         {
             // A reusable control: a user control, or a custom control derived from any other standard control (`X : ComboBox` with a designer).
@@ -76,13 +87,18 @@ public sealed partial class WinFormsProjectAnalyzer : IProjectAnalyzer
 
     private static string? FindStartupForm(string root)
     {
-        foreach (var program in EnumerateFiles(root, "Program.cs"))
+        // Program.cs first; old projects keep Main() inside the main form's own file, so every other file is searched too.
+        var files = EnumerateFiles(root, "Program.cs").Concat(EnumerateFiles(root, "*.cs").Where(f => !Path.GetFileName(f).Equals("Program.cs", StringComparison.OrdinalIgnoreCase)));
+        foreach (var file in files)
         {
-            var match = StartupRegex().Match(File.ReadAllText(program));
+            var match = StartupRegex().Match(File.ReadAllText(file));
             if (match.Success) return match.Groups[1].Value[(match.Groups[1].Value.LastIndexOf('.') + 1)..];
         }
         return null;
     }
+
+    private static bool IsUnder(string file, string root) =>
+        Path.GetFullPath(file).StartsWith(Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
 
     private static string? FindFrameworkVersion(string root)
     {
