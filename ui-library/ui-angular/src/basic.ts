@@ -1,5 +1,5 @@
-import { Component, computed, input, output } from '@angular/core';
-import { parseMnemonic } from '@wfm/ui-core';
+import { Component, ElementRef, HostListener, computed, inject, input, output, signal } from '@angular/core';
+import { parseMnemonic, wfFilterInput, type WfInputRule } from '@wfm/ui-core';
 
 /** Host elements add no box of their own: the inner element takes part in the parent's layout as if it were a direct child. */
 const HOST = { style: 'display: contents' } as const;
@@ -82,7 +82,7 @@ export class WfLinkLabel {
     } @else {
       <input [type]="password() ? 'password' : 'text'" [attr.id]="controlId()" [attr.title]="tooltip()" [attr.placeholder]="placeholder()" [readOnly]="!!readOnly()"
              [disabled]="!!disabled()" [attr.maxlength]="maxLength()" [value]="value() ?? ''" [class]="cls('wf-textbox', className())"
-             (input)="wfValueChange.emit($any($event.target).value)" (keydown)="$event.key === 'Enter' && wfEnter.emit()" />
+             (input)="onInput($event)" (keydown)="onKeyDown($event)" />
     }`,
 })
 export class WfTextBox {
@@ -92,6 +92,10 @@ export class WfTextBox {
   password = input<boolean | undefined>(false);
   multiline = input<boolean | undefined>(false);
   maxLength = input<number | undefined>();
+  /** `letters` accepts only letters and spaces; `number` accepts digits, plus one decimal point with `allowFloat` and a minus sign with `allowNegative`. */
+  inputRule = input<WfInputRule | undefined>();
+  allowFloat = input<boolean | undefined>(false);
+  allowNegative = input<boolean | undefined>(false);
   disabled = input<boolean | undefined>(false);
   controlId = input<string | undefined>();
   className = input<string | undefined>();
@@ -99,27 +103,100 @@ export class WfTextBox {
   wfValueChange = output<string>();
   wfEnter = output<void>();
   protected cls = cls;
+
+  /** A statement, not an expression: an expression template handler that evaluates to `false` makes Angular cancel the key press. */
+  protected onKeyDown(event: KeyboardEvent): void {
+    if (event.key === 'Enter') this.wfEnter.emit();
+  }
+
+  protected onInput(event: Event): void {
+    const box = event.target as HTMLInputElement;
+    if (this.inputRule()) {
+      const kept = wfFilterInput(this.inputRule(), box.value, { allowFloat: !!this.allowFloat(), allowNegative: !!this.allowNegative() });
+      if (kept !== box.value) box.value = kept;
+    }
+    this.wfValueChange.emit(box.value);
+  }
 }
+
+/** A column of a multi-column drop-down. */
+export interface WfComboColumn { field: string; header?: string; width?: number }
 
 @Component({
   selector: 'wf-combo-box',
   standalone: true,
   host: HOST,
-  template: `<select [attr.id]="controlId()" [attr.title]="tooltip()" [disabled]="!!disabled()" [class]="cls('wf-combobox', className())"
+  template: `@if (columns() && columns()!.length > 0) {
+      <div [class]="cls('wf-combo-multi', className())">
+        <button type="button" [attr.id]="controlId()" [attr.title]="tooltip()" [disabled]="!!disabled()" role="combobox" aria-haspopup="grid" [attr.aria-expanded]="open()"
+                class="wf-combobox wf-combo-multi-button" (click)="open.set(!open())" (keydown)="onKey($event)">{{ shownText() }}</button>
+        @if (open()) {
+          <div role="grid" class="wf-combo-multi-panel">
+            <table>
+              <thead><tr>@for (c of columns()!; track c.field) { <th [style.width.px]="c.width">{{ c.header ?? c.field }}</th> }</tr></thead>
+              <tbody>
+                @for (r of rows(); track $index) {
+                  <tr role="row" [attr.aria-selected]="isSelected(r)" [class.wf-combo-active]="$index === active()" (mouseenter)="active.set($index)" (mousedown)="$event.preventDefault(); choose(r)">
+                    @for (c of columns()!; track c.field) { <td>{{ cell(r, c.field) }}</td> }
+                  </tr>
+                } @empty { <tr><td [attr.colspan]="columns()!.length">No rows</td></tr> }
+              </tbody>
+            </table>
+          </div>
+        }
+      </div>
+    } @else {
+      <select [attr.id]="controlId()" [attr.title]="tooltip()" [disabled]="!!disabled()" [class]="cls('wf-combobox', className())"
                      (change)="wfSelectionChange.emit($any($event.target).value)">
-      @if (value() !== undefined && value() !== '' && !items().includes(value()!)) { <option [value]="value()!" selected>{{ value() }}</option> }
-      @for (item of items(); track $index) { <option [value]="item" [selected]="item === value()">{{ item }}</option> }
-    </select>`,
+        @if (value() !== undefined && value() !== '' && !items().includes(value()!)) { <option [value]="value()!" selected>{{ value() }}</option> }
+        @for (item of items(); track $index) { <option [value]="item" [selected]="item === value()">{{ item }}</option> }
+      </select>
+    }`,
 })
 export class WfComboBox {
   items = input<string[]>([]);
   value = input<string | undefined>();
+  /** With `columns` the drop-down opens a small grid of `rows` (a multi-column combo): `valueField` is the selected value, `displayField` the text shown. */
+  columns = input<WfComboColumn[] | undefined>();
+  rows = input<Record<string, unknown>[]>([]);
+  valueField = input<string | undefined>();
+  displayField = input<string | undefined>();
   disabled = input<boolean | undefined>(false);
   controlId = input<string | undefined>();
   className = input<string | undefined>();
   tooltip = input<string | undefined>();
   wfSelectionChange = output<string>();
   protected cls = cls;
+
+  protected readonly open = signal(false);
+  protected readonly active = signal(-1);
+  private readonly host = inject(ElementRef<HTMLElement>);
+
+  private valueKey = (): string => this.valueField() ?? this.columns()?.[0]?.field ?? '';
+  private shownKey = (): string => this.displayField() ?? this.columns()?.find(c => c.field !== this.valueKey())?.field ?? this.valueKey();
+  protected cell = (row: Record<string, unknown>, field: string): string => String(row[field] ?? '');
+  protected isSelected = (row: Record<string, unknown>): boolean => String(row[this.valueKey()]) === this.value();
+  protected shownText = computed(() => {
+    const selected = this.rows().find(r => String(r[this.valueKey()]) === this.value());
+    return selected ? String(selected[this.shownKey()] ?? '') : '';
+  });
+
+  protected choose(row: Record<string, unknown>): void {
+    this.wfSelectionChange.emit(String(row[this.valueKey()]));
+    this.open.set(false);
+  }
+
+  protected onKey(e: KeyboardEvent): void {
+    if (e.key === 'Escape') this.open.set(false);
+    else if (e.key === 'ArrowDown') { e.preventDefault(); this.open.set(true); this.active.update(a => Math.min(a + 1, this.rows().length - 1)); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); this.active.update(a => Math.max(a - 1, 0)); }
+    else if (e.key === 'Enter' && this.open() && this.rows()[this.active()]) { e.preventDefault(); this.choose(this.rows()[this.active()]); }
+  }
+
+  @HostListener('document:mousedown', ['$event'])
+  protected closeOnOutside(e: MouseEvent): void {
+    if (this.open() && !(this.host.nativeElement as HTMLElement).contains(e.target as Node)) this.open.set(false);
+  }
 }
 
 @Component({
@@ -288,4 +365,52 @@ export class WfUnsupported {
   reason = input('Not migrated — see MIGRATION_REPORT.md');
   controlId = input<string | undefined>();
   protected name = computed(() => this.type().slice(this.type().lastIndexOf('.') + 1));
+}
+
+/** Colour chooser (WinForms ColorDialog / colour editors): the browser's native colour input; the value is `#rrggbb`. */
+@Component({
+  selector: 'wf-color-picker',
+  standalone: true,
+  host: HOST,
+  template: `<input type="color" [attr.id]="controlId()" [attr.title]="tooltip()" [disabled]="!!disabled()" [class]="cls('wf-colorpicker', className())" [attr.aria-label]="tooltip() ?? 'Colour'"
+                    [value]="value()" (input)="wfValueChange.emit($any($event.target).value)" />`,
+})
+export class WfColorPicker {
+  value = input('#000000');
+  disabled = input<boolean | undefined>(false);
+  controlId = input<string | undefined>();
+  className = input<string | undefined>();
+  tooltip = input<string | undefined>();
+  wfValueChange = output<string>();
+  protected cls = cls;
+}
+
+/** Font families offered by default: the web-safe set every browser has. */
+export const WF_FONT_FAMILIES = ['Arial', 'Calibri', 'Cambria', 'Courier New', 'Georgia', 'Segoe UI', 'Tahoma', 'Times New Roman', 'Trebuchet MS', 'Verdana'];
+
+/** Font chooser (WinForms FontDialog / font editors): a family drop-down with a live preview line; the value is the family name. */
+@Component({
+  selector: 'wf-font-picker',
+  standalone: true,
+  host: HOST,
+  template: `<span [class]="cls('wf-fontpicker', className())">
+      <select [attr.id]="controlId()" [attr.title]="tooltip()" [disabled]="!!disabled()" class="wf-combobox" [attr.aria-label]="tooltip() ?? 'Font'" (change)="wfValueChange.emit($any($event.target).value)">
+        @for (f of list(); track f) { <option [value]="f" [selected]="f === value()">{{ f }}</option> }
+      </select>
+      <span class="wf-fontpicker-preview" [style.font-family]="value()" [style.font-size.pt]="size()" [style.font-weight]="bold() ? 700 : 400" [style.font-style]="italic() ? 'italic' : 'normal'">AaBb 123</span>
+    </span>`,
+})
+export class WfFontPicker {
+  value = input('Segoe UI');
+  size = input(10);
+  bold = input<boolean | undefined>(false);
+  italic = input<boolean | undefined>(false);
+  families = input<string[]>(WF_FONT_FAMILIES);
+  disabled = input<boolean | undefined>(false);
+  controlId = input<string | undefined>();
+  className = input<string | undefined>();
+  tooltip = input<string | undefined>();
+  wfValueChange = output<string>();
+  protected cls = cls;
+  protected list = computed(() => (this.families().includes(this.value()) ? this.families() : [this.value(), ...this.families()]));
 }

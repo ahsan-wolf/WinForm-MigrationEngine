@@ -48,7 +48,7 @@ public sealed class ReactTargetEngine : IProjectTargetEngine
     public Version Version { get; } = new(0, 5, 0);
     public Version SchemaVersion { get; } = Version.Parse(IrSchema.Version);
     public string UiLibraryPackage => "@wfm/ui-react";
-    public IReadOnlyList<string> RequiredSpecVersion { get; } = new[] { "^0.3" };
+    public IReadOnlyList<string> RequiredSpecVersion { get; } = new[] { "^0.4" };
 
     /// <summary>Page-level generator (one component, no project context). Prefer <see cref="GenerateProject"/>.</summary>
     public IIrGenerator Generator => new ReactPageIrGenerator(_options);

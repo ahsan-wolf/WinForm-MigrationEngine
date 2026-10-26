@@ -79,3 +79,41 @@ export function WfLinkLabel({ text, onClick, disabled, id, className, tooltip }:
     </a>
   );
 }
+
+export interface WfColorPickerProps extends Common {
+  /** Colour as `#rrggbb`. */
+  value?: string;
+  onValueChange?: (value: string) => void;
+}
+/** Colour chooser (WinForms ColorDialog / colour editors): the browser's native colour input; the value is `#rrggbb`. */
+export function WfColorPicker({ value = '#000000', onValueChange, disabled, id, className, tooltip }: WfColorPickerProps) {
+  return (
+    <input type="color" id={id} title={tooltip} disabled={disabled} className={cls('wf-colorpicker', className)} aria-label={tooltip ?? 'Colour'}
+           {...(onValueChange ? { value } : { defaultValue: value })} onChange={e => onValueChange?.(e.target.value)} />
+  );
+}
+
+/** Font families offered by default: the web-safe set every browser has. */
+export const WF_FONT_FAMILIES = ['Arial', 'Calibri', 'Cambria', 'Courier New', 'Georgia', 'Segoe UI', 'Tahoma', 'Times New Roman', 'Trebuchet MS', 'Verdana'];
+
+export interface WfFontPickerProps extends Common {
+  /** Font family name. */
+  value?: string;
+  /** Size in points; with `bold` / `italic` shown as a preview. */
+  size?: number; bold?: boolean; italic?: boolean;
+  families?: string[];
+  onValueChange?: (value: string) => void;
+}
+/** Font chooser (WinForms FontDialog / font editors): a family drop-down with a live preview line; the value is the family name. */
+export function WfFontPicker({ value = 'Segoe UI', size = 10, bold, italic, families = WF_FONT_FAMILIES, onValueChange, disabled, id, className, tooltip }: WfFontPickerProps) {
+  const list = families.includes(value) ? families : [value, ...families];
+  return (
+    <span className={cls('wf-fontpicker', className)}>
+      <select id={id} title={tooltip} disabled={disabled} className="wf-combobox" aria-label={tooltip ?? 'Font'}
+              {...(onValueChange ? { value } : { defaultValue: value })} onChange={e => onValueChange?.(e.target.value)}>
+        {list.map(f => <option key={f} value={f}>{f}</option>)}
+      </select>
+      <span className="wf-fontpicker-preview" style={{ fontFamily: value, fontSize: `${size}pt`, fontWeight: bold ? 700 : 400, fontStyle: italic ? 'italic' : 'normal' }}>AaBb 123</span>
+    </span>
+  );
+}

@@ -136,3 +136,15 @@ textarea.wf-textbox { height: auto; padding: var(--wf-space-1); }
 .wf-dropdown > .wf-menu { top: 100%; left: 0; z-index: var(--wf-z-menu, 10); }
 .wf-dynamic { display: flex; flex-direction: column; gap: var(--wf-gap, 4px); }
 .wf-listview-icon { width: 16px; height: 16px; margin-right: 4px; vertical-align: text-bottom; }
+
+/* multi-column combo, colour and font pickers */
+.wf-combo-multi { position: relative; display: inline-block; }
+.wf-combo-multi-button { min-width: 10em; text-align: left; cursor: pointer; }
+.wf-combo-multi-panel { position: absolute; z-index: 20; top: 100%; left: 0; min-width: 100%; max-height: 16em; overflow: auto; background: var(--wf-color-bg); border: 1px solid var(--wf-color-border); box-shadow: 0 2px 6px rgba(0, 0, 0, .2); }
+.wf-combo-multi-panel table { border-collapse: collapse; width: 100%; }
+.wf-combo-multi-panel th, .wf-combo-multi-panel td { padding: 2px var(--wf-space-1); text-align: left; white-space: nowrap; }
+.wf-combo-multi-panel th { position: sticky; top: 0; background: var(--wf-color-bg); border-bottom: 1px solid var(--wf-color-border); }
+.wf-combo-multi-panel tr.wf-combo-active { background: var(--wf-color-selection, #cce4ff); }
+.wf-colorpicker { height: var(--wf-control-height); width: 3em; padding: 0; border: 1px solid var(--wf-color-border); border-radius: var(--wf-radius); background: var(--wf-color-bg); }
+.wf-fontpicker { display: inline-flex; align-items: center; gap: var(--wf-space-1); }
+.wf-fontpicker-preview { white-space: nowrap; }

@@ -34,13 +34,14 @@ Event naming (canonical → React / Angular / HTML): `click → onClick / (wfCli
 | `Button` | `WfButton` | `text, variant, icon, type, dialogResult` | `click` |
 | `Label` | `WfLabel` | `text, for` | — |
 | `LinkLabel` | `WfLinkLabel` ✅ | `text, disabled` | `click` (`LinkClicked`/`Click`) |
-| `TextBox` | `WfTextBox` | `value, maxLength, readOnly, password, placeholder, casing` | `valueChange, enter, blur` |
+| `TextBox` | `WfTextBox` | `value, maxLength, readOnly, password, placeholder, casing, inputRule (letters \| number), allowFloat, allowNegative` | `valueChange, enter, blur` |
 | `TextBox (Multiline)` | `WfTextArea` | `value, rows, wrap` | `valueChange` |
 | `MaskedTextBox` | `WfMaskedTextBox` | `value, mask` | `valueChange` |
 | `RichTextBox` | `WfRichTextBox` | `value` (plain text) | `valueChange` |
 | `CheckBox` | `WfCheckBox` | `checked, indeterminate, text` | `checkedChange` |
 | `RadioButton` ✅ | `WfRadioButton` | `text, checked, group` (= parent container id; radio buttons of one container are exclusive) | `checkedChange` |
-| `ComboBox` | `WfComboBox` | `items, displayMember, valueMember, value, editable` | `selectionChange` |
+| `ComboBox` | `WfComboBox` | `items, displayMember, valueMember, value, editable`; `columns, rows, valueField, displayField` = multi-column combo (grid drop-down) | `selectionChange` |
+| colour / font editors (third-party, by fallback) | `WfColorPicker`, `WfFontPicker` | `value` (`#rrggbb` / family), font `size, bold, italic` | `valueChange` |
 | `ListBox` | `WfListBox` | `items, value` (single selection) | `selectionChange` |
 | `NumericUpDown` ✅ | `WfNumericUpDown` | `value, min, max, step, decimals, readOnly` | `valueChange` |
 | `DateTimePicker` ✅ | `WfDateTimePicker` | `value` (ISO text), `kind` (date \| datetime \| time, from `Format`/`CustomFormat`) | `valueChange` |

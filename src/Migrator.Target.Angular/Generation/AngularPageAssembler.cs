@@ -20,7 +20,7 @@ public sealed partial class AngularPageAssembler : IPageAssembler
         "WfProgress", "WfPictureBox", "WfUnsupported", "WfForm", "WfPanel", "WfGroupBox", "WfSplit", "WfSplitPane", "WfStatusBar",
         "WfTabs", "WfTabPage", "WfMenuBar", "WfMenuItem", "WfSeparator", "WfToolbar", "WfToolbarButton", "WfDropDownButton", "WfContextMenu",
         "WfCheckedListBox", "WfDomainUpDown", "WfTrackBar", "WfScrollBar", "WfMaskedTextBox", "WfRichTextBox", "WfMonthCalendar", "WfListBox",
-        "WfDataGrid", "WfListView", "WfTreeView", "WfDynamicHost"
+        "WfDataGrid", "WfListView", "WfTreeView", "WfDynamicHost", "WfColorPicker", "WfFontPicker"
     };
 
     /// <summary>Types of the library that inline handler parameters can carry (imported into the code-behind when used).</summary>

@@ -334,7 +334,7 @@ internal sealed class JsxToAngular
     {
         var known = (tag, reactName) switch
         {
-            ("WfTextBox" or "WfDateTimePicker", "onValueChange") => new[] { "string" },
+            ("WfTextBox" or "WfDateTimePicker" or "WfColorPicker" or "WfFontPicker", "onValueChange") => new[] { "string" },
             ("WfNumericUpDown", "onValueChange") => new[] { "number" },
             ("WfComboBox", "onSelectionChange") => new[] { "string" },
             ("WfCheckBox" or "WfRadioButton", "onCheckedChange") => new[] { "boolean" },

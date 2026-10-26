@@ -1,5 +1,5 @@
 {
-  "specVersion": "0.3.0",
+  "specVersion": "0.4.0",
   "note": "When a WinForms control has no component in controls.json, the generator renders the closest available library component instead of a placeholder. Data only: edit or extend without rebuilding. `use` is a component name from controls.json; propertyAliases / eventAliases rename WinForms members to the ones that component's spec reads (code that uses `dt.Value` then reads the text box state).",
   "fallbacks": [
     {
@@ -10,13 +10,22 @@
     }
   ],
   "namePatterns": [
-    { "pattern": "(Date|Time)(Edit|Picker|Box)$", "use": "WfDateTimePicker", "note": "third-party or custom date control" },
-    { "pattern": "(Numeric|Number|Currency|Decimal|Spin)(Box|Edit|Text)?$", "use": "WfNumericUpDown", "note": "third-party or custom numeric control" },
+    { "pattern": "DateTime(Edit|Picker|Box)$", "use": "WfDateTimePicker", "attributes": { "DateKind": "datetime" }, "note": "third-party or custom date-time control" },
+    { "pattern": "Time(Edit|Picker|Box)$", "use": "WfDateTimePicker", "attributes": { "DateKind": "time" }, "note": "third-party or custom time-only control" },
+    { "pattern": "Date(Edit|Picker|Box)$", "use": "WfDateTimePicker", "attributes": { "DateKind": "date" }, "note": "third-party or custom date-only control" },
+    { "pattern": "Colou?r(Edit|Picker|Box|Selector|Combo(Box)?)$", "use": "WfColorPicker", "note": "third-party or custom colour editor: the browser's colour input" },
+    { "pattern": "Font(Edit|Picker|Box|Selector|Combo(Box)?)$", "use": "WfFontPicker", "note": "third-party or custom font editor: a font family drop-down with a preview" },
+    { "pattern": "Calendar(Control|Box)?$", "use": "WfMonthCalendar", "note": "third-party or custom calendar" },
+    { "pattern": "(Spin|UpDown)(Box|Edit)?$", "use": "WfNumericUpDown", "note": "third-party or custom spin box" },
+    { "pattern": "(Numeric|Number|Currency|Decimal|Integer)(Box|Edit|Text)?$", "use": "WfTextBox", "attributes": { "InputRule": "number" }, "note": "numeric text box: digits only; decimals and negatives from AllowFloat / AllowNegative" },
+    { "pattern": "^(Txt|Alpha|Letters?)(Box|Edit|Text)?$|TextOnly$", "use": "WfTextBox", "attributes": { "InputRule": "letters" }, "note": "text-only box: letters and spaces only" },
     { "pattern": "Check(Box|Edit)$", "use": "WfCheckBox", "note": "third-party or custom check box" },
     { "pattern": "(Combo(Box)?|LookUp(Edit)?|DropDown(List|Edit)?)$", "use": "WfComboBox", "note": "third-party or custom drop-down" },
-    { "pattern": "(Data)?Grid(View|Control)?$|FlexGrid$", "use": "WfDataGrid", "note": "third-party or custom grid" },
+    { "pattern": "(Data|Hierarchical|Banded|Advanced)?Grid(View|Control)?$|FlexGrid$|GridList$", "use": "WfDataGrid", "note": "third-party or custom grid" },
     { "pattern": "Tree(View|List)?$", "use": "WfTreeView", "note": "third-party or custom tree" },
     { "pattern": "Button$", "use": "WfButton", "note": "third-party or custom button" },
+    { "pattern": "Mask(ed)?(Text|Edit|Box)$", "use": "WfMaskedTextBox", "note": "third-party or custom masked editor" },
+    { "pattern": "(Memo|MultiLine|Multiline)(Text)?(Box|Edit)?$", "use": "WfTextBox", "attributes": { "Multiline": "true" }, "note": "multi-line text" },
     { "pattern": "(Text|Txt|Memo|Mask)(Box|Edit)?$|Edit$", "use": "WfTextBox", "note": "third-party or custom text editor" }
   ],
   "nonVisualPatterns": [

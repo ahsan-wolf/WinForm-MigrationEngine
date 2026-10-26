@@ -3,7 +3,7 @@
 As built, for the React target (`@wfm/ui-react`). The sources of truth are `ui-library/ui-spec/controls.json` (components), `ui-library/ui-spec/fallbacks.json` (stand-ins) and `ui-library/ui-spec/tokens.css` (theme); this page summarises them.
 Generated pages import `Wf*` components only. Identical names, props and canonical events are the contract for the Angular and HTML+jQuery libraries (not started).
 
-## 1. Components that represent a WinForms control directly (37)
+## 1. Components that represent a WinForms control directly (37, plus two reached through fallbacks)
 
 | WinForms control(s) | React component | Props (from the WinForms property) | Events (from the WinForms event) |
 |---|---|---|---|
@@ -22,8 +22,10 @@ Generated pages import `Wf*` components only. Identical names, props and canonic
 | `Label`, `ToolStripLabel`, `ToolStripStatusLabel` | `WfLabel` | `text` | — |
 | `Button` | `WfButton` | `text`, `disabled` | `onClick` (a `DialogResult` also closes the dialog) |
 | `LinkLabel` | `WfLinkLabel` | `text`, `disabled` | `onClick` (LinkClicked / Click) |
-| `TextBox` | `WfTextBox` | `value`, `readOnly`, `maxLength`, `multiline`, `password` | `onValueChange` (TextChanged) |
-| `ComboBox`, `ToolStripComboBox` | `WfComboBox` | `items`, `value`, `disabled` | `onSelectionChange` |
+| `TextBox` | `WfTextBox` | `value`, `readOnly`, `maxLength`, `multiline`, `password`, `inputRule` (`letters` or `number`), `allowFloat`, `allowNegative` (the rule is set by a fallback for third-party text-only and numeric boxes; typing and pasting keep only what the rule accepts) | `onValueChange` (TextChanged) |
+| `ComboBox`, `ToolStripComboBox` | `WfComboBox` | `items`, `value`, `disabled`; with `columns` / `rows` / `valueField` / `displayField` the drop-down is a **grid** (multi-column combo, look-up) | `onSelectionChange` |
+| *(fallback only)* colour editors | `WfColorPicker` | `value` (`#rrggbb`); the browser's native colour input | `onValueChange` |
+| *(fallback only)* font editors | `WfFontPicker` | `value` (family), `size`, `bold`, `italic`; a family drop-down with a preview | `onValueChange` |
 | `CheckBox` | `WfCheckBox` | `text`, `checked` | `onCheckedChange` |
 | `RadioButton` | `WfRadioButton` | `text`, `checked`, `group` (the parent container: its radio buttons are mutually exclusive) | `onCheckedChange` |
 | `DateTimePicker` | `WfDateTimePicker` | `value` (ISO text), `kind` = date / datetime / time (from Format / CustomFormat), `minDate` / `maxDate` (from MinDate / MaxDate); a native `input type=date|time|datetime-local` | `onValueChange` |
@@ -64,6 +66,8 @@ The closest component is rendered, marked `/* FALLBACK: Type */`, and listed in 
 | WinForms control(s) | Rendered as |
 |---|---|
 | `ToolStripTextBox` | `WfTextBox` (`Value` read as `Text`) |
+| third-party or custom controls (not `System.*`), by **name pattern** (`namePatterns` in `fallbacks.json`, generic words) | numeric text box (`Numeric…`, `Number…`, `Currency…`, `Decimal…`, `Integer…`) -> `WfTextBox` with the number rule; text-only box (`Txt`, `Alpha`, `Letters`, `…TextOnly`) -> `WfTextBox` with the letters rule; memo / multi-line -> `WfTextBox` multiline; masked editors -> `WfMaskedTextBox`; `…DateTime…` / `…Date…` / `…Time…` pickers -> `WfDateTimePicker` with `kind` datetime / date / time; calendars -> `WfMonthCalendar`; combos, look-ups, drop-downs -> `WfComboBox`; grids (data, hierarchical, banded, flex) -> `WfDataGrid`; trees -> `WfTreeView`; buttons -> `WfButton`; colour editors -> `WfColorPicker`; font editors -> `WfFontPicker`; spin boxes -> `WfNumericUpDown` |
+| third-party helpers with no visual (`…Provider`, `…Controller`, generated `rpt…` report classes) | not rendered, listed as non-visual (`nonVisualPatterns`) |
 | anything else (third-party, owner-drawn, report viewers, ...) | `WfPanel` when it has children, otherwise `WfLabel` (its text, or `[TypeName]`) |
 
 ## 4. How other controls get there

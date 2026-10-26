@@ -495,6 +495,9 @@ public sealed partial class PageGenerator : IPageGenerator
                 if (node.Attributes.TryGetValue(from, out var value) && !node.Attributes.ContainsKey(to)) node.Attributes[to] = value;
                 node.Attributes["Fallback.Alias." + from] = to;
             }
+            // Attributes a fallback fixes (an input rule, a date kind): the designer's own values win.
+            foreach (var (name, value) in fallback?.Attributes ?? new Dictionary<string, string>())
+                node.Attributes.TryAdd(name, value);
             foreach (var (from, to) in fallback?.EventAliases ?? new Dictionary<string, string>())
                 if (node.Attributes.TryGetValue("On" + from, out var handler) && !node.Attributes.ContainsKey("On" + to)) node.Attributes["On" + to] = handler;
 
@@ -1624,6 +1627,8 @@ public sealed partial class PageGenerator : IPageGenerator
     {
         var format = LastToken(node.Attributes.GetValueOrDefault("Format") ?? "");
         var kind = format == "Time" ? "time" : "date";
+        // A third-party date, time or date-time control named by its kind (fallbacks.json sets DateKind).
+        if (node.Attributes.GetValueOrDefault("DateKind") is { } named && named is "time" or "datetime" or "date") kind = named;
         if (format == "Custom" && node.Attributes.GetValueOrDefault("CustomFormat") is { } custom)
         {
             var hasTime = custom.Contains('H') || custom.Contains('h') || custom.Contains("tt", StringComparison.Ordinal);
