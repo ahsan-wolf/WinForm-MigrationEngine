@@ -224,9 +224,11 @@ public static class PageTranslator
                     case MemberAccessExpressionSyntax ma:
                         var recv = ma.Expression.ToString();
                         var method = ma.Name.Identifier.ValueText;
+                        var shown = ma.Expression;
+                        while (shown is ParenthesizedExpressionSyntax parenthesized) shown = parenthesized.Expression;
                         if (recv is "MessageBox" or "System.Windows.Forms.MessageBox" && method == "Show") direct.Add(m.Name);
-                        else if (method is "ShowDialog" or "Show" && (ma.Expression is ObjectCreationExpressionSyntax oc2 && scope.Units.ContainsKey(Simple(oc2.Type))
-                                 || ma.Expression is IdentifierNameSyntax fid && formLocals.Contains(fid.Identifier.ValueText))) direct.Add(m.Name);
+                        else if (method is "ShowDialog" or "Show" && (shown is ObjectCreationExpressionSyntax oc2 && scope.Units.ContainsKey(Simple(oc2.Type))
+                                 || shown is IdentifierNameSyntax fid && formLocals.Contains(fid.Identifier.ValueText))) direct.Add(m.Name);
                         else if (FacadeName(ma.Expression, scope.Vocabulary) is { } facade && scope.Vocabulary.IsFacade(facade) && !scope.Fields.ContainsKey(facade) && !scope.Controls.Contains(facade))
                         {
                             if (Enumerable.Range(0, 16).Any(n => scope.Vocabulary.FindCall(facade, method, n) is not null)) direct.Add(m.Name);

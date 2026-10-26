@@ -45,7 +45,7 @@ public sealed class AngularTargetEngine : IProjectTargetEngine
     public Version Version { get; } = new(0, 5, 0);
     public Version SchemaVersion { get; } = Version.Parse(IrSchema.Version);
     public string UiLibraryPackage => "@wfm/ui-angular";
-    public IReadOnlyList<string> RequiredSpecVersion { get; } = new[] { "^0.3" };
+    public IReadOnlyList<string> RequiredSpecVersion { get; } = new[] { "^0.4" };
 
     /// <summary>The page-level generator is not offered: a page needs the project context (routes, shared support code). Use <see cref="GenerateProject"/>.</summary>
     public IIrGenerator Generator => throw new NotSupportedException("angular-app generates whole projects; use GenerateProject.");

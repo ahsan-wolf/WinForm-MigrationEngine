@@ -1421,6 +1421,8 @@ internal sealed partial class MethodTranslator
         if (inv.Expression is not MemberAccessExpressionSyntax ma) throw new Untranslatable("call through an expression");
         var method = ma.Name.Identifier.ValueText;
         var receiver = ma.Expression;
+        // `(new frmX() { MdiParent = this }).Show()`: the parentheses (and the initializer, which only sets a window property) do not change what is opened.
+        if (method is "Show" or "ShowDialog") while (receiver is ParenthesizedExpressionSyntax paren) receiver = paren.Expression;
 
         if (receiver is ThisExpressionSyntax)
         {

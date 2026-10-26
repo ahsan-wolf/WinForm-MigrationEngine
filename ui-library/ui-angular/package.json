@@ -1,6 +1,6 @@
 {
   "name": "@wfm/ui-angular",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Angular 21 (standalone components) implementation of @wfm/ui-spec. Independent of the migration engine and of any IR. Consumed as TypeScript source (tsconfig path) by generated apps.",
   "type": "module",
   "private": true,

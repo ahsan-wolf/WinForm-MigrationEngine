@@ -271,7 +271,7 @@ The controls live in a **separate, UI-independent library** under `ui-library/`.
 | `@wfm/ui-angular` | Angular 21 standalone components implementing the spec (selectors `wf-*`, outputs `wf` + event name) |
 | `@wfm/ui-html` | HTML/CSS + vanilla JS web-friendly components; jQuery adapter (`$.fn.wfDataGrid`, …) |
 
-**As built:** `ui-spec` 0.3.0 (`controls.json` + `fallbacks.json` + `tokens.css`) and `@wfm/ui-react` 0.3.0 exist, with 41 spec entries (36 map WinForms controls; native HTML only, no third-party dependency) plus the dialog service (`dialog.show()` / `dialog.close()`), `useWfModel` and `WfUnsupported`; see `ui-library/README.md` and `docs/UI_CONTROL_MAPPING.md`. `@wfm/ui-core` 0.4.0 (framework-free helpers) and `@wfm/ui-angular` 0.4.0 exist too (React 0.4.0); `ui-html` is not started. Generators read `controls.json` as data (`winformsTypes`, `props[].from/transform`, `events[].from`).
+**As built:** `ui-spec` 0.4.0 (`controls.json` + `fallbacks.json` + `tokens.css`) and `@wfm/ui-react` 0.5.0 exist, with 43 spec entries (36 map WinForms controls, two more are reached through name-pattern fallbacks: `WfColorPicker`, `WfFontPicker`; native HTML only, no third-party dependency) plus the dialog service (`dialog.show()` / `dialog.close()`), `useWfModel` and `WfUnsupported`; see `ui-library/README.md` and `docs/UI_CONTROL_MAPPING.md`. `@wfm/ui-core` and `@wfm/ui-angular` 0.5.0 exist too; `ui-html` is not started. Generators read `controls.json` as data (`winformsTypes`, `props[].from/transform`, `events[].from`).
 
 Hard rules:
 1. **Library-first generation.** Generated pages import `Wf*` components only. They never import AG Grid / DataTables / Material / jstree etc. directly — those are the library's private implementation detail (peer deps).
