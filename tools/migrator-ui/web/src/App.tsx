@@ -11,7 +11,7 @@ import { FolderPicker } from './FolderPicker';
 const STORAGE = 'migrator-ui.form.v1';
 const DEFAULTS: MigrateForm = {
   source: '', out: '', mode: 'app', target: 'react-app', entry: '', depth: '1', allUnits: false, catalog: false, noExternalProjects: false,
-  translate: 'rules', compileGate: true, contracts: '', contractScope: 'used', images: '', archetypes: '',
+  translate: 'rules', compileGate: true, contracts: '', contractScope: 'used', images: '', archetypes: '', api: false, dbProvider: 'sqlclient',
 };
 const MODES: { id: MigrateForm['mode']; text: string; hint: string }[] = [
   { id: 'ir', text: 'IR only', hint: 'The framework-neutral IR files (six per form + project.ir.json).' },
@@ -29,6 +29,8 @@ function preview(f: MigrateForm): string {
   const q = (s: string) => (/\s/.test(s) ? `"${s}"` : s);
   if (f.mode === 'ir') return `migrator ir --source ${q(f.source || '<source>')} --out ${q(f.out || '<out>')}`;
   const a = ['migrator migrate', `--source ${q(f.source || '<source>')}`, `--out ${q(f.out || '<out>')}`, `--target ${f.target}`];
+  if (f.target === 'dotnet-api') return a.concat(f.dbProvider ? [`--db-provider ${f.dbProvider}`] : []).join(' ');
+  if (f.api) a.push('--api');
   if (f.mode === 'appshell') a.push('--appshell');
   if (f.mode === 'viewer') a.push('--preview');
   if (f.entry) a.push(`--entry ${f.entry}`);
@@ -162,7 +164,7 @@ export function App() {
             <WfCheckBox text="Do not follow projects outside the source folder" checked={form.noExternalProjects} onCheckedChange={v => set('noExternalProjects', v)} />
           </WfGroupBox>
 
-          <WfGroupBox title="Translation and inputs" disabled={form.mode !== 'app'}>
+          <WfGroupBox title="Translation and inputs" disabled={form.mode !== 'app' && form.target !== 'dotnet-api'}>
             <div className="mu-field">
               <WfLabel text="Translate" />
               <WfComboBox items={['none', 'rules', 'llm']} value={form.translate} onSelectionChange={v => set('translate', v)} />
@@ -172,6 +174,12 @@ export function App() {
               <WfTextBox multiline value={form.contracts} onValueChange={v => set('contracts', v)} placeholder="one contract.json path per line" />
             </div>
             <WfCheckBox text="Compile gate (installs npm packages, runs tsc / ngc)" checked={form.compileGate} onCheckedChange={v => set('compileGate', v)} />
+            <WfCheckBox text="Call the generated .NET API for data access (--api)" checked={form.api} onCheckedChange={v => set('api', v)} />
+            <div className="mu-field">
+              <WfLabel text="API database" />
+              <WfComboBox items={['sqlclient', 'oledb']} value={form.dbProvider} onSelectionChange={v => set('dbProvider', v)} />
+            </div>
+            <div className="mu-hint">Generate the server with target dotnet-api (same source); its provider is the API database above.</div>
           </WfGroupBox>
 
           <WfGroupBox title="Rules and images">

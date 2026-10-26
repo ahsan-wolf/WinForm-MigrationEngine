@@ -51,6 +51,7 @@ app.MapGet("/api/info", () => new
     {
         new { id = "react-app", modes = new[] { "ir", "app", "appshell", "viewer" } },
         new { id = "angular-app", modes = new[] { "ir", "app" } },
+        new { id = "dotnet-api", modes = new[] { "app" } },
     },
 });
 
@@ -114,25 +115,26 @@ IResult StartApp(AppRequest r, string action)
     {
         var existing = runs.Values.FirstOrDefault(x => x.Kind == "dev" && !x.Done && string.Equals(x.AppDirectory, dir, StringComparison.OrdinalIgnoreCase));
         if (existing is not null) return Results.Json(Describe(existing), json);
-        if (!Directory.Exists(Path.Combine(dir, "node_modules"))) return Results.BadRequest(new { error = "Dependencies are not installed. Run Install first." });
+        if (!File.Exists(Path.Combine(dir, "GeneratedApi.csproj")) && !Directory.Exists(Path.Combine(dir, "node_modules"))) return Results.BadRequest(new { error = "Dependencies are not installed. Run Install first." });
     }
 
     var run = new Run { Kind = action == "install" ? "install" : "dev", Title = (action == "install" ? "npm install — " : "dev server — ") + Path.GetFileName(dir), AppDirectory = dir, WorkingDirectory = dir };
+    var isApi = File.Exists(Path.Combine(dir, "GeneratedApi.csproj"));
     if (action == "install")
     {
-        var (file, a) = Run.Shell("npm", "install");
+        var (file, a) = isApi ? ("dotnet", new List<string> { "build", "-c", "Release", "--nologo" }) : Run.Shell("npm", "install");
         runs[run.Id] = run;
-        run.Add($"> npm install   (in {dir})");
+        run.Add($"> {(isApi ? "dotnet build" : "npm install")}   (in {dir})");
         run.Start(file, a, dir);
         return Results.Json(Describe(run), json);
     }
 
-    var port = r.Port ?? Enumerable.Range(5400, 100).First(Run.PortFree);
+    var port = r.Port ?? (isApi ? Enumerable.Range(5000, 100).First(Run.PortFree) : Enumerable.Range(5400, 100).First(Run.PortFree));
     var angular = File.Exists(Path.Combine(dir, "angular.json"));
-    var (f, args2) = angular
+    var (f, args2) = isApi ? ("dotnet", new List<string> { "run", "-c", "Release", "--urls", $"http://localhost:{port}" }) : angular
         ? Run.Shell("npx", "ng", "serve", "--port", port.ToString())
         : Run.Shell("npm", "run", "dev", "--", "--port", port.ToString(), "--strictPort");
-    run = new Run { Kind = "dev", Title = run.Title, AppDirectory = dir, WorkingDirectory = dir, CommandLine = angular ? $"npx ng serve --port {port}" : $"npm run dev -- --port {port} --strictPort", Port = port };
+    run = new Run { Kind = "dev", Title = run.Title, AppDirectory = dir, WorkingDirectory = dir, CommandLine = isApi ? $"dotnet run -c Release --urls http://localhost:{port}" : angular ? $"npx ng serve --port {port}" : $"npm run dev -- --port {port} --strictPort", Port = port };
     runs[run.Id] = run;
     run.Add($"> {run.CommandLine}   (in {dir})");
     run.Start(f, args2, dir);
@@ -193,6 +195,7 @@ bool IsUnderOutput(string path) => outputRoots.Any(o => path.StartsWith(o, Strin
 
 bool IsGeneratedApp(string dir)
 {
+    if (File.Exists(Path.Combine(dir, "GeneratedApi.csproj"))) return true; // the generated .NET API
     var package = Path.Combine(dir, "package.json");
     if (!File.Exists(package)) return false;
     var text = File.ReadAllText(package);
@@ -226,6 +229,13 @@ static List<string> BuildArgs(MigrateRequest r, string outFull, string enginesJs
     var name = mode switch { "appshell" => target.Replace("-app", "") + "-appshell", "viewer" => target.Replace("-app", "") + "-viewer", _ => target };
     appDir = Path.Combine(outFull, name);
     if (mode == "appshell") a.Add("--appshell");
+    if (target == "dotnet-api")
+    {
+        if (!string.IsNullOrWhiteSpace(r.DbProvider)) a.AddRange(new[] { "--db-provider", r.DbProvider });
+        a.AddRange(new[] { "--config", enginesJson });
+        return a;
+    }
+    if (r.Api) a.Add("--api");
     if (mode == "viewer") a.Add("--preview");
     if (!string.IsNullOrWhiteSpace(r.Entry)) a.AddRange(new[] { "--entry", r.Entry });
     if (!string.IsNullOrWhiteSpace(r.Depth)) a.AddRange(new[] { "--depth", r.Depth });
@@ -255,6 +265,6 @@ static string? FindRepoRoot()
 
 public sealed record MigrateRequest(
     string? Source, string? Out, string? Mode, string? Target, string? Entry, string? Depth, bool AllUnits, bool Catalog, bool NoExternalProjects,
-    string? Translate, bool CompileGate, List<string>? Contracts, string? ContractScope, string? Images, string? Archetypes);
+    string? Translate, bool CompileGate, List<string>? Contracts, string? ContractScope, string? Images, string? Archetypes, bool Api = false, string? DbProvider = null);
 
 public sealed record AppRequest(string? Dir, int? Port);

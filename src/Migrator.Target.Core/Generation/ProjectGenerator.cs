@@ -49,7 +49,11 @@ public sealed class ProjectGenerator
         // Only the project classes the generated pages reach (directly or through each other) become part of the app.
         var serverRules = ServerBoundRules.Load(_backend.ServerBoundRulesPath);
         var serverBound = new List<string>();
-        var supportFile = ir.Support is { Classes.Count: > 0 } ? SupportPruner.Reachable(ir.Support, scopeUnits, serverRules, serverBound) : null;
+        // `--api`: server-bound classes are not left out; their public methods become calls to the generated dotnet-api.
+        IReadOnlyDictionary<string, ServerClass> apiClasses = options.Api
+            ? ServerOperations.Find(ir.Support, serverRules).ToDictionary(c => c.Name, StringComparer.Ordinal)
+            : new Dictionary<string, ServerClass>();
+        var supportFile = ir.Support is { Classes.Count: > 0 } ? SupportPruner.Reachable(ir.Support, scopeUnits, serverRules, serverBound, apiClasses.Keys.ToHashSet(StringComparer.Ordinal)) : null;
 
         // External contracts first: the translator needs their vocabulary (facade methods, type names) before any page is generated.
         var contracts = new List<ContractEmitResult>();
@@ -80,10 +84,10 @@ public sealed class ProjectGenerator
         {
             supportRegistry = SupportRegistry.Build(supportFile);
             foreach (var name in supportRegistry.Classes.Keys) vocabulary.SupportTypes.Add(name);
-            supportRegistry.ColorAsync(vocabulary);
+            supportRegistry.ColorAsync(vocabulary, apiClasses);
         }
         var env = translate
-            ? new TranslationEnv { Vocabulary = vocabulary, Components = components, Units = ir.Units, Generated = generated, Support = supportRegistry, Resources = new ResourceImages(ir.Resources, options.ImagesFolder), UiLibraryPackage = _backend.UiLibraryPackage, Bypass = BypassRules.Load(_backend.BypassRulesPath), ServerBound = serverRules }
+            ? new TranslationEnv { Vocabulary = vocabulary, Components = components, Units = ir.Units, Generated = generated, Support = supportRegistry, Resources = new ResourceImages(ir.Resources, options.ImagesFolder), UiLibraryPackage = _backend.UiLibraryPackage, Bypass = BypassRules.Load(_backend.BypassRulesPath), ServerBound = serverRules, ApiClasses = apiClasses }
             : null;
         SupportBuild? support = null;
         if (env is not null && supportRegistry is not null)
@@ -133,8 +137,9 @@ public sealed class ProjectGenerator
                     .Select(p => new CatalogEntry(p.Unit, p.Page.ComponentName, archetypes.TryGetValue(p.Unit, out var a) ? a.Archetype : ControlArchetype.Form, ir.Units[p.Unit].Title, false, ir.Units[p.Unit].IsUserControl))
                     .OrderBy(e => e.Archetype).ThenBy(e => e.Unit, StringComparer.Ordinal).ToList()
                 : new List<CatalogEntry>();
+            if (apiClasses.Count > 0) OutputFiles.Put(outputDirectory, "src/lib/api.ts", ApiClientRuntime.Source, result.Files);
             _backend.WriteApp(outputDirectory, "migrated-" + Naming.Camel(Naming.StripPrefix(entry)).ToLowerInvariant(), entryComponent,
-                Path.GetFullPath(_backend.UiLibraryPath), result.Files, favicon, catalog);
+                Path.GetFullPath(_backend.UiLibraryPath), result.Files, favicon, catalog, apiClasses.Count > 0);
         }
 
         var gate = translate ? RunCompileGate(outputDirectory, options, generator, ir, pages, result, support) : new GateSummary();
@@ -158,7 +163,7 @@ public sealed class ProjectGenerator
             }
         }
 
-        OutputFiles.Put(outputDirectory, "MIGRATION_REPORT.md", Report(ir, entry, options, spec, pages, result, skippedOutOfScope, contracts, translate, gate, support?.Module, serverBound, archetypes, opened, options.Catalog || options.AllUnits), result.Files);
+        OutputFiles.Put(outputDirectory, "MIGRATION_REPORT.md", Report(ir, entry, options, spec, pages, result, skippedOutOfScope, contracts, translate, gate, support?.Module, serverBound, archetypes, opened, options.Catalog || options.AllUnits, apiClasses), result.Files);
         return result;
     }
 
@@ -329,6 +334,21 @@ public sealed class ProjectGenerator
             .Select(m => m.Groups[1].Value).Distinct(StringComparer.Ordinal)
             .Where(n => ir.Units.TryGetValue(n, out var u) && u.IsUserControl);
 
+    /// <summary>`--api`: the classes whose methods are calls to the generated API.</summary>
+    private static void ApiSection(StringBuilder sb, IReadOnlyDictionary<string, ServerClass> apiClasses)
+    {
+        if (apiClasses.Count == 0) return;
+        sb.AppendLine();
+        sb.AppendLine("## API calls");
+        sb.AppendLine();
+        sb.AppendLine($"**{apiClasses.Count}** server-bound class(es) run behind the generated `dotnet-api`; their public methods are async calls (`src/lib/api.ts`, base URL `window.__API_BASE__` or `http://localhost:5000`). Messages the data classes showed (`MessageBox`) arrive with the reply and open as popups. Run the API with `migrate --target dotnet-api` (same source).");
+        sb.AppendLine();
+        sb.AppendLine("| Class | Operations |");
+        sb.AppendLine("|---|---|");
+        foreach (var c in apiClasses.Values.OrderBy(c => c.Name, StringComparer.Ordinal))
+            sb.AppendLine($"| {c.Name} | {string.Join(", ", c.Methods.Where(m => !m.HasByRefParameters).Select(m => "`" + m.Route + "`"))} |");
+    }
+
     /// <summary>Archetypes of the generated units, what was inferred for the ones the designer under-specifies, and the `/modules` catalog.</summary>
     private static void ArchetypeSection(StringBuilder sb, IEnumerable<string> generated, Dictionary<string, ArchetypeInfo> archetypes, HashSet<string> opened, string entry, bool catalog)
     {
@@ -367,7 +387,7 @@ public sealed class ProjectGenerator
 
     private string Report(IrFolder ir, string entry, GenerationOptions options, SpecCatalog spec,
         List<(string Unit, int Depth, GeneratedPage Page)> pages, GenerationResult result, List<string> outOfScope, List<ContractEmitResult> contracts, bool translate, GateSummary gate, SupportModule? supportModule, List<string> serverBound,
-        Dictionary<string, ArchetypeInfo> archetypes, HashSet<string> opened, bool catalog)
+        Dictionary<string, ArchetypeInfo> archetypes, HashSet<string> opened, bool catalog, IReadOnlyDictionary<string, ServerClass> apiClasses)
     {
         var sb = new StringBuilder();
         sb.AppendLine($"# Migration report — {_backend.Key}");
@@ -388,6 +408,7 @@ public sealed class ProjectGenerator
             sb.AppendLine($"| {unit} | `{page.ComponentName}` | {depth} | {page.Controls} | {page.Handlers} | {page.NavigationHandlers} | {page.Issues.Count + page.NonVisual.Count} |");
 
         ArchetypeSection(sb, pages.Select(p => p.Unit), archetypes, opened, entry, catalog);
+        ApiSection(sb, apiClasses);
 
         var extracted = pages.Sum(p => p.Page.IconsExtracted);
         var converted = pages.Sum(p => p.Page.IconsConverted);

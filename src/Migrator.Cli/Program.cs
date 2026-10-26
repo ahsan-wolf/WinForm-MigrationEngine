@@ -24,7 +24,7 @@ static int Run(string[] args)
                                                   and data-access.json (SQL table/procedure names; connection-string-like literals are only counted)
               backend --source <dir>... [--wsdl <dir>...] --out <dir> [--rules <backend-patterns.json>]
                                                   Read-only survey of .NET Framework class libraries / ASMX services and WSDLs -> BACKEND_ANALYSIS.md + backend-analysis.json (use a git-ignored --out)
-              migrate --source <dir> --out <dir> [--target react-app|angular-app] [--entry <form>] [--depth <n|all>] [--units all] [--catalog] [--archetypes <rules.json>] [--preview|--appshell] [--contract <contract.json>]... [--contract-scope used|all] [--translate none|rules|llm] [--compile-gate] [--config <engines.json>]
+              migrate --source <dir> --out <dir> [--target react-app|angular-app|dotnet-api] [--entry <form>] [--depth <n|all>] [--units all] [--catalog] [--archetypes <rules.json>] [--api] [--db-provider sqlclient|oledb] [--preview|--appshell] [--contract <contract.json>]... [--contract-scope used|all] [--translate none|rules|llm] [--compile-gate] [--config <engines.json>]
                                                   ir step, then generate an app into <out>/<target> (default depth 1: entry form + forms it opens)
             """);
         return args.Length == 0 ? 1 : 0;
@@ -208,6 +208,8 @@ static int Migrate(string[] args)
             Depth = depth,
             AllUnits = OptionValue(args, "--units")?.Equals("all", StringComparison.OrdinalIgnoreCase) == true,
             Catalog = args.Contains("--catalog"),
+            DbProvider = OptionValue(args, "--db-provider"),
+            Api = args.Contains("--api"),
             ArchetypeRulesPath = OptionValue(args, "--archetypes"),
             Preview = preview,
             AppShell = appShell,

@@ -38,8 +38,8 @@ public sealed class AngularBackend : ITargetBackend
 
     public string CodeFilePath(GeneratedPage page) => $"src/pages/{AngularPageAssembler.FileBase(page.ComponentName)}.page.code.ts";
 
-    public void WriteApp(string appDir, string appName, string entryComponent, string uiLibraryDir, List<string> files, string? favicon, IReadOnlyList<CatalogEntry> catalog) =>
-        AngularAppWriter.Write(appDir, appName, entryComponent, uiLibraryDir, _pages.Values.ToList(), files, favicon, catalog);
+    public void WriteApp(string appDir, string appName, string entryComponent, string uiLibraryDir, List<string> files, string? favicon, IReadOnlyList<CatalogEntry> catalog, bool api) =>
+        AngularAppWriter.Write(appDir, appName, entryComponent, uiLibraryDir, _pages.Values.ToList(), files, favicon, catalog, api);
 
     private static string NgcPath(string appDir) => Path.Combine(appDir, "node_modules", "@angular", "compiler-cli", "bundles", "src", "bin", "ngc.js");
 

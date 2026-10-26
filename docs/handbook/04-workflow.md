@@ -67,6 +67,15 @@ Many WinForms applications call a service layer. Two optional inputs improve the
 
 Keep DLLs and WSDLs in a git-ignored folder (`local-inputs/`) or outside the repository.
 
+### 4.4a Step 4b (optional): the data layer as an API
+If the application has its own data-access classes (ADO.NET, DataSets, `MessageBox` in the data layer), generate the server side from the same source:
+
+```bash
+migrator migrate --source "C:\src\MyApp" --out "D:\out\MyApp" --target dotnet-api          # -> D:\out\MyApp\dotnet-api
+cd "D:\out\MyApp\dotnet-api"; set AppSettings__<key>=<value>; dotnet run --urls http://localhost:5000
+```
+Read `API_REPORT.md` (operations, members that did not port, SQL built from strings, the configuration keys to set). Then add `--api` to the web run in step 5 so the app calls it. The API has no authentication and does not parameterize the SQL yet: review before using it for real.
+
 ## 4.5 Step 5: generate the working app
 ```bash
 migrator migrate --source "C:\src\MyApp" --out "D:\out\MyApp" \

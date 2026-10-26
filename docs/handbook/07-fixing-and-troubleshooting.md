@@ -19,6 +19,10 @@ After a fix: regenerate, check `0 TS error(s) remain`, build and lint ([workflow
 | Symptom | Cause and fix |
 |---|---|
 | `0 form(s), 0 user control(s)` on an old project whose forms have no `.Designer.cs` | Supported since 0.5: a class that declares `InitializeComponent` itself is found as a unit. If you still get 0 units, check that the source folder is the project folder and that the forms derive from `Form` / `UserControl` (directly or through your own base classes) |
+| API: `The ConnectionString property has not been initialized` popup | The server has no connection string: set `AppSettings__<key>` (the key is in `API_REPORT.md`) before `dotnet run` |
+| API: `Keyword not supported: provider` | An OLE DB connection string reached SqlClient: `Provider=` keys are stripped automatically; other OLE DB-only keys must be removed from the value |
+| API: CORS error in the browser console | Add the app's origin to `Cors:Origins` in `appsettings.json` (or `Cors__Origins__0` in the environment) |
+| App cannot reach the API | The app calls `window.__API_BASE__` or `http://localhost:5000`: start the API there or set the variable in `index.html` |
 | `engines.json not found` | Run from the repository root or pass `--config <path>` |
 | `Target engine 'x' is not loaded or cannot generate a whole project` | The engine is missing or disabled in `engines.json`; run `migrator engines` for diagnostics |
 | An engine DLL in `plugins/` is ignored | Only engines listed in `engines.json` load; list it |

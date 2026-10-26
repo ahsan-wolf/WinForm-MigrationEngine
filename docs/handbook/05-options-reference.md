@@ -17,7 +17,7 @@ All commands accept `--config <engines.json>`; without it the tool looks for `en
 |---|---|---|---|
 | `--source <dir>` | required | WinForms project folder | WinForms source |
 | `--out <dir>` | required | Output folder (outside the repository); IR in `<out>/ir`, app next to it | Output folder |
-| `--target react-app\|angular-app` | `react-app` | Target engine; the Angular app is written to `<out>/angular-app` | Target |
+| `--target react-app\|angular-app\|dotnet-api` | `react-app` | Target engine; the Angular app is written to `<out>/angular-app` | Target |
 | `--entry <form>` | the startup form | Entry form (route `/`) | Entry form |
 | `--depth <n\|all>` | `1` | `Show` / `ShowDialog` hops from the entry form to generate; `all` follows everything reachable | Depth |
 | `--units all` | off | Generate every form and user control, not only those reachable; also writes the `/modules` catalog | *Every form and user control* |
@@ -29,6 +29,8 @@ All commands accept `--config <engines.json>`; without it the tool looks for `en
 | `--no-compile-gate` | off | Skip the gate even when dependencies exist (shows the raw errors of translated code) | |
 | `--contract <file>` (repeatable) | none | A `contract.json` from `migrator contract`: typed mock services, fixtures and types | Contract files |
 | `--contract-scope used\|all` | `used` | Emit only what the generated code uses, or every public type and static method | Contract scope |
+| `--api` | off | Web targets: keep the server-bound data-access classes and call the generated API for them (`src/lib/api.ts`); generate the server with `--target dotnet-api` | *Call the generated .NET API* |
+| `--db-provider sqlclient\|oledb` | `sqlclient` | `dotnet-api`: the ADO.NET provider the ported data classes run against | API database |
 | `--images <folder>` | none | Image files named by key (`Name.png`, `Name.ico`, …) for `Properties.Resources.Name` and image-list entries the engine could not extract | Images folder |
 | `--appshell` | off | Write `<out>/react-appshell`: visual-only pages in a WinForms-style window (React only). Implies all units; entry, depth, contracts and translation are ignored | mode *App shell* |
 | `--preview` | off | Write `<out>/react-viewer`: a visual-only page per unit with a sidebar (React only). Same implications | mode *Component viewer* |
@@ -71,3 +73,4 @@ Extend a **copy** per project, keep it with the project (outside this repository
 | Application with resource images that were not extracted | add `--images <folder>` |
 | Analyse only one part of a big solution | `--entry <form>` with a small `--depth` |
 | Angular instead of React | add `--target angular-app` |
+| Application with data-access classes (ADO.NET, DataSets) | run once with `--target dotnet-api` for the server, then the web target with `--api` |

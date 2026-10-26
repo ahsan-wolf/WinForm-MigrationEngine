@@ -35,8 +35,8 @@ public sealed class ReactBackend : ITargetBackend
 
     public string CodeFilePath(GeneratedPage page) => $"src/pages/{page.ComponentName}.code.tsx";
 
-    public void WriteApp(string appDir, string appName, string entryComponent, string uiLibraryDir, List<string> files, string? favicon, IReadOnlyList<CatalogEntry> catalog) =>
-        AppWriter.Write(appDir, appName, entryComponent, uiLibraryDir, files, favicon, catalog);
+    public void WriteApp(string appDir, string appName, string entryComponent, string uiLibraryDir, List<string> files, string? favicon, IReadOnlyList<CatalogEntry> catalog, bool api) =>
+        AppWriter.Write(appDir, appName, entryComponent, uiLibraryDir, files, favicon, catalog, api);
 
     public bool CanRunTypeCheck(string appDir) => CompileGate.CanRun(appDir);
     public bool TryInstall(string appDir, out string error) => CompileGate.TryInstall(appDir, out error);

@@ -30,6 +30,15 @@ public sealed class GenerationOptions
     /// </summary>
     public bool Catalog { get; init; }
 
+    /// <summary>
+    /// Web targets: call the generated `dotnet-api` for the server-bound project classes (data access, file system, configuration) instead of leaving them out:
+    /// their public methods become async calls (`src/lib/api.ts`), and the callers are translated against them. Off by default (output unchanged).
+    /// </summary>
+    public bool Api { get; init; }
+
+    /// <summary>`dotnet-api` only: the ADO.NET provider the ported data-access code runs against (`sqlclient`, `oledb`; null = the default of rules/api-port.json).</summary>
+    public string? DbProvider { get; init; }
+
     /// <summary>Name patterns that decide a unit's archetype when its designer cannot (data file, `rules/control-archetypes.json`); null = the target's default.</summary>
     public string? ArchetypeRulesPath { get; init; }
 

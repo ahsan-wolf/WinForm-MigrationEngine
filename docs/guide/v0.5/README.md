@@ -16,6 +16,7 @@ Complete working guide for engine release **0.5** (WinForms source engine 0.3.0,
 | [10-archetypes.md](10-archetypes.md) | Grid / tree / menu / toolbar controls inferred from the designer and the code, and the `/modules` catalog for units the original loads dynamically |
 | [11-ui.md](11-ui.md) | The Migrator UI: run migrations and generated apps from a window |
 | [../../handbook/README.md](../../handbook/README.md) | The handbook: a task-oriented summary and user guide with the detailed workflow |
+| [12-api.md](12-api.md) | The generated .NET API for data-access classes (`dotnet-api`) and `--api` for the web apps |
 | [CHANGELOG.md](CHANGELOG.md) | What was built, in order |
 | [VERSIONING.md](VERSIONING.md) | Version policy and how to cut `v0.6` |
 
