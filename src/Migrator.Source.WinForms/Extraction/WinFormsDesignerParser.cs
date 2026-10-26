@@ -44,6 +44,9 @@ public sealed class DesignerParseResult
 
     /// <summary>InitializeComponent statements the parser did not understand (single-line text). Never silently dropped.</summary>
     public List<string> Unhandled { get; } = new();
+
+    /// <summary>Fields that InitializeComponent creates with <c>new</c> (the controls and components of the form).</summary>
+    internal HashSet<string> Instantiated { get; } = new();
 }
 
 /// <summary>Reads InitializeComponent() statement by statement (syntax only; nothing is compiled or run).</summary>
@@ -55,13 +58,35 @@ public static partial class WinFormsDesignerParser
         "SuspendLayout", "ResumeLayout", "PerformLayout", "BeginInit", "EndInit"
     };
 
+    /// <summary>
+    /// Locals a decompiler (or an old IDE) leaves in InitializeComponent: an alias of a collection (`Control.ControlCollection controls = base.Controls;`) and
+    /// arrays of children (`Control[] controlArray = new Control[] { this.a, this.b };`, reused for several collections). Resolved when they are added.
+    /// </summary>
+    private sealed class LocalScope
+    {
+        public Dictionary<string, List<string>> Aliases { get; } = new();
+        public Dictionary<string, List<ExpressionSyntax>> Arrays { get; } = new();
+
+        /// <summary>The table style whose GridColumnStyles collection was aliased last, and the column arrays declared after it (see AttachImpliedColumns).</summary>
+        public string? ColumnStyleOwner { get; set; }
+        public List<(string Owner, List<string> Columns)> ImpliedColumns { get; } = new();
+    }
+
+    /// <param name="designerSourceText">A Designer.cs partial, or a whole code-behind file that also holds InitializeComponent (single-file forms).</param>
     public static DesignerParseResult Parse(string designerSourceText)
     {
         var result = new DesignerParseResult();
         var root = CSharpSyntaxTree.ParseText(designerSourceText).GetCompilationUnitRoot();
 
-        var classDecl = root.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault();
+        // The class that owns InitializeComponent is the form (a single-file form may sit among helper classes); else the first class.
+        var allClasses = root.DescendantNodes().OfType<ClassDeclarationSyntax>().ToList();
+        var classDecl = allClasses.FirstOrDefault(c => c.Members.OfType<MethodDeclarationSyntax>().Any(m => m.Identifier.Text == "InitializeComponent"))
+                        ?? allClasses.FirstOrDefault();
         if (classDecl == null) return result;
+
+        // A Designer.cs holds only InitializeComponent and Dispose; any other method means the designer code shares the class with the code-behind,
+        // so a field is a control only when InitializeComponent creates it (the rest are the form's own fields).
+        var mixed = classDecl.Members.OfType<MethodDeclarationSyntax>().Any(m => m.Identifier.Text is not ("InitializeComponent" or "Dispose"));
 
         result.ClassName = classDecl.Identifier.Text;
         result.BaseTypeName = classDecl.BaseList?.Types.FirstOrDefault()?.Type.ToString();
@@ -86,33 +111,46 @@ public static partial class WinFormsDesignerParser
         if (initMethod?.Body == null) return result;
 
         var locals = new Dictionary<string, Dictionary<string, string>>(); // designer locals, e.g. DataGridViewCellStyle
+        var scope = new LocalScope();
         foreach (var stmt in initMethod.Body.Statements)
         {
-            if (!HandleStatement(stmt, result, locals))
+            if (!HandleStatement(stmt, result, locals, scope))
                 result.Unhandled.Add(Describe(stmt));
         }
 
+        AttachImpliedColumns(result, scope);
+        HoistTableStyleColumns(result);
+        if (mixed) DropFieldsThatAreNotControls(result);
         return result;
     }
 
     /// <summary>Returns false when the statement is not understood (the caller records it).</summary>
-    private static bool HandleStatement(StatementSyntax stmt, DesignerParseResult result, Dictionary<string, Dictionary<string, string>> locals)
+    private static bool HandleStatement(StatementSyntax stmt, DesignerParseResult result, Dictionary<string, Dictionary<string, string>> locals, LocalScope scope)
     {
         switch (stmt)
         {
             case LocalDeclarationStatementSyntax local:
                 // e.g. ComponentResourceManager resources = ...; DataGridViewCellStyle dataGridViewCellStyle1 = new ...;
-                foreach (var v in local.Declaration.Variables) locals.TryAdd(v.Identifier.Text, new Dictionary<string, string>());
+                foreach (var v in local.Declaration.Variables)
+                {
+                    var init = v.Initializer?.Value;
+                    if (init is not null && TryRememberLocal(v.Identifier.Text, init, scope, result)) continue;
+                    locals.TryAdd(v.Identifier.Text, new Dictionary<string, string>());
+                }
                 return true;
 
             case ExpressionStatementSyntax { Expression: var expr }:
                 return expr switch
                 {
+                    AssignmentExpressionSyntax { Left: IdentifierNameSyntax reused } a when a.IsKind(SyntaxKind.SimpleAssignmentExpression) && TryRememberLocal(reused.Identifier.Text, a.Right, scope, result) => true,
                     AssignmentExpressionSyntax a when a.IsKind(SyntaxKind.SimpleAssignmentExpression) => HandleAssignment(a, result, locals),
                     AssignmentExpressionSyntax a when a.IsKind(SyntaxKind.AddAssignmentExpression) => HandleEventWiring(a, result),
-                    InvocationExpressionSyntax invoke => HandleInvocation(invoke, result),
+                    InvocationExpressionSyntax invoke => HandleInvocation(invoke, result, scope),
                     _ => false
                 };
+
+            case EmptyStatementSyntax:
+                return true; // a stray `;` left by a decompiler
 
             default:
                 return false;
@@ -138,6 +176,7 @@ public static partial class WinFormsDesignerParser
         switch (expr)
         {
             case ThisExpressionSyntax: root = "this"; return true;
+            case BaseExpressionSyntax: root = "this"; return true; // decompiled code writes base.Controls, base.Name, base.ClientSize
             case IdentifierNameSyntax id: root = id.Identifier.Text; return true;
             default: return false;
         }
@@ -202,6 +241,7 @@ public static partial class WinFormsDesignerParser
                 if (assign.Right is ObjectCreationExpressionSyntax creation && result.DeclaredControlTypes.ContainsKey(first))
                 {
                     result.DeclaredControlTypes[first] = creation.Type.ToString();
+                    result.Instantiated.Add(first);
                     Attrs(result, first);
                     result.ControlEventHandlers.TryAdd(first, new Dictionary<string, string>());
                     Touch(result, first);
@@ -280,7 +320,7 @@ public static partial class WinFormsDesignerParser
 
     // ---- invocations ---------------------------------------------------------------------------------------------
 
-    private static bool HandleInvocation(InvocationExpressionSyntax invoke, DesignerParseResult result)
+    private static bool HandleInvocation(InvocationExpressionSyntax invoke, DesignerParseResult result, LocalScope scope)
     {
         var methodName = invoke.Expression switch
         {
@@ -292,7 +332,13 @@ public static partial class WinFormsDesignerParser
         if (methodName == "ApplyResources") return HandleApplyResources(invoke, result);
 
         if (invoke.Expression is not MemberAccessExpressionSyntax access) return false;
-        if (!TryFlatten(access.Expression, out var root, out var receiver) || root != "this") return false;
+        if (!TryFlatten(access.Expression, out var root, out var receiver)) return false;
+        if (root != "this")
+        {
+            // `controls.AddRange(controlArray)`: the local stands for a collection of the form or of a control.
+            if (!scope.Aliases.TryGetValue(root, out var aliased)) return false;
+            receiver = aliased.Concat(receiver).ToList();
+        }
 
         // this.tlp.SetColumnSpan(this.child, 2)  (also SetRowSpan / SetColumn / SetRow)
         if (methodName is "SetColumn" or "SetRow" or "SetColumnSpan" or "SetRowSpan" && receiver.Count == 1)
@@ -311,7 +357,7 @@ public static partial class WinFormsDesignerParser
         if (methodName == "Add" && receiver is [var tableId, "ColumnStyles" or "RowStyles"])
             return HandleTableStyle(invoke, tableId, receiver[1], result);
 
-        if (methodName is "Add" or "AddRange") return HandleCollectionAdd(invoke, receiver, methodName == "AddRange", result);
+        if (methodName is "Add" or "AddRange") return HandleCollectionAdd(invoke, receiver, methodName == "AddRange", result, scope);
 
         return false;
     }
@@ -320,7 +366,7 @@ public static partial class WinFormsDesignerParser
     /// this.Controls.Add(this.X) | this.P.Controls.Add(this.X) | this.P.Items/DropDownItems/TabPages/Columns.Add|AddRange(...)
     /// | this.S.Panel1/Panel2.Controls.Add(this.X). Receiver = member chain after `this`.
     /// </summary>
-    private static bool HandleCollectionAdd(InvocationExpressionSyntax invoke, List<string> receiver, bool isRange, DesignerParseResult result)
+    private static bool HandleCollectionAdd(InvocationExpressionSyntax invoke, List<string> receiver, bool isRange, DesignerParseResult result, LocalScope scope)
     {
         string parentId;
         string slot;
@@ -330,8 +376,17 @@ public static partial class WinFormsDesignerParser
                 parentId = ""; slot = ""; break;
             case [var p, "Controls"]:
                 parentId = p; slot = ""; break;
-            case [var p, "Items" or "DropDownItems" or "TabPages" or "Columns"]:
+            case [var p, "Items" or "DropDownItems" or "TabPages" or "Columns" or "TableStyles"]:
                 parentId = p; slot = receiver[1]; break;
+            // Pre-ToolStrip menus: MainMenu.MenuItems are the top level, MenuItem.MenuItems the drop-down; named like the ToolStrip slots so targets need no change.
+            case [var p, "MenuItems"]:
+                var ownerType = result.DeclaredControlTypes.GetValueOrDefault(p, "");
+                parentId = p;
+                slot = ownerType.EndsWith("MainMenu", StringComparison.Ordinal) || ownerType.EndsWith("ContextMenu", StringComparison.Ordinal) ? "Items" : "DropDownItems";
+                break;
+            // DataGrid table style columns; hoisted onto the grid once the whole method is read.
+            case [var p, "GridColumnStyles"]:
+                parentId = p; slot = "Columns"; break;
             case [var p, "Panel1" or "Panel2", "Controls"]:
                 parentId = p; slot = receiver[1]; break;
             default:
@@ -356,6 +411,7 @@ public static partial class WinFormsDesignerParser
                 {
                     ArrayCreationExpressionSyntax arr => arr.Initializer?.Expressions,
                     ImplicitArrayCreationExpressionSyntax arr => arr.Initializer.Expressions,
+                    IdentifierNameSyntax local when scope.Arrays.TryGetValue(local.Identifier.Text, out var items) => SyntaxFactory.SeparatedList(items),
                     _ => null
                 }
                 : null;
@@ -491,5 +547,92 @@ public static partial class WinFormsDesignerParser
         list.Add(new Dictionary<string, object?> { ["SizeType"] = sizeType, ["Value"] = size });
         attrs[kind] = JsonSerializer.Serialize(list);
         return true;
+    }
+
+    /// <summary>
+    /// Remembers a local the decompiler introduced: an alias of a collection of this form (`base.Controls`, `this.panel1.Controls`, `this.mnuFile.MenuItems`) or an array
+    /// of children. A later assignment to the same name replaces the earlier value. False when the value is neither.
+    /// </summary>
+    private static bool TryRememberLocal(string name, ExpressionSyntax value, LocalScope scope, DesignerParseResult result)
+    {
+        switch (value)
+        {
+            case ArrayCreationExpressionSyntax { Initializer: { } init }:
+                scope.Arrays[name] = init.Expressions.ToList();
+                RememberColumnArray(init.Expressions, scope, result);
+                return true;
+            case ImplicitArrayCreationExpressionSyntax implicitArray:
+                scope.Arrays[name] = implicitArray.Initializer.Expressions.ToList();
+                return true;
+            case MemberAccessExpressionSyntax access when TryFlatten(access, out var root, out var chain) && root == "this" && chain.Count >= 1
+                                                         && chain[^1] is "Controls" or "MenuItems" or "Items" or "DropDownItems" or "TabPages" or "Columns" or "GridColumnStyles" or "TableStyles":
+                scope.Aliases[name] = chain;
+                if (chain.Count >= 2 && chain[^1] == "GridColumnStyles") scope.ColumnStyleOwner = chain[^2];
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    /// <summary>
+    /// A column array declared right after the alias of a table style's GridColumnStyles belongs to that style, even where the `AddRange` call itself is missing
+    /// (the original comments it out): its columns are attached afterwards, unless something already attached them.
+    /// </summary>
+    private static void RememberColumnArray(SeparatedSyntaxList<ExpressionSyntax> elements, LocalScope scope, DesignerParseResult result)
+    {
+        if (scope.ColumnStyleOwner is not { } owner || elements.Count == 0) return;
+        var ids = new List<string>();
+        foreach (var e in elements)
+        {
+            if (!TryGetThisMemberName(e, out var id) || !result.DeclaredControlTypes.GetValueOrDefault(id, "").EndsWith("Column", StringComparison.Ordinal)) return;
+            ids.Add(id);
+        }
+        scope.ImpliedColumns.Add((owner, ids));
+    }
+
+    private static void AttachImpliedColumns(DesignerParseResult result, LocalScope scope)
+    {
+        foreach (var (owner, columns) in scope.ImpliedColumns)
+            foreach (var id in columns.Where(c => !result.ParentOf.TryGetValue(c, out var parent) || parent.Length == 0))
+            {
+                result.ParentOf[id] = owner;
+                Attrs(result, id)["ParentSlot"] = "Columns";
+            }
+    }
+
+    /// <summary>
+    /// A DataGrid keeps its columns in a table style (`grid.TableStyles.Add(style)`, `style.GridColumnStyles.AddRange(...)`). The columns are moved onto the grid, as the
+    /// columns of a DataGridView are, with the style's mapping name as the column's data property; the style itself is not a control and is dropped.
+    /// </summary>
+    private static void HoistTableStyleColumns(DesignerParseResult result)
+    {
+        var styles = result.ParentOf.Where(kv => Attrs(result, kv.Key).GetValueOrDefault("ParentSlot") == "TableStyles").ToList();
+        foreach (var (style, grid) in styles)
+        {
+            foreach (var column in result.ParentOf.Where(kv => kv.Value == style).Select(kv => kv.Key).ToList())
+            {
+                result.ParentOf[column] = grid;
+                var attrs = Attrs(result, column);
+                if (!attrs.ContainsKey("DataPropertyName") && attrs.TryGetValue("MappingName", out var mapping)) attrs["DataPropertyName"] = mapping;
+            }
+            result.ParentOf.Remove(style);
+            result.DeclaredControlTypes.Remove(style);
+            result.ControlAttributes.Remove(style);
+            result.ControlEventHandlers.Remove(style);
+            result.ControlDeclarationOrder.Remove(style);
+        }
+    }
+
+    /// <summary>Single-file forms: a field InitializeComponent never creates is one of the form's own fields, not a control (it stays a member).</summary>
+    private static void DropFieldsThatAreNotControls(DesignerParseResult result)
+    {
+        foreach (var name in result.DeclaredControlTypes.Keys.Where(n => !result.Instantiated.Contains(n)).ToList())
+        {
+            result.DeclaredControlTypes.Remove(name);
+            result.ControlAttributes.Remove(name);
+            result.ControlEventHandlers.Remove(name);
+            result.ControlDeclarationOrder.Remove(name);
+            result.ParentOf.Remove(name);
+        }
     }
 }
