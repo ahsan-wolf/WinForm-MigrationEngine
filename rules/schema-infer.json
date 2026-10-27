@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "note": "How the database structure is inferred from the SQL text found in the application's data-access code. Data only: extend a copy per project (no application names) and point the dotnet-api target option schemaInferRulesPath at it. Column types are decided by (1) the C# type of the value the code writes into the column, then (2) the first matching columnTypeHints pattern (case-insensitive, whole column name), else defaultType. Every type is marked inferred in SCHEMA_REPORT.md.",
+  "defaultType": "nvarchar(255)",
+  "columnTypeHints": [
+    { "pattern": "(v)?date|.*_date|.*date|dtime|dt", "type": "datetime" },
+    { "pattern": ".*(amount|total|bal|balance|price|rate|salary|pay|allowances?|tax|discount)", "type": "decimal(18,2)" },
+    { "pattern": "(qty|quantity|bundleno|bundle_no|chequeno|invoiceno|billno|po|vno|vid|id|.*_?id|.*no)", "type": "int" },
+    { "pattern": ".*(description|address|remarks?|note|narration)", "type": "nvarchar(500)" }
+  ],
+  "csharpTypes": {
+    "int": "int", "Int32": "int", "short": "smallint", "long": "bigint", "Int64": "bigint",
+    "double": "decimal(18,2)", "float": "decimal(18,2)", "decimal": "decimal(18,2)", "Decimal": "decimal(18,2)", "Double": "decimal(18,2)",
+    "DateTime": "datetime", "bool": "bit", "Boolean": "bit", "string": "nvarchar(255)", "String": "nvarchar(255)"
+  },
+  "ignoreTables": [ "master", "sysobjects", "syscolumns", "sysdatabases", "dual", "dbo" ],
+  "surrogateKeyName": "RowId"
+}
