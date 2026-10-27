@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using Migrator.Engine.Contracts;
 using Migrator.Engine.Support;
+using Migrator.Target.Api.Schema;
 using Migrator.Target.Core.Generation;
 using Migrator.Target.Core.Ir;
 using Migrator.Target.Core.Translation;
@@ -36,6 +37,11 @@ public sealed partial class ApiProjectGenerator
 
         var classes = Reachable(ir.Support!.Classes.Where(c => !c.External).ToList(), operations);
         var included = new HashSet<string>(classes.Select(c => c.Name), StringComparer.Ordinal);
+
+        // The database structure behind the SQL, and the repository layer on top of it (sqlclient only: the repositories use Microsoft.Data.SqlClient directly).
+        var schema = SqlSchemaExtractor.Extract(classes, SchemaInferRules.Load(_options.SchemaInferRulesPath));
+        var withRepositories = schema.Tables.Count > 0 && provider.Package.Equals("Microsoft.Data.SqlClient", StringComparison.OrdinalIgnoreCase);
+        var data = withRepositories ? new DataLayer(RepositoryGenerator.Files(schema, RepositoryGenerator.DefaultDatabase, ConnectionKeys(classes)), SchemaWriters.Ddl(schema)) : null;
         var result = new GenerationResult { OutputDirectory = outputDirectory };
         var demoted = new HashSet<string>(StringComparer.Ordinal);
         var reasons = new HashSet<string>(StringComparer.Ordinal);
@@ -51,7 +57,7 @@ public sealed partial class ApiProjectGenerator
             ported = classes.Select(c => ClassPorter.Port(c, portRules, provider, included, included, demoted, reasons)).ToList();
             var endpoints = WriteEndpoints(operations, skippedOperations, result);
             endpointLines = endpoints.Lines;
-            WriteProject(outputDirectory, provider, portRules, ported, endpoints.Source, result);
+            WriteProject(outputDirectory, provider, portRules, ported, endpoints.Source, data, result);
 
             var diagnostics = CSharpGate.Build(outputDirectory, out var log);
             if (diagnostics is null)
@@ -85,7 +91,12 @@ public sealed partial class ApiProjectGenerator
 
         var findings = Findings(classes, operations, serverRules, portRules, result);
         OutputFiles.Put(outputDirectory, "API_REPORT.md", Report(operations, classes, demoted, reasons, skippedOperations, findings, gateNote, remaining, providerKey, provider), result.Files);
-        OutputFiles.Put(outputDirectory, "README.md", Readme(providerKey), result.Files);
+        OutputFiles.Put(outputDirectory, "README.md", Readme(providerKey, withRepositories), result.Files);
+        if (schema.Tables.Count > 0)
+        {
+            OutputFiles.Put(outputDirectory, "schema.sql", SchemaWriters.Ddl(schema), result.Files);
+            OutputFiles.Put(outputDirectory, "SCHEMA_REPORT.md", SchemaWriters.Report(schema, withRepositories, withRepositories ? null : "The repository layer needs `--db-provider sqlclient`."), result.Files);
+        }
 
         foreach (var c in operations) result.GeneratedUnits.Add(c.Name);
         var distinct = result.Files.Distinct(StringComparer.Ordinal).ToList();
@@ -95,6 +106,9 @@ public sealed partial class ApiProjectGenerator
         result.Stats["api.server-classes"] = operations.Count;
         result.Stats["api.operations"] = operations.Sum(c => c.Methods.Count(m => !m.HasByRefParameters)) - skippedOperations.Count;
         result.Stats["api.demoted-members"] = demoted.Count;
+        result.Stats["api.schema-tables"] = schema.Tables.Count;
+        result.Stats["api.schema-columns"] = schema.Tables.Sum(t => t.Columns.Count(c => !c.IsSurrogate));
+        result.Stats["api.repositories"] = withRepositories ? schema.Tables.Count : 0;
         result.Stats["api.compile-errors-remaining"] = remaining?.Count ?? -1;
         result.Stats["api.sql-concatenation-findings"] = findings.Count(f => f.Category == "sql-concatenation");
         return result;
@@ -123,11 +137,24 @@ public sealed partial class ApiProjectGenerator
 
     // ------------------------------------------------------------------------------------------------ files
 
-    private static void WriteProject(string dir, ProviderRules provider, ApiPortRules rules, List<PortedFile> ported, string endpoints, GenerationResult result)
+    private sealed record DataLayer(List<(string Path, string Content)> Files, string Ddl);
+
+    private static void WriteProject(string dir, ProviderRules provider, ApiPortRules rules, List<PortedFile> ported, string endpoints, DataLayer? data, GenerationResult result)
     {
-        OutputFiles.Put(dir, "GeneratedApi.csproj", ApiTemplates.Project.Replace("__PROVIDER_PACKAGE__", provider.Package).Replace("__PROVIDER_VERSION__", provider.Version), result.Files);
+        var extra = data is null ? "" : "<ItemGroup><None Include=\"Data/schema.sql\" CopyToOutputDirectory=\"PreserveNewest\" /></ItemGroup>";
+        OutputFiles.Put(dir, "GeneratedApi.csproj", ApiTemplates.Project.Replace("__PROVIDER_PACKAGE__", provider.Package).Replace("__PROVIDER_VERSION__", provider.Version).Replace("__EXTRA_ITEMS__", extra), result.Files);
         OutputFiles.Put(dir, "appsettings.json", ApiTemplates.AppSettings, result.Files);
-        OutputFiles.Put(dir, "Program.cs", ApiTemplates.Program, result.Files);
+        var program = ApiTemplates.Program
+            .Replace("__DATA_USINGS__", data is null ? "" : ApiTemplates.DataUsings)
+            .Replace("__DATA_BUILDER__", data is null ? "" : ApiTemplates.DataBuilder)
+            .Replace("__DATA_APP__", data is null ? "" : ApiTemplates.DataApp)
+            .Replace("__DATA_MAP__", data is null ? "" : ApiTemplates.DataMap);
+        OutputFiles.Put(dir, "Program.cs", program, result.Files);
+        if (data is not null)
+        {
+            foreach (var (path, content) in data.Files) OutputFiles.Put(dir, path, content, result.Files);
+            OutputFiles.Put(dir, "Data/schema.sql", data.Ddl, result.Files);
+        }
         OutputFiles.Put(dir, "Api/Shims.cs", ApiTemplates.Shims, result.Files);
         var strip = "new string[] { " + string.Join(", ", provider.StripConnectionStringKeys.Select(k => "\"" + k + "\"")) + " }";
         OutputFiles.Put(dir, "Api/ApiRuntime.cs", ApiTemplates.Runtime.Replace("__STRIP_KEYS__", strip), result.Files);
@@ -282,7 +309,17 @@ public sealed partial class ApiProjectGenerator
         return sb.ToString();
     }
 
-    private static string Readme(string providerKey) => $"""
+    /// <summary>The `AppSettings` keys whose value the code uses as a connection string (read in a method that also sets or opens a connection).</summary>
+    private static List<string> ConnectionKeys(List<SupportClassIr> classes)
+    {
+        var keys = new SortedSet<string>(StringComparer.Ordinal);
+        foreach (var m in classes.SelectMany(c => c.Members).Where(m => m.Kind == MemberKind.Method && m.Body != null && m.Body.Contains("Connection", StringComparison.Ordinal)))
+            foreach (Match k in Regex.Matches(m.Body!, @"AppSettings\s*\[\s*""([^""]+)""\s*\]"))
+                keys.Add(k.Groups[1].Value);
+        return keys.ToList();
+    }
+
+    private static string Readme(string providerKey, bool withRepositories) => $"""
         # Generated API
 
         A .NET 10 minimal API generated by `migrator migrate --target dotnet-api`. It hosts the data-access classes of the migrated application and exposes their public methods as `POST /api/<Class>/<Method>` operations (see `API_REPORT.md`).
@@ -294,6 +331,21 @@ public sealed partial class ApiProjectGenerator
         ```
 
         Provider: `{providerKey}`. Allowed browser origins: `Cors:Origins` in `appsettings.json`.
+        {(withRepositories ? RepositoryReadme : "")}
+        """;
+
+    private const string RepositoryReadme = """
+
+        ## Database and repositories
+        `schema.sql` is the database structure **inferred** from the SQL of the original code (`SCHEMA_REPORT.md`). Each table has an entity, a repository (`Data/Repositories`) and REST endpoints `GET|POST /api/data/<table>`, `GET|PUT|DELETE /api/data/<table>/<key>`, `GET /api/data/<table>/next-id`; the repositories use parameterized SQL only.
+
+        ```bash
+        # SQL Server LocalDB (installed with Visual Studio / SQL Server Express): nothing to configure, the database is created on first start
+        dotnet run
+        # another server: set the connection string in the environment (never in a file); the database is created only if Database__AutoCreate=true
+        set ConnectionStrings__Default=Server=...;Database=...;...
+        ```
+        The ported data classes are pointed at the same database through their old `AppSettings` connection key.
         """;
 
     private static string Short(string message) => message.Length > 160 ? message[..160] + "..." : message;

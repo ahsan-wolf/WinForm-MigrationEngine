@@ -20,6 +20,7 @@ internal static class ApiTemplates
           <ItemGroup>
             <PackageReference Include="__PROVIDER_PACKAGE__" Version="__PROVIDER_VERSION__" />
           </ItemGroup>
+        __EXTRA_ITEMS__
 
         </Project>
         """;
@@ -218,18 +219,37 @@ internal static class ApiTemplates
 
     public const string Program = """
         using Generated.Api;
-
+        __DATA_USINGS__
         var builder = WebApplication.CreateBuilder(args);
         var origins = builder.Configuration.GetSection("Cors:Origins").Get<string[]>() ?? new[] { "http://localhost:5173", "http://localhost:4200" };
         builder.Services.AddCors(o => o.AddDefaultPolicy(p => p.WithOrigins(origins).AllowAnyHeader().AllowAnyMethod()));
 
+        __DATA_BUILDER__
         var app = builder.Build();
         ApiRuntime.Configure(app.Configuration);
         app.UseCors();
-
+        __DATA_APP__
         app.MapGet("/api/health", () => new { status = "ok" });
         Endpoints.Map(app);
-
+        __DATA_MAP__
         app.Run();
         """;
+
+    public const string DataUsings = "using Generated.DataAccess;";
+
+    public const string DataBuilder = """
+        builder.Services.AddDataAccess(builder.Configuration);
+        // The ported data classes read their connection from the old AppSettings keys: point them at the same database unless set explicitly.
+        var linkedConnection = DataServices.ResolveConnectionString(builder.Configuration);
+        foreach (var key in DataServices.ConnectionSettingKeys)
+            if (builder.Configuration["AppSettings:" + key] is null && Environment.GetEnvironmentVariable("AppSettings__" + key) is null)
+                builder.Configuration["AppSettings:" + key] = linkedConnection;
+        """;
+
+    public const string DataApp = """
+        try { await DatabaseInitializer.InitializeAsync(app.Configuration, app.Services.GetRequiredService<IDbConnectionFactory>(), app.Logger); }
+        catch (Exception ex) { app.Logger.LogError("Database initialization failed: {Message}", ApiRuntime.Redact(ex.Message)); }
+        """;
+
+    public const string DataMap = "DataEndpoints.Map(app);";
 }

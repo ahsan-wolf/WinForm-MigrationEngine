@@ -14,6 +14,9 @@ public sealed class ApiTargetOptions
 
     /// <summary>How server-bound classes are ported: usings, providers and aliases (data file; copy and extend it per project).</summary>
     public string ApiPortRulesPath { get; set; } = "rules/api-port.json";
+
+    /// <summary>How the database structure is inferred from the SQL in the data-access code: type hints and ignored names (data file; copy and extend it per project).</summary>
+    public string SchemaInferRulesPath { get; set; } = "rules/schema-infer.json";
 }
 
 public sealed class ApiTargetModule : IEngineModule
@@ -23,7 +26,7 @@ public sealed class ApiTargetModule : IEngineModule
     public ApiTargetModule(EngineOptions options)
     {
         var bound = options.Bind<ApiTargetOptions>();
-        _options = new ApiTargetOptions { ServerBoundRulesPath = options.ResolvePath(bound.ServerBoundRulesPath), ApiPortRulesPath = options.ResolvePath(bound.ApiPortRulesPath) };
+        _options = new ApiTargetOptions { ServerBoundRulesPath = options.ResolvePath(bound.ServerBoundRulesPath), ApiPortRulesPath = options.ResolvePath(bound.ApiPortRulesPath), SchemaInferRulesPath = options.ResolvePath(bound.SchemaInferRulesPath) };
     }
 
     public void Register(IEngineRegistry registry) => registry.RegisterTarget(new ApiTargetEngine(_options));
