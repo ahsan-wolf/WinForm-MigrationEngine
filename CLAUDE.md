@@ -95,6 +95,7 @@ WinFormsMigrator/                         # standalone repo + solution (NOT insi
 ├─ ui-library/                            # INDEPENDENT of engine + IR (own build, own versions)
 │  ├─ ui-spec/                            # framework-neutral control contract (JSON) + design tokens
 │  ├─ ui-core/                            # @wfm/ui-core: framework-free helpers and types shared by the ui-* packages (grid model, image list, tree nodes, list items, mnemonics)
+│  ├─ data/                               # @wf-controls/data: in-memory ADO.NET layer (DataSet, DataTable, DataView, DataRow, DataColumn, DataRelation); shared with webforms-ts-controls (packages/data is the source of truth, keep src identical)
 │  ├─ ui-react/                           # @wfm/ui-react
 │  ├─ ui-angular/                         # @wfm/ui-angular (consumed as TypeScript source through tsconfig paths)
 │  └─ ui-html/                            # @wfm/ui-html (HTML/CSS/vanilla JS + jQuery adapter)
@@ -363,7 +364,8 @@ dotnet run --project src/Migrator.Cli -- migrate --source <path> --out <dir> --a
 dotnet run --project src/Migrator.Cli -- migrate --source <path> --out <dir> --target dotnet-api [--db-provider sqlclient|oledb]   # EXISTS: the server side (data-access classes -> .NET 10 minimal API); add --api to the web target run so the app calls it
 pwsh tools/migrator-ui/start.ps1                                              # EXISTS: the Migrator UI (http://127.0.0.1:5280): source/output pickers, mode (IR / app / app shell / viewer), options, run + log + report, install/start the generated app
 set WFM_LLM_TARGET=react-app                                                   # opt-in LLM translation
-cd ui-library/ui-core && npm ci && npm run build && npm run lint   # first: ui-react and generated apps import it
+cd ui-library/data && npm ci && npm run build && npm run lint      # first: generated apps link it (React: file: dependency, Angular: tsconfig path to its source)
+cd ../ui-core && npm ci && npm run build && npm run lint           # then: ui-react and generated apps import it
 cd ../ui-react && npm ci && npm run build && npm run lint
 ```
 (Adjust CLI verbs to what exists; if a command doesn't exist yet, add it in `Migrator.Cli` as a thin wrapper over the Engine.)
