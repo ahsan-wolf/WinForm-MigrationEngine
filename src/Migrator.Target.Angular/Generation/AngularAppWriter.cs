@@ -18,6 +18,7 @@ internal static class AngularAppWriter
         var uiAngular = Rel(appDir, uiAngularDir);
         var uiCoreDir = Path.GetFullPath(Path.Combine(uiAngularDir, "..", "ui-core"));
         var uiCore = Rel(appDir, uiCoreDir);
+        var uiData = Rel(appDir, Path.GetFullPath(Path.Combine(uiAngularDir, "..", "data")));
 
         var package = new Dictionary<string, object>
         {
@@ -98,7 +99,8 @@ internal static class AngularAppWriter
                   "rxjs": ["node_modules/rxjs"],
                   "rxjs/*": ["node_modules/rxjs/*"],
                   "@wfm/ui-angular": ["{{uiAngular}}/src/public-api.ts"],
-                  "@wfm/ui-core": ["{{uiCore}}/src/index.ts"]
+                  "@wfm/ui-core": ["{{uiCore}}/src/index.ts"],
+                  "@wf-controls/data": ["{{uiData}}/src/index.ts"]
                 }
               },
               "angularCompilerOptions": { "strictTemplates": true, "strictInjectionParameters": true }
@@ -110,7 +112,7 @@ internal static class AngularAppWriter
               "extends": "./tsconfig.json",
               "compilerOptions": { "outDir": "./out-tsc/app", "types": [] },
               "files": ["src/main.ts"],
-              "include": ["src/**/*.d.ts", "{{uiAngular}}/src/**/*.ts", "{{uiCore}}/src/**/*.ts"]
+              "include": ["src/**/*.d.ts", "{{uiAngular}}/src/**/*.ts", "{{uiCore}}/src/**/*.ts", "{{uiData}}/src/**/*.ts"]
             }
             """, files);
 

@@ -93,10 +93,36 @@ internal static class ApiTemplates
     public const string Runtime = """
         using System.Collections;
         using System.Data;
+        using System.Globalization;
         using System.Text.Json;
+        using System.Text.Json.Serialization;
         using System.Text.RegularExpressions;
 
         namespace Generated.Api;
+
+        /// <summary>A date field the browser object never set arrives as an empty string (the TypeScript class initializes it that way): that means "not set", not an error.</summary>
+        public sealed class LenientDateTimeConverter : JsonConverter<DateTime>
+        {
+            public override DateTime Read(ref Utf8JsonReader reader, Type type, JsonSerializerOptions options)
+            {
+                if (reader.TokenType != JsonTokenType.String) return reader.GetDateTime();
+                var text = reader.GetString();
+                return string.IsNullOrWhiteSpace(text) ? default : DateTime.Parse(text, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind);
+            }
+            public override void Write(Utf8JsonWriter writer, DateTime value, JsonSerializerOptions options) => writer.WriteStringValue(value);
+        }
+
+        public sealed class LenientNullableDateTimeConverter : JsonConverter<DateTime?>
+        {
+            public override DateTime? Read(ref Utf8JsonReader reader, Type type, JsonSerializerOptions options)
+            {
+                if (reader.TokenType == JsonTokenType.Null) return null;
+                if (reader.TokenType != JsonTokenType.String) return reader.GetDateTime();
+                var text = reader.GetString();
+                return string.IsNullOrWhiteSpace(text) ? null : DateTime.Parse(text, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind);
+            }
+            public override void Write(Utf8JsonWriter writer, DateTime? value, JsonSerializerOptions options) { if (value is null) writer.WriteNullValue(); else writer.WriteStringValue(value.Value); }
+        }
 
         public sealed record ApiMessage(string Text, string Caption, string Icon);
 
@@ -116,6 +142,7 @@ internal static class ApiTemplates
                 PropertyNameCaseInsensitive = true,
                 DictionaryKeyPolicy = null,
                 NumberHandling = System.Text.Json.Serialization.JsonNumberHandling.AllowReadingFromString,
+                Converters = { new LenientDateTimeConverter(), new LenientNullableDateTimeConverter() },
             };
 
             public static void Configure(IConfiguration configuration) => _configuration = configuration;
