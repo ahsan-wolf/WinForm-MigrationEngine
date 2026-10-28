@@ -28,6 +28,7 @@ public static class AppWriter
             ["dependencies"] = new Dictionary<string, string>
             {
                 ["@wfm/ui-core"] = "file:" + Path.GetRelativePath(appDir, Path.Combine(uiLibraryDir, "..", "ui-core")).Replace('\\', '/'),
+                ["@wf-controls/data"] = "file:" + Path.GetRelativePath(appDir, Path.Combine(uiLibraryDir, "..", "data")).Replace('\\', '/'),
                 ["@wfm/ui-react"] = "file:" + uiRelative, ["react"] = "^18.3.1", ["react-dom"] = "^18.3.1"
             },
             ["devDependencies"] = new Dictionary<string, string>
