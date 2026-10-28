@@ -1,0 +1,24 @@
+{
+  "name": "@wf-controls/data",
+  "version": "1.0.0",
+  "description": "In-memory ADO.NET data layer (DataSet, DataTable, DataView, DataRow, DataColumn, DataRelation). Shared with the webforms-ts-controls repo, where packages/data is the source of truth. Independent of the migration engine, of any IR and of any UI framework.",
+  "type": "module",
+  "private": true,
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": { ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" } },
+  "files": ["dist"],
+  "sideEffects": false,
+  "scripts": {
+    "build": "node ./node_modules/typescript/bin/tsc -p tsconfig.json",
+    "lint": "node ./node_modules/eslint/bin/eslint.js ."
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.12.0",
+    "globals": "^17.13.0",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.71.1"
+  }
+}
